@@ -40,8 +40,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 240
     env:
-      # cvc5 1.1.2 vendors deps (LibPoly, CaDiCaL, ...) whose ancient
-      # cmake_minimum_required CMake 4.x rejects outright.
+      # Some auto-downloaded dependencies use old cmake_minimum_required
+      # declarations that CMake 4.x rejects outright.
       CMAKE_POLICY_VERSION_MINIMUM: "3.5"
 
     steps:
@@ -97,12 +97,18 @@ jobs:
         shell: bash
         run: |
           tag="basis-${GITHUB_SHA:0:10}"
-          cat */*.sha256 > SHA256SUMS
+          cat ./*/*.sha256 > SHA256SUMS
+          {
+            printf 'Pinned Basis build of cvc5 at %s.\n\n' "$GITHUB_SHA"
+            printf '%s\n' '```'
+            cat SHA256SUMS
+            printf '%s\n' '```'
+          } > RELEASE_NOTES.md
           gh release delete -y "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag 2>/dev/null || true
           gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Basis cvc5 build $tag" \
-            --notes "$(printf 'Pinned Basis build of cvc5 at %s.\n\n```\n%s\n```' "$GITHUB_SHA" "$(cat SHA256SUMS)")" \
+            --notes-file RELEASE_NOTES.md \
             cvc5-arm64-macos/cvc5-arm64-macos \
             cvc5-arm64-macos/cvc5-arm64-macos.sha256 \
             cvc5-x86-linux/cvc5-x86-linux \
