@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: MIT
+#
+# Basis fork build: produce pinned static cvc5 binaries for the platforms the
+# Verus MCP server supports (arm64 macOS, x86 Linux), publish them as a
+# per-commit GitHub release with sha256 checksums. Mirrors the
+# BasisResearch/verus fork's build.yml/rolling-release.yml pattern, except
+# artifacts land on a release so verus-tools-mcp can download them
+# unauthenticated and verify against hardcoded hashes.
+
+name: basis-build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: basis-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        build: [macos, linux]
+        include:
+          - build: macos
+            os: macos-14
+            release_name: cvc5-arm64-macos
+          - build: linux
+            os: ubuntu-24.04
+            release_name: cvc5-x86-linux
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: install dependencies
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y build-essential ninja-build libbsd-dev libedit-dev libgmp-dev libtinfo-dev libfl-dev
+          else
+            brew install ninja
+          fi
+          python3 -m pip install --break-system-packages tomli pyparsing 2>/dev/null \
+            || python3 -m pip install tomli pyparsing
+
+      - name: configure
+        run: ./configure.sh production --static --auto-download --ninja
+
+      - name: build
+        run: cmake --build build --target cvc5-bin
+
+      - name: package
+        shell: bash
+        run: |
+          strip build/bin/cvc5 || true
+          ./build/bin/cvc5 --version | head -5
+          cp build/bin/cvc5 "${{ matrix.release_name }}"
+          shasum -a 256 "${{ matrix.release_name }}" > "${{ matrix.release_name }}.sha256"
+          cat "${{ matrix.release_name }}.sha256"
+
+      - name: upload release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.release_name }}
+          path: |
+            ${{ matrix.release_name }}
+            ${{ matrix.release_name }}.sha256
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: [build]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: download all artifacts
+        uses: actions/download-artifact@v8
+
+      - name: publish per-commit release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="basis-${GITHUB_SHA:0:10}"
+          cat */*.sha256 > SHA256SUMS
+          gh release delete -y "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag 2>/dev/null || true
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Basis cvc5 build $tag" \
+            --notes "$(printf 'Pinned Basis build of cvc5 at %s.\n\n```\n%s\n```' "$GITHUB_SHA" "$(cat SHA256SUMS)")" \
+            cvc5-arm64-macos/cvc5-arm64-macos \
+            cvc5-arm64-macos/cvc5-arm64-macos.sha256 \
+            cvc5-x86-linux/cvc5-x86-linux \
+            cvc5-x86-linux/cvc5-x86-linux.sha256 \
+            SHA256SUMS
