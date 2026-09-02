@@ -11,7 +11,7 @@ name: basis-build
 
 on:
   push:
-    branches: [basis]
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
