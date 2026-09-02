@@ -26,6 +26,7 @@ concurrency:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         build: [macos, linux]
         include:
@@ -38,6 +39,10 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 240
+    env:
+      # cvc5 1.1.2 vendors deps (LibPoly, CaDiCaL, ...) whose ancient
+      # cmake_minimum_required CMake 4.x rejects outright.
+      CMAKE_POLICY_VERSION_MINIMUM: "3.5"
 
     steps:
       - uses: actions/checkout@v6
