@@ -60,7 +60,7 @@ jobs:
             || python3 -m pip install tomli toml pyparsing
 
       - name: configure
-        run: ./configure.sh production --static --auto-download --ninja
+        run: ./configure.sh unrestricted --static --auto-download --ninja
 
       - name: build
         run: cmake --build build --target cvc5-bin
