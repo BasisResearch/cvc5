@@ -543,6 +543,16 @@ Term Smt2TermParser::parseTerm()
               d_state.notifyNamedExpression(tstack.back().first.d_expr, sym);
               needsUpdateCtx = true;
             }
+            else if (key == ":assert-id")
+            {
+              Assert(!tstack.back().first.d_expr.isNull());
+              // a provenance tag on the body of the term annotation. Like
+              // :qid, the symbol is not a declared name; unlike :named, it
+              // defines nothing and leaves the term unchanged.
+              std::string sym = parseSymbol(CHECK_NONE, SYM_VARIABLE);
+              d_state.notifyAssertionTag(tstack.back().first.d_expr, sym);
+              needsUpdateCtx = true;
+            }
             else if (key == ":no-pattern")
             {
               // a single term, set the current kind

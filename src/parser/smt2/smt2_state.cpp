@@ -1956,6 +1956,11 @@ void Smt2State::notifyNamedExpression(Term& expr, std::string name)
   setLastNamedTerm(expr, name);
 }
 
+void Smt2State::notifyAssertionTag(Term& expr, const std::string& tag)
+{
+  getSymbolManager()->addAssertionTag(expr, tag);
+}
+
 Term Smt2State::mkAnd(const std::vector<Term>& es) const
 {
   if (es.size() == 0)

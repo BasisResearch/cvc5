@@ -170,6 +170,32 @@ class CVC5_EXPORT SymManager
    */
   std::map<cvc5::Term, std::string> getExpressionNames(
       bool areAssertions = false) const;
+
+  //---------------------------- assertion tags
+  /**
+   * Record that term t carried an `:assert-id tag` annotation. Unlike
+   * `:named`, a tag defines no symbol, is not checked against the symbol
+   * table, and may be given under a binder. Terms are hash-consed, so two
+   * textually identical assertions with different tags are one term; every
+   * tag is kept, in order of arrival, without duplicates.
+   *
+   * @param t The tagged term
+   * @param tag The tag symbol
+   */
+  void addAssertionTag(cvc5::Term t, const std::string& tag);
+  /**
+   * Get the assertion tags of t.
+   *
+   * @param t The term
+   * @param tags Updated with the tags of t if it has any
+   * @return true if t has at least one tag
+   */
+  bool getAssertionTags(cvc5::Term t, std::vector<std::string>& tags) const;
+  /**
+   * @return A mapping of all tagged terms to their tags, in the current
+   * scope.
+   */
+  std::map<cvc5::Term, std::vector<std::string>> getAssertionTags() const;
   /**
    * @return The sorts we have declared that should be printed in the model.
    */

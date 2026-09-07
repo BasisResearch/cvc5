@@ -337,6 +337,12 @@ class Smt2State : public ParserState
    * attribute.
    */
   void notifyNamedExpression(Term& expr, std::string name);
+  /**
+   * Notify that expression expr was tagged with `:assert-id tag`. The tag is
+   * added to the term's tag list in the symbol manager and nothing else: no
+   * symbol is defined and the term is returned unchanged by the parser.
+   */
+  void notifyAssertionTag(Term& expr, const std::string& tag);
 
   // Throw a ParserException with msg appended with the current logic.
   inline void parseErrorLogic(const std::string& msg)

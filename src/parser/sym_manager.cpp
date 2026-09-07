@@ -12,6 +12,8 @@
 
 #include "parser/sym_manager.h"
 
+#include <algorithm>
+
 #include "context/cdhashmap.h"
 #include "context/cdhashset.h"
 #include "context/cdlist.h"
@@ -29,6 +31,8 @@ class SymManager::Implementation
 {
   using TermStringMap =
       CDHashMap<cvc5::Term, std::string, std::hash<cvc5::Term>>;
+  using TermStringsMap =
+      CDHashMap<cvc5::Term, std::vector<std::string>, std::hash<cvc5::Term>>;
   using TermSet = CDHashSet<cvc5::Term, std::hash<cvc5::Term>>;
   using SortList = CDList<cvc5::Sort>;
   using TermList = CDList<cvc5::Term>;
@@ -38,6 +42,7 @@ class SymManager::Implementation
       : d_context(),
         d_names(&d_context),
         d_namedAsserts(&d_context),
+        d_tags(&d_context),
         d_declareSorts(&d_context),
         d_declareTerms(&d_context),
         d_funToSynth(&d_context),
@@ -66,6 +71,12 @@ class SymManager::Implementation
   /** get expression names */
   std::map<cvc5::Term, std::string> getExpressionNames(
       bool areAssertions) const;
+  /** add assertion tag */
+  void addAssertionTag(cvc5::Term t, const std::string& tag);
+  /** get assertion tags */
+  bool getAssertionTags(cvc5::Term t, std::vector<std::string>& tags) const;
+  /** get all assertion tags */
+  std::map<cvc5::Term, std::vector<std::string>> getAssertionTags() const;
   /** get model declare sorts */
   std::vector<cvc5::Sort> getDeclaredSorts() const;
   /** get model declare terms */
@@ -104,6 +115,8 @@ class SymManager::Implementation
   TermStringMap d_names;
   /** The set of terms with assertion names */
   TermSet d_namedAsserts;
+  /** Map terms to their `:assert-id` tags */
+  TermStringsMap d_tags;
   /** Declared sorts (for model printing) */
   SortList d_declareSorts;
   /** Declared terms (for model printing) */
@@ -195,6 +208,51 @@ SymManager::Implementation::getExpressionNames(bool areAssertions) const
     emap[t] = (*it).second;
   }
   return emap;
+}
+
+void SymManager::Implementation::addAssertionTag(cvc5::Term t,
+                                                 const std::string& tag)
+{
+  Trace("sym-manager") << "SymManager: add assertion tag: " << t << " -> "
+                       << tag << std::endl;
+  std::vector<std::string> tags;
+  TermStringsMap::const_iterator it = d_tags.find(t);
+  if (it != d_tags.end())
+  {
+    tags = (*it).second;
+    if (std::find(tags.begin(), tags.end(), tag) != tags.end())
+    {
+      return;
+    }
+  }
+  tags.push_back(tag);
+  d_tags[t] = tags;
+}
+
+bool SymManager::Implementation::getAssertionTags(
+    cvc5::Term t, std::vector<std::string>& tags) const
+{
+  TermStringsMap::const_iterator it = d_tags.find(t);
+  if (it == d_tags.end())
+  {
+    return false;
+  }
+  tags = (*it).second;
+  return true;
+}
+
+std::map<cvc5::Term, std::vector<std::string>>
+SymManager::Implementation::getAssertionTags() const
+{
+  std::map<cvc5::Term, std::vector<std::string>> tmap;
+  for (TermStringsMap::const_iterator it = d_tags.begin(),
+                                      itend = d_tags.end();
+       it != itend;
+       ++it)
+  {
+    tmap[(*it).first] = (*it).second;
+  }
+  return tmap;
 }
 
 std::vector<cvc5::Sort> SymManager::Implementation::getDeclaredSorts() const
@@ -462,6 +520,23 @@ std::map<cvc5::Term, std::string> SymManager::getExpressionNames(
     bool areAssertions) const
 {
   return d_implementation->getExpressionNames(areAssertions);
+}
+
+void SymManager::addAssertionTag(cvc5::Term t, const std::string& tag)
+{
+  d_implementation->addAssertionTag(t, tag);
+}
+
+bool SymManager::getAssertionTags(cvc5::Term t,
+                                  std::vector<std::string>& tags) const
+{
+  return d_implementation->getAssertionTags(t, tags);
+}
+
+std::map<cvc5::Term, std::vector<std::string>> SymManager::getAssertionTags()
+    const
+{
+  return d_implementation->getAssertionTags();
 }
 std::vector<cvc5::Sort> SymManager::getDeclaredSorts() const
 {
