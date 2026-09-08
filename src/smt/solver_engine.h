@@ -747,6 +747,23 @@ class CVC5_EXPORT SolverEngine
    * to a value that estimates their difficulty for solving the current problem.
    */
   void getDifficultyMap(std::map<Node, Node>& dmap);
+  /**
+   * Get, for every preprocessed assertion currently asserted, the :assert-id
+   * tags of the input assertions it was derived from (an untagged input is
+   * `?`). Requires preprocessing proofs; throws ModalException otherwise.
+   *
+   * @param srcs Updated with (preprocessed assertion, tags) pairs, in
+   * assertion order.
+   */
+  void getAssertionSources(
+      std::vector<std::pair<Node, std::vector<std::string>>>& srcs);
+  /**
+   * Get the :assert-id tags of the input assertions that formula n was
+   * derived from. A quantified formula is looked up where it occurs in the
+   * preprocessed assertions, so instantiated quantifiers can be traced too.
+   * Requires preprocessing proofs; throws ModalException otherwise.
+   */
+  std::vector<std::string> getAssertionSourcesOf(const Node& n);
 
   /**
    * Push a user-level context.

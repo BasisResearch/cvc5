@@ -52,7 +52,8 @@ SmtSolver::SmtSolver(Env& env, SolverEngineStatistics& stats)
       d_propEngine(nullptr),
       d_ppAssertions(userContext()),
       d_ppSkolemMap(userContext()),
-      d_quantSrc(userContext())
+      d_quantSrc(userContext()),
+      d_sourced(userContext())
 {
 }
 
@@ -189,25 +190,36 @@ void SmtSolver::printAssertionSources(const preprocessing::AssertionPipeline& ap
   out << ";; assert-sources end" << std::endl;
 }
 
+void SmtSolver::getSourceTags(const std::vector<Node>& inputs,
+                              std::vector<std::string>& tags)
+{
+  for (const Node& in : inputs)
+  {
+    std::vector<std::string> ts;
+    if (!d_asserts.getAssertionTags(in, ts))
+    {
+      ts.push_back("?");
+    }
+    tags.insert(tags.end(), ts.begin(), ts.end());
+  }
+}
+
 void SmtSolver::printSourceTags(std::ostream& out,
                                 const std::vector<Node>& inputs)
 {
+  std::vector<std::string> tags;
+  getSourceTags(inputs, tags);
   out << "(";
-  bool first = true;
-  for (const Node& in : inputs)
+  for (size_t i = 0, size = tags.size(); i < size; i++)
   {
-    std::vector<std::string> tags;
-    if (!d_asserts.getAssertionTags(in, tags))
-    {
-      tags.push_back("?");
-    }
-    for (const std::string& tag : tags)
-    {
-      out << (first ? "" : " ") << tag;
-      first = false;
-    }
+    out << (i == 0 ? "" : " ") << tags[i];
   }
   out << ")";
+}
+
+const context::CDList<Node>& SmtSolver::getSourcedAssertions() const
+{
+  return d_sourced;
 }
 
 void SmtSolver::indexQuantifierSources(
@@ -235,6 +247,19 @@ void SmtSolver::indexQuantifierSources(
       d_quantSrc[q] = srcs;
     }
   }
+}
+
+std::vector<Node> SmtSolver::getIndexedQuantifiers() const
+{
+  std::vector<Node> qs;
+  for (context::CDHashMap<Node, std::vector<Node>>::const_iterator it =
+           d_quantSrc.begin();
+       it != d_quantSrc.end();
+       ++it)
+  {
+    qs.push_back((*it).first);
+  }
+  return qs;
 }
 
 bool SmtSolver::getQuantifierSources(const Node& q, std::vector<Node>& inputs)
@@ -286,6 +311,10 @@ void SmtSolver::assertToInternal(preprocessing::AssertionPipeline& ap)
   if (d_pp.getPreprocessProofGenerator() != nullptr)
   {
     indexQuantifierSources(ap);
+    for (const Node& a : assertions)
+    {
+      d_sourced.push_back(a);
+    }
   }
 
   // It is important to distinguish the input assertions from the skolem

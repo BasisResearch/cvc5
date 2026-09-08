@@ -74,6 +74,7 @@ Smt2CmdParser::Smt2CmdParser(Smt2Lexer& lex,
     d_table["find-synth-next"] = Token::FIND_SYNTH_NEXT_TOK;
     d_table["get-abduct-next"] = Token::GET_ABDUCT_NEXT_TOK;
     d_table["get-abduct"] = Token::GET_ABDUCT_TOK;
+    d_table["get-assertion-sources"] = Token::GET_ASSERTION_SOURCES_TOK;
     d_table["get-difficulty"] = Token::GET_DIFFICULTY_TOK;
     d_table["get-interpolant-next"] = Token::GET_INTERPOL_NEXT_TOK;
     d_table["get-interpolant"] = Token::GET_INTERPOL_TOK;
@@ -598,6 +599,18 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
     {
       d_state.checkThatLogicIsSet();
       cmd.reset(new GetAssignmentCommand());
+    }
+    break;
+    // (get-assertion-sources) or (get-assertion-sources <term>)
+    case Token::GET_ASSERTION_SOURCES_TOK:
+    {
+      d_state.checkThatLogicIsSet();
+      Term t;
+      if (d_lex.peekToken() != Token::RPAREN_TOK)
+      {
+        t = d_tparser.parseTerm();
+      }
+      cmd.reset(new GetAssertionSourcesCommand(t));
     }
     break;
     // (get-difficulty)

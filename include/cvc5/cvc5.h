@@ -6053,6 +6053,52 @@ class CVC5_EXPORT Solver
   std::map<Term, Term> getDifficulty() const;
 
   /**
+   * Get the provenance of the preprocessed assertions: for each assertion
+   * of the preprocessed problem, the ``:assert-id`` tags of the input
+   * assertions it was derived from. An input without a tag is reported as
+   * ``?``. This function is intended to be called immediately after any
+   * response to a checkSat.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (get-assertion-sources)
+   * \endverbatim
+   *
+   * Requires preprocessing proofs (option ``--proof-mode=pp-only`` or
+   * stronger).
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @return The (preprocessed assertion, tags) pairs, in assertion order.
+   */
+  std::vector<std::pair<Term, std::vector<std::string>>> getAssertionSources()
+      const;
+
+  /**
+   * Get the ``:assert-id`` tags of the input assertions that a formula was
+   * derived from. A quantified formula is looked up where it occurs in the
+   * preprocessed assertions, so the quantifiers named by
+   * ``--dump-instantiations`` can be traced.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (get-assertion-sources <term>)
+   * \endverbatim
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param term The formula.
+   * @return Its tags; an untagged input is ``?``.
+   */
+  std::vector<std::string> getAssertionSourcesOf(const Term& term) const;
+
+  /**
    * Get a timeout core.
    *
    * \verbatim embed:rst:leading-asterisk

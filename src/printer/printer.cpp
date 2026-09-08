@@ -538,6 +538,12 @@ void Printer::toStreamCmdGetDifficulty(std::ostream& out) const
   printUnknownCommand(out, "get-difficulty");
 }
 
+void Printer::toStreamCmdGetAssertionSources(std::ostream& out,
+                                             const Node& n) const
+{
+  printUnknownCommand(out, "get-assertion-sources");
+}
+
 void Printer::toStreamCmdGetTimeoutCore(std::ostream& out) const
 {
   printUnknownCommand(out, "get-timeout-core");

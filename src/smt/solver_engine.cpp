@@ -2229,6 +2229,85 @@ std::vector<Node> SolverEngine::getAssertions()
   return getAssertionsInternal();
 }
 
+namespace {
+/** The :qid of quantified formula q as a string, or empty if it has none. */
+std::string quantIdName(const Node& q)
+{
+  theory::quantifiers::QAttributes qa;
+  theory::quantifiers::QuantAttributes::computeQuantAttributes(q, qa);
+  if (qa.d_name.isNull() || !qa.d_name.hasName())
+  {
+    return "";
+  }
+  return qa.d_name.getName();
+}
+}  // namespace
+
+void SolverEngine::getAssertionSources(
+    std::vector<std::pair<Node, std::vector<std::string>>>& srcs)
+{
+  Trace("smt") << "SMT getAssertionSources()\n";
+  finishInit();
+  if (d_smtSolver->getPreprocessor()->getPreprocessProofGenerator() == nullptr)
+  {
+    throw ModalException(
+        "Cannot get assertion sources when preprocessing proofs are off "
+        "(use --proof-mode=pp-only or stronger).");
+  }
+  for (const Node& a : d_smtSolver->getSourcedAssertions())
+  {
+    std::vector<Node> inputs;
+    d_smtSolver->getInputSourcesOf(a, inputs);
+    std::vector<std::string> tags;
+    d_smtSolver->getSourceTags(inputs, tags);
+    srcs.emplace_back(a, tags);
+  }
+}
+
+std::vector<std::string> SolverEngine::getAssertionSourcesOf(const Node& n)
+{
+  Trace("smt") << "SMT getAssertionSourcesOf(" << n << ")\n";
+  finishInit();
+  if (d_smtSolver->getPreprocessor()->getPreprocessProofGenerator() == nullptr)
+  {
+    throw ModalException(
+        "Cannot get assertion sources when preprocessing proofs are off "
+        "(use --proof-mode=pp-only or stronger).");
+  }
+  std::vector<Node> inputs;
+  if (n.isClosure())
+  {
+    Node q = n;
+    // A quantifier re-parsed from the command line is not the pipeline's
+    // node when it carries a :qid, since each parse mints a fresh name
+    // variable. Fall back to the indexed quantifier with the same name.
+    std::vector<Node> indexed = d_smtSolver->getIndexedQuantifiers();
+    if (std::find(indexed.begin(), indexed.end(), q) == indexed.end())
+    {
+      std::string name = quantIdName(n);
+      if (!name.empty())
+      {
+        for (const Node& iq : indexed)
+        {
+          if (quantIdName(iq) == name)
+          {
+            q = iq;
+            break;
+          }
+        }
+      }
+    }
+    d_smtSolver->getQuantifierSources(q, inputs);
+  }
+  else
+  {
+    d_smtSolver->getInputSourcesOf(n, inputs);
+  }
+  std::vector<std::string> tags;
+  d_smtSolver->getSourceTags(inputs, tags);
+  return tags;
+}
+
 void SolverEngine::getDifficultyMap(std::map<Node, Node>& dmap)
 {
   Trace("smt") << "SMT getDifficultyMap()\n";

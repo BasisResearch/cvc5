@@ -290,6 +290,10 @@ class CVC5_EXPORT Printer
   /** Print get-difficulty command */
   virtual void toStreamCmdGetDifficulty(std::ostream& out) const;
 
+  /** Print get-assertion-sources command; n is null for the all form */
+  virtual void toStreamCmdGetAssertionSources(std::ostream& out,
+                                              const Node& n) const;
+
   /** Print get-timeout-core command */
   virtual void toStreamCmdGetTimeoutCore(std::ostream& out) const;
 

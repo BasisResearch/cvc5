@@ -132,11 +132,25 @@ class SmtSolver : protected EnvObj
    * @return false if preprocessing proofs are off.
    */
   bool getQuantifierSources(const Node& q, std::vector<Node>& inputs);
+  /** The quantified formulas indexed by indexQuantifierSources. */
+  std::vector<Node> getIndexedQuantifiers() const;
+  /**
+   * Get the :assert-id tags of the given input assertions, in order; an
+   * untagged input contributes `?`.
+   */
+  void getSourceTags(const std::vector<Node>& inputs,
+                     std::vector<std::string>& tags);
   /**
    * Print the :assert-id tags of the given input assertions as a
    * parenthesised list, an untagged input printing as `?`.
    */
   void printSourceTags(std::ostream& out, const std::vector<Node>& inputs);
+  /**
+   * The preprocessed assertions handed to the prop engine while preprocessing
+   * proofs were on, in the user context: the assertions
+   * (get-assertion-sources) reports on. Empty when proofs are off.
+   */
+  const context::CDList<Node>& getSourcedAssertions() const;
   //------------------------------------------ end access methods
   /**
    * Preprocess the assertions. This calls the preprocessor on the assertions
@@ -194,6 +208,8 @@ class SmtSolver : protected EnvObj
    * on; used to attribute instantiations to input assertions.
    */
   context::CDHashMap<Node, std::vector<Node>> d_quantSrc;
+  /** See getSourcedAssertions. */
+  NodeList d_sourced;
 };
 
 }  // namespace smt

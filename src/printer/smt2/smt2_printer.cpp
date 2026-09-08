@@ -2022,6 +2022,17 @@ void Smt2Printer::toStreamCmdGetDifficulty(std::ostream& out) const
   out << "(get-difficulty)";
 }
 
+void Smt2Printer::toStreamCmdGetAssertionSources(std::ostream& out,
+                                                 const Node& n) const
+{
+  if (n.isNull())
+  {
+    out << "(get-assertion-sources)";
+    return;
+  }
+  out << "(get-assertion-sources " << n << ")";
+}
+
 void Smt2Printer::toStreamCmdGetTimeoutCore(std::ostream& out) const
 {
   out << "(get-timeout-core)";

@@ -1041,6 +1041,37 @@ class CVC5_EXPORT GetUnsatCoreLemmasCommand : public Cmd
   std::vector<cvc5::Term> d_result;
 }; /* class GetUnsatCoreLemmasCommand */
 
+/**
+ * (get-assertion-sources) and (get-assertion-sources <term>): the :assert-id
+ * tags of the input assertions each preprocessed assertion, or the given
+ * formula, was derived from.
+ */
+class CVC5_EXPORT GetAssertionSourcesCommand : public Cmd
+{
+ public:
+  /** @param term The formula to trace, or null for every assertion. */
+  GetAssertionSourcesCommand(const cvc5::Term& term);
+  /** The result of the all-assertions form. */
+  const std::vector<std::pair<cvc5::Term, std::vector<std::string>>>&
+  getAssertionSources() const;
+  /** The result of the single-term form. */
+  const std::vector<std::string>& getTags() const;
+
+  void invoke(cvc5::Solver* solver, parser::SymManager* sm) override;
+  void printResult(cvc5::Solver* solver, std::ostream& out) const override;
+
+  std::string getCommandName() const override;
+  void toStream(std::ostream& out) const override;
+
+ protected:
+  /** The formula to trace, null for all */
+  cvc5::Term d_term;
+  /** The result of the all-assertions form */
+  std::vector<std::pair<cvc5::Term, std::vector<std::string>>> d_result;
+  /** The result of the single-term form */
+  std::vector<std::string> d_tags;
+};
+
 class CVC5_EXPORT GetDifficultyCommand : public Cmd
 {
  public:

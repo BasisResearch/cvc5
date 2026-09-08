@@ -235,6 +235,10 @@ class Smt2Printer : public cvc5::internal::Printer
   /** Print get-difficulty command */
   void toStreamCmdGetDifficulty(std::ostream& out) const override;
 
+  /** Print get-assertion-sources command */
+  void toStreamCmdGetAssertionSources(std::ostream& out,
+                                      const Node& n) const override;
+
   /** Print get-timeout-core command */
   void toStreamCmdGetTimeoutCore(std::ostream& out) const override;
 

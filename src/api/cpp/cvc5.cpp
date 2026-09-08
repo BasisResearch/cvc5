@@ -7995,6 +7995,45 @@ std::vector<Term> Solver::getUnsatCoreLemmas(void) const
   CVC5_API_TRY_CATCH_END;
 }
 
+std::vector<std::pair<Term, std::vector<std::string>>>
+Solver::getAssertionSources() const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_RECOVERABLE_CHECK(d_slv->getSmtMode() == internal::SmtMode::UNSAT
+                             || d_slv->getSmtMode() == internal::SmtMode::SAT
+                             || d_slv->getSmtMode()
+                                    == internal::SmtMode::SAT_UNKNOWN)
+      << "cannot get assertion sources unless after a UNSAT, SAT or UNKNOWN "
+         "response.";
+  //////// all checks before this line
+  std::vector<std::pair<internal::Node, std::vector<std::string>>> srcs;
+  d_slv->getAssertionSources(srcs);
+  std::vector<std::pair<Term, std::vector<std::string>>> res;
+  for (const std::pair<internal::Node, std::vector<std::string>>& s : srcs)
+  {
+    res.emplace_back(Term(d_tm.d_nm, s.first), s.second);
+  }
+  return res;
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+std::vector<std::string> Solver::getAssertionSourcesOf(const Term& term) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_SOLVER_CHECK_TERM(term);
+  CVC5_API_RECOVERABLE_CHECK(d_slv->getSmtMode() == internal::SmtMode::UNSAT
+                             || d_slv->getSmtMode() == internal::SmtMode::SAT
+                             || d_slv->getSmtMode()
+                                    == internal::SmtMode::SAT_UNKNOWN)
+      << "cannot get assertion sources unless after a UNSAT, SAT or UNKNOWN "
+         "response.";
+  //////// all checks before this line
+  return d_slv->getAssertionSourcesOf(*term.d_node);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
 std::map<Term, Term> Solver::getDifficulty() const
 {
   CVC5_API_TRY_CATCH_BEGIN;

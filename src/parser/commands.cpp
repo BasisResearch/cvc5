@@ -2255,6 +2255,93 @@ void GetUnsatCoreLemmasCommand::toStream(std::ostream& out) const
 }
 
 /* -------------------------------------------------------------------------- */
+/* class GetAssertionSourcesCommand */
+/* -------------------------------------------------------------------------- */
+
+GetAssertionSourcesCommand::GetAssertionSourcesCommand(const cvc5::Term& term)
+    : d_term(term)
+{
+}
+void GetAssertionSourcesCommand::invoke(cvc5::Solver* solver,
+                                        CVC5_UNUSED SymManager* sm)
+{
+  try
+  {
+    if (d_term.isNull())
+    {
+      d_result = solver->getAssertionSources();
+    }
+    else
+    {
+      d_tags = solver->getAssertionSourcesOf(d_term);
+    }
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.what());
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+namespace {
+void printTagList(std::ostream& out, const std::vector<std::string>& tags)
+{
+  out << "(";
+  for (size_t i = 0, size = tags.size(); i < size; i++)
+  {
+    out << (i == 0 ? "" : " ") << tags[i];
+  }
+  out << ")";
+}
+}  // namespace
+
+void GetAssertionSourcesCommand::printResult(CVC5_UNUSED cvc5::Solver* solver,
+                                             std::ostream& out) const
+{
+  if (!d_term.isNull())
+  {
+    out << "(";
+    printTagList(out, d_tags);
+    out << " " << d_term << ")" << std::endl;
+    return;
+  }
+  out << "(" << std::endl;
+  for (const std::pair<cvc5::Term, std::vector<std::string>>& s : d_result)
+  {
+    out << "(";
+    printTagList(out, s.second);
+    out << " " << s.first << ")" << std::endl;
+  }
+  out << ")" << std::endl;
+}
+
+const std::vector<std::pair<cvc5::Term, std::vector<std::string>>>&
+GetAssertionSourcesCommand::getAssertionSources() const
+{
+  return d_result;
+}
+
+const std::vector<std::string>& GetAssertionSourcesCommand::getTags() const
+{
+  return d_tags;
+}
+
+std::string GetAssertionSourcesCommand::getCommandName() const
+{
+  return "get-assertion-sources";
+}
+
+void GetAssertionSourcesCommand::toStream(std::ostream& out) const
+{
+  internal::Printer::getPrinter(out)->toStreamCmdGetAssertionSources(
+      out, d_term.isNull() ? internal::Node::null() : termToNode(d_term));
+}
+
+/* -------------------------------------------------------------------------- */
 /* class GetDifficultyCommand */
 /* -------------------------------------------------------------------------- */
 
