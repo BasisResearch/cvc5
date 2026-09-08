@@ -1506,6 +1506,7 @@ set(regress_0_tests
   regress0/printer/issue9938-2.smt2
   regress0/printer/assert-tags-output.smt2
   regress0/printer/assert-sources-output.smt2
+  regress0/printer/assert-sources-subst.smt2
   regress0/printer/get-assertion-sources-tags-only.smt2
   regress0/printer/get-assertion-sources.smt2
   regress0/printer/inst-sources-output.smt2
@@ -3184,6 +3185,7 @@ set(regress_1_tests
   regress1/proj-issue766-block-model.smt2
   regress1/proj-issue772-nlc-unk.smt2
   regress1/proof00.smt2
+  regress1/printer/verus-fixture-provenance.smt2
   regress1/proofs/add_two_base.smt2
   regress1/proofs/alpha-eq-var-shadow.smt2
   regress1/proofs/alpha-eq-var-shadow-name-only.smt2
