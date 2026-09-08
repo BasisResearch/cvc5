@@ -12,6 +12,8 @@
 
 #include "smt/assertions.h"
 
+#include <algorithm>
+
 #include <sstream>
 
 #include "base/modal_exception.h"
@@ -37,6 +39,7 @@ Assertions::Assertions(Env& env)
     : EnvObj(env),
       d_assertionList(userContext()),
       d_assertionListDefs(userContext()),
+      d_tags(userContext()),
       d_globalDefineFunLemmasIndex(userContext(), 0)
 {
 }
@@ -69,11 +72,57 @@ void Assertions::setAssumptions(const std::vector<Node>& assumptions)
   }
 }
 
-void Assertions::assertFormula(const Node& n)
+void Assertions::assertFormula(const Node& n,
+                               const std::vector<std::string>& tags)
 {
   ensureBoolean(n);
+  if (!tags.empty())
+  {
+    // Identical formulas are one node; keep every tag ever given to it.
+    std::vector<std::string> all;
+    TagMap::const_iterator it = d_tags.find(n);
+    if (it != d_tags.end())
+    {
+      all = (*it).second;
+    }
+    for (const std::string& tag : tags)
+    {
+      if (std::find(all.begin(), all.end(), tag) == all.end())
+      {
+        all.push_back(tag);
+      }
+    }
+    d_tags[n] = all;
+    if (isOutputOn(OutputTag::ASSERT_TAGS))
+    {
+      std::ostream& out = d_env.output(OutputTag::ASSERT_TAGS);
+      out << "(assert-tags (";
+      for (size_t i = 0, size = all.size(); i < size; i++)
+      {
+        out << (i == 0 ? "" : " ") << all[i];
+      }
+      out << ") " << n << ")" << std::endl;
+    }
+  }
   bool maybeHasFv = language::isLangSygus(options().base.inputLanguage);
   addFormula(n, false, maybeHasFv);
+}
+
+bool Assertions::getAssertionTags(const Node& n,
+                                  std::vector<std::string>& tags) const
+{
+  TagMap::const_iterator it = d_tags.find(n);
+  if (it == d_tags.end())
+  {
+    return false;
+  }
+  tags = (*it).second;
+  return true;
+}
+
+const Assertions::TagMap& Assertions::getAssertionTagMap() const
+{
+  return d_tags;
 }
 
 std::vector<Node>& Assertions::getAssumptions() { return d_assumptions; }

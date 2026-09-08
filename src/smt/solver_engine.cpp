@@ -945,11 +945,12 @@ std::vector<Node> SolverEngine::getUnsatAssumptions(void)
   return res;
 }
 
-void SolverEngine::assertFormula(const Node& formula)
+void SolverEngine::assertFormula(const Node& formula,
+                                 const std::vector<std::string>& tags)
 {
   beginCall();
   ensureWellFormedTerm(formula, "assertFormula");
-  assertFormulaInternal(formula);
+  assertFormulaInternal(formula, tags);
 }
 
 Node SolverEngine::eliminateSubtypesForProof(const Node& n) const
@@ -970,7 +971,8 @@ Node SolverEngine::eliminateSubtypesForProof(const Node& n) const
   return n;
 }
 
-void SolverEngine::assertFormulaInternal(const Node& formula)
+void SolverEngine::assertFormulaInternal(const Node& formula,
+                                         const std::vector<std::string>& tags)
 {
   // as an optimization we do not check whether formula is well-formed here, and
   // defer this check for certain cases within the assertions module.
@@ -978,7 +980,7 @@ void SolverEngine::assertFormulaInternal(const Node& formula)
   // note we could throw a warning here if formula and f are different,
   // but currently don't.
   Node f = eliminateSubtypesForProof(formula);
-  d_smtSolver->getAssertions().assertFormula(f);
+  d_smtSolver->getAssertions().assertFormula(f, tags);
 }
 
 /*

@@ -327,9 +327,13 @@ class CVC5_EXPORT SolverEngine
    * literals and conjunction of literals. Note this formula will
    * be included in the unsat core when applicable.
    *
+   * @param formula The formula.
+   * @param tags The `:assert-id` tags the formula carried in the input, if
+   * any; recorded by the assertions module for provenance queries.
    * @throw TypeCheckingException, LogicException
    */
-  void assertFormula(const Node& formula);
+  void assertFormula(const Node& formula,
+                     const std::vector<std::string>& tags = {});
 
   /**
    * Assert a formula (if provided) to the current context and call
@@ -904,7 +908,8 @@ class CVC5_EXPORT SolverEngine
   UnsatCore getUnsatCoreInternal(bool isInternal = true);
 
   /** Internal version of assertFormula */
-  void assertFormulaInternal(const Node& formula);
+  void assertFormulaInternal(const Node& formula,
+                             const std::vector<std::string>& tags = {});
 
   /**
    * If we are producing proofs that do not permit subtypes (mixed arithmetic),

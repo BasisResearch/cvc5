@@ -17,6 +17,7 @@
 
 #include <vector>
 
+#include "context/cdhashmap.h"
 #include "context/cdlist.h"
 #include "context/cdo.h"
 #include "expr/node.h"
@@ -42,6 +43,8 @@ class Assertions : protected EnvObj
 {
   /** The type of our internal assertion list */
   typedef context::CDList<Node> AssertionList;
+  /** The type of the map from input formulas to their :assert-id tags */
+  typedef context::CDHashMap<Node, std::vector<std::string>> TagMap;
 
  public:
   Assertions(Env& env);
@@ -71,9 +74,23 @@ class Assertions : protected EnvObj
    * literals and conjunction of literals.  Returns false if
    * immediately determined to be inconsistent.
    *
+   * @param n The formula.
+   * @param tags The `:assert-id` tags the formula carried, if any. They are
+   * recorded against n, merged with any tags an earlier assertion of the same
+   * formula carried, and printed under `-o assert-tags`.
    * @throw TypeCheckingException, LogicException
    */
-  void assertFormula(const Node& n);
+  void assertFormula(const Node& n, const std::vector<std::string>& tags = {});
+  /**
+   * Get the `:assert-id` tags recorded for input formula n.
+   *
+   * @param n The formula, as it was asserted.
+   * @param tags Updated with the tags of n, if it has any.
+   * @return true if n has at least one tag.
+   */
+  bool getAssertionTags(const Node& n, std::vector<std::string>& tags) const;
+  /** Get the map from tagged input formulas to their tags. */
+  const TagMap& getAssertionTagMap() const;
   /**
    * Assert that n corresponds to an assertion from a define-fun or
    * define-fun-rec command.
@@ -129,6 +146,8 @@ class Assertions : protected EnvObj
   AssertionList d_assertionList;
   /** The subset of above the correspond to define-fun or define-fun-rec */
   AssertionList d_assertionListDefs;
+  /** The `:assert-id` tags of input formulas, keyed by the formula asserted */
+  TagMap d_tags;
   /**
    * List of lemmas generated for global (recursive) function definitions. We
    * assert this list of definitions in each check-sat call.

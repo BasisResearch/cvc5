@@ -5665,6 +5665,28 @@ class CVC5_EXPORT Solver
   void assertFormula(const Term& term) const;
 
   /**
+   * Assert a formula that carried `:assert-id` provenance tags.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (assert (! <term> :assert-id <symbol>))
+   * \endverbatim
+   *
+   * The tags are recorded against the formula and reported by the
+   * provenance queries; they do not change what is asserted.
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param term The formula to assert.
+   * @param tags The tags the formula carried.
+   */
+  void assertFormula(const Term& term,
+                     const std::vector<std::string>& tags) const;
+
+  /**
    * Check satisfiability.
    *
    * SMT-LIB:

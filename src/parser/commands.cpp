@@ -274,11 +274,19 @@ void EchoCommand::toStream(std::ostream& out) const
 AssertCommand::AssertCommand(const cvc5::Term& t) : d_term(t) {}
 
 cvc5::Term AssertCommand::getTerm() const { return d_term; }
-void AssertCommand::invoke(cvc5::Solver* solver, CVC5_UNUSED SymManager* sm)
+void AssertCommand::invoke(cvc5::Solver* solver, SymManager* sm)
 {
   try
   {
-    solver->assertFormula(d_term);
+    std::vector<std::string> tags;
+    if (sm != nullptr && sm->getAssertionTags(d_term, tags))
+    {
+      solver->assertFormula(d_term, tags);
+    }
+    else
+    {
+      solver->assertFormula(d_term);
+    }
     d_commandStatus = CommandSuccess::instance();
   }
   catch (exception& e)

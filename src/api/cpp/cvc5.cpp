@@ -7295,6 +7295,19 @@ void Solver::assertFormula(const Term& term) const
   CVC5_API_TRY_CATCH_END;
 }
 
+void Solver::assertFormula(const Term& term,
+                           const std::vector<std::string>& tags) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_SOLVER_CHECK_TERM(term);
+  CVC5_API_SOLVER_CHECK_TERM_WITH_SORT(term, getBooleanSort());
+  ensureWellFormedTerm(term);
+  //////// all checks before this line
+  d_slv->assertFormula(*term.d_node, tags);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
 Result Solver::checkSat(void) const
 {
   CVC5_API_TRY_CATCH_BEGIN;
