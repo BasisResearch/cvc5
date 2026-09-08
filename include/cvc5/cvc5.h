@@ -6065,7 +6065,11 @@ class CVC5_EXPORT Solver
    * .. code:: smtlib
    *
    *     (get-assertion-sources)
+   *     (get-assertion-sources :tags-only)
    * \endverbatim
+   *
+   * The ``:tags-only`` form of the command replies with one copy of each
+   * distinct tag list naming at least one real tag, and no formulas.
    *
    * Requires preprocessing proofs (option ``--proof-mode=pp-only`` or
    * stronger).

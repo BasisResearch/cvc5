@@ -1042,15 +1042,20 @@ class CVC5_EXPORT GetUnsatCoreLemmasCommand : public Cmd
 }; /* class GetUnsatCoreLemmasCommand */
 
 /**
- * (get-assertion-sources) and (get-assertion-sources <term>): the :assert-id
- * tags of the input assertions each preprocessed assertion, or the given
- * formula, was derived from.
+ * (get-assertion-sources [:tags-only] [<term>]): the :assert-id tags of the
+ * input assertions each preprocessed assertion, or the given formula, was
+ * derived from. With :tags-only the reply omits the formulas and keeps one
+ * copy of each distinct tag list that names at least one real tag, which is
+ * what a client that only joins on tags needs to read.
  */
 class CVC5_EXPORT GetAssertionSourcesCommand : public Cmd
 {
  public:
-  /** @param term The formula to trace, or null for every assertion. */
-  GetAssertionSourcesCommand(const cvc5::Term& term);
+  /**
+   * @param term The formula to trace, or null for every assertion.
+   * @param tagsOnly Whether to reply with tag lists alone.
+   */
+  GetAssertionSourcesCommand(const cvc5::Term& term, bool tagsOnly = false);
   /** The result of the all-assertions form. */
   const std::vector<std::pair<cvc5::Term, std::vector<std::string>>>&
   getAssertionSources() const;
@@ -1066,6 +1071,8 @@ class CVC5_EXPORT GetAssertionSourcesCommand : public Cmd
  protected:
   /** The formula to trace, null for all */
   cvc5::Term d_term;
+  /** Whether to print tag lists alone */
+  bool d_tagsOnly;
   /** The result of the all-assertions form */
   std::vector<std::pair<cvc5::Term, std::vector<std::string>>> d_result;
   /** The result of the single-term form */

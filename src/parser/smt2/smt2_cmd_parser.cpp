@@ -601,16 +601,30 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
       cmd.reset(new GetAssignmentCommand());
     }
     break;
-    // (get-assertion-sources) or (get-assertion-sources <term>)
+    // (get-assertion-sources [:tags-only] [<term>])
     case Token::GET_ASSERTION_SOURCES_TOK:
     {
       d_state.checkThatLogicIsSet();
+      bool tagsOnly = false;
+      // peek at most once between consumptions
+      Token next = d_lex.peekToken();
+      if (next == Token::KEYWORD)
+      {
+        d_lex.eatToken(Token::KEYWORD);
+        std::string key = d_lex.tokenStr();
+        if (key != ":tags-only")
+        {
+          d_lex.parseError("Unknown get-assertion-sources option " + key);
+        }
+        tagsOnly = true;
+        next = d_lex.peekToken();
+      }
       Term t;
-      if (d_lex.peekToken() != Token::RPAREN_TOK)
+      if (next != Token::RPAREN_TOK)
       {
         t = d_tparser.parseTerm();
       }
-      cmd.reset(new GetAssertionSourcesCommand(t));
+      cmd.reset(new GetAssertionSourcesCommand(t, tagsOnly));
     }
     break;
     // (get-difficulty)

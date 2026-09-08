@@ -2258,8 +2258,9 @@ void GetUnsatCoreLemmasCommand::toStream(std::ostream& out) const
 /* class GetAssertionSourcesCommand */
 /* -------------------------------------------------------------------------- */
 
-GetAssertionSourcesCommand::GetAssertionSourcesCommand(const cvc5::Term& term)
-    : d_term(term)
+GetAssertionSourcesCommand::GetAssertionSourcesCommand(const cvc5::Term& term,
+                                                       bool tagsOnly)
+    : d_term(term), d_tagsOnly(tagsOnly)
 {
 }
 void GetAssertionSourcesCommand::invoke(cvc5::Solver* solver,
@@ -2304,9 +2305,38 @@ void GetAssertionSourcesCommand::printResult(CVC5_UNUSED cvc5::Solver* solver,
 {
   if (!d_term.isNull())
   {
+    if (d_tagsOnly)
+    {
+      printTagList(out, d_tags);
+      out << std::endl;
+      return;
+    }
     out << "(";
     printTagList(out, d_tags);
     out << " " << d_term << ")" << std::endl;
+    return;
+  }
+  if (d_tagsOnly)
+  {
+    // one copy of each distinct tag list with at least one real tag
+    std::vector<std::vector<std::string>> seen;
+    out << "(";
+    for (const std::pair<cvc5::Term, std::vector<std::string>>& s : d_result)
+    {
+      bool real = false;
+      for (const std::string& t : s.second)
+      {
+        real = real || t != "?";
+      }
+      if (!real || std::find(seen.begin(), seen.end(), s.second) != seen.end())
+      {
+        continue;
+      }
+      seen.push_back(s.second);
+      out << (seen.size() == 1 ? "" : " ");
+      printTagList(out, s.second);
+    }
+    out << ")" << std::endl;
     return;
   }
   out << "(" << std::endl;
@@ -2338,7 +2368,9 @@ std::string GetAssertionSourcesCommand::getCommandName() const
 void GetAssertionSourcesCommand::toStream(std::ostream& out) const
 {
   internal::Printer::getPrinter(out)->toStreamCmdGetAssertionSources(
-      out, d_term.isNull() ? internal::Node::null() : termToNode(d_term));
+      out,
+      d_term.isNull() ? internal::Node::null() : termToNode(d_term),
+      d_tagsOnly);
 }
 
 /* -------------------------------------------------------------------------- */

@@ -539,7 +539,8 @@ void Printer::toStreamCmdGetDifficulty(std::ostream& out) const
 }
 
 void Printer::toStreamCmdGetAssertionSources(std::ostream& out,
-                                             const Node& n) const
+                                             const Node& n,
+                                             bool tagsOnly) const
 {
   printUnknownCommand(out, "get-assertion-sources");
 }

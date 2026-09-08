@@ -2023,14 +2023,19 @@ void Smt2Printer::toStreamCmdGetDifficulty(std::ostream& out) const
 }
 
 void Smt2Printer::toStreamCmdGetAssertionSources(std::ostream& out,
-                                                 const Node& n) const
+                                                 const Node& n,
+                                                 bool tagsOnly) const
 {
-  if (n.isNull())
+  out << "(get-assertion-sources";
+  if (tagsOnly)
   {
-    out << "(get-assertion-sources)";
-    return;
+    out << " :tags-only";
   }
-  out << "(get-assertion-sources " << n << ")";
+  if (!n.isNull())
+  {
+    out << " " << n;
+  }
+  out << ")";
 }
 
 void Smt2Printer::toStreamCmdGetTimeoutCore(std::ostream& out) const
