@@ -109,10 +109,25 @@ class PreprocessProofGenerator : protected EnvObj, public ProofGenerator
    * assertion with EQ_RESOLVE to obtain the proof of the ending assertion f.
    */
   std::shared_ptr<ProofNode> getProofFor(Node f) override;
+  /**
+   * Get the input assertions that f was derived from, without building the
+   * proof of f. Follows d_src backwards: a REWRITE step continues at the
+   * formula it rewrote, and any step whose generator proves it from other
+   * formulas (a substitution learned from an equality, a lemma inferred from
+   * inputs) continues at that proof's free assumptions. A formula with no
+   * entry in d_src is an input and is added to inputs.
+   *
+   * @param f The (preprocessed) formula.
+   * @param inputs The input assertions f was derived from, in discovery order,
+   * without duplicates.
+   */
+  void getSources(const Node& f, std::vector<Node>& inputs);
   /** Identify */
   std::string identify() const override;
 
  private:
+  /** Record a further justification of n (see d_altSrc). */
+  void addAltSource(const Node& n, const TrustNode& tn);
   /**
    * Possibly check pedantic failure for null proof generator provided
    * to this class.
@@ -130,6 +145,13 @@ class PreprocessProofGenerator : protected EnvObj, public ProofGenerator
    * (2) A trust node LEMMA proving n.
    */
   NodeTrustNodeMap d_src;
+  /**
+   * Further justifications of nodes already in d_src. Proof construction
+   * needs one justification per node and keeps the first; provenance needs
+   * every one, since an input that another assertion rewrites to, or a lemma
+   * two passes both derive, has more than one source. getSources reads both.
+   */
+  context::CDHashMap<Node, std::vector<TrustNode>> d_altSrc;
   /**
    * A cd proof for input assertions, this is an empty proof that intentionally
    * returns (ASSUME f) for all f.

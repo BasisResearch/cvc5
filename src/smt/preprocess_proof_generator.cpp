@@ -13,6 +13,7 @@
 
 #include "smt/preprocess_proof_generator.h"
 
+#include <algorithm>
 #include <sstream>
 
 #include "options/proof_options.h"
@@ -20,6 +21,7 @@
 #include "proof/proof.h"
 #include "proof/proof_checker.h"
 #include "proof/proof_node.h"
+#include "proof/proof_node_algorithm.h"
 #include "proof/proof_node_manager.h"
 #include "smt/env.h"
 #include "theory/quantifiers/extended_rewrite.h"
@@ -33,6 +35,7 @@ PreprocessProofGenerator::PreprocessProofGenerator(Env& env,
     : EnvObj(env),
       d_ctx(c ? c : &d_context),
       d_src(d_ctx),
+      d_altSrc(d_ctx),
       d_inputPf(env, c, "InputProof"),
       d_trustPf(env, c, "PreprocessTrustProof"),
       d_name(name)
@@ -71,6 +74,10 @@ void PreprocessProofGenerator::notifyNewAssert(Node n,
   else
   {
     Trace("smt-proof-pp-debug") << "...already proven" << std::endl;
+    if (pg != nullptr)
+    {
+      addAltSource(n, TrustNode::mkTrustLemma(n, pg));
+    }
   }
 }
 
@@ -118,7 +125,21 @@ void PreprocessProofGenerator::notifyTrustedPreprocessed(TrustNode tnp,
   else
   {
     Trace("smt-proof-pp-debug") << "...already proven" << std::endl;
+    addAltSource(np, tnp);
   }
+}
+
+void PreprocessProofGenerator::addAltSource(const Node& n, const TrustNode& tn)
+{
+  std::vector<TrustNode> alts;
+  context::CDHashMap<Node, std::vector<TrustNode>>::const_iterator it =
+      d_altSrc.find(n);
+  if (it != d_altSrc.end())
+  {
+    alts = (*it).second;
+  }
+  alts.push_back(tn);
+  d_altSrc[n] = alts;
 }
 
 std::shared_ptr<ProofNode> PreprocessProofGenerator::getProofFor(Node f)
@@ -240,6 +261,80 @@ std::shared_ptr<ProofNode> PreprocessProofGenerator::getProofFor(Node f)
   // Note F_1 may have been given a proof if it was not an input assumption.
 
   return cdp.getProofFor(f);
+}
+
+void PreprocessProofGenerator::getSources(const Node& f,
+                                          std::vector<Node>& inputs)
+{
+  std::vector<Node> worklist{f};
+  std::unordered_set<Node> visited;
+  while (!worklist.empty())
+  {
+    Node curr = worklist.back();
+    worklist.pop_back();
+    if (!visited.insert(curr).second)
+    {
+      continue;
+    }
+    if (curr.isConst())
+    {
+      // true and false carry no provenance of their own
+      continue;
+    }
+    NodeTrustNodeMap::const_iterator it = d_src.find(curr);
+    if (it == d_src.end())
+    {
+      // no preprocessing step produced it, so it is an input assertion
+      if (std::find(inputs.begin(), inputs.end(), curr) == inputs.end())
+      {
+        inputs.push_back(curr);
+      }
+      continue;
+    }
+    // every justification of curr is a source: the one proofs use and any
+    // that arrived after it
+    std::vector<TrustNode> justs{(*it).second};
+    context::CDHashMap<Node, std::vector<TrustNode>>::const_iterator ita =
+        d_altSrc.find(curr);
+    if (ita != d_altSrc.end())
+    {
+      justs.insert(justs.end(), (*ita).second.begin(), (*ita).second.end());
+    }
+    for (const TrustNode& tn : justs)
+    {
+      Node proven = tn.getProven();
+      if (tn.getKind() == TrustNodeKind::REWRITE)
+      {
+        // curr was rewritten from proven[0]
+        Assert(proven.getKind() == Kind::EQUAL);
+        worklist.push_back(proven[0]);
+      }
+      ProofGenerator* pg = tn.getGenerator();
+      if (pg == nullptr || pg == &d_inputPf || pg == &d_trustPf)
+      {
+        // an input (ASSUME), or a trusted step with no recorded premises
+        if (pg == &d_inputPf
+            && std::find(inputs.begin(), inputs.end(), curr) == inputs.end())
+        {
+          inputs.push_back(curr);
+        }
+        continue;
+      }
+      // the step was justified from other formulas, e.g. a substitution
+      // learned from an input equality; those are its free assumptions
+      std::shared_ptr<ProofNode> pf = pg->getProofFor(proven);
+      if (pf == nullptr)
+      {
+        continue;
+      }
+      std::vector<Node> assumps;
+      expr::getFreeAssumptions(pf.get(), assumps);
+      for (const Node& a : assumps)
+      {
+        worklist.push_back(a);
+      }
+    }
+  }
 }
 
 std::string PreprocessProofGenerator::identify() const { return d_name; }

@@ -109,6 +109,16 @@ class SmtSolver : protected EnvObj
   Preprocessor* getPreprocessor();
   /** Get the assertions maintained by this SMT solver */
   Assertions& getAssertions();
+  /**
+   * Get the input assertions that the (preprocessed) formula n was derived
+   * from, by walking the preprocessing proof generator's record backwards.
+   *
+   * @param n The formula.
+   * @param inputs Updated with the input assertions n was derived from.
+   * @return false if preprocessing proofs are off, in which case nothing is
+   * recorded and inputs is unchanged.
+   */
+  bool getInputSourcesOf(const Node& n, std::vector<Node>& inputs);
   //------------------------------------------ end access methods
   /**
    * Preprocess the assertions. This calls the preprocessor on the assertions
@@ -133,6 +143,11 @@ class SmtSolver : protected EnvObj
   bool trackPreprocessedAssertions() const;
   /** Finish initialization of preprocessor */
   void finishInitPreprocessor();
+  /**
+   * Print, for `-o assert-sources`, each assertion of the preprocessed
+   * pipeline with the :assert-id tags of the inputs it was derived from.
+   */
+  void printAssertionSources(const preprocessing::AssertionPipeline& ap);
   /** The preprocessor of this SMT solver */
   Preprocessor d_pp;
   /** Assertions manager */

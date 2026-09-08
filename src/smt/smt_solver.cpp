@@ -27,6 +27,7 @@
 #include "smt/assertions.h"
 #include "smt/env.h"
 #include "smt/logic_exception.h"
+#include "smt/preprocess_proof_generator.h"
 #include "smt/preprocessor.h"
 #include "smt/proof_manager.h"
 #include "smt/solver_engine_stats.h"
@@ -142,8 +143,59 @@ void SmtSolver::preprocess(preprocessing::AssertionPipeline& ap)
   // process the assertions with the preprocessor
   d_pp.process(ap);
 
+  if (isOutputOn(OutputTag::ASSERT_SOURCES))
+  {
+    printAssertionSources(ap);
+  }
+
   // end: INVARIANT to maintain: no reordering of assertions or
   // introducing new ones
+}
+
+bool SmtSolver::getInputSourcesOf(const Node& n, std::vector<Node>& inputs)
+{
+  PreprocessProofGenerator* pppg = d_pp.getPreprocessProofGenerator();
+  if (pppg == nullptr)
+  {
+    return false;
+  }
+  pppg->getSources(n, inputs);
+  return true;
+}
+
+void SmtSolver::printAssertionSources(const preprocessing::AssertionPipeline& ap)
+{
+  std::ostream& out = d_env.output(OutputTag::ASSERT_SOURCES);
+  if (d_pp.getPreprocessProofGenerator() == nullptr)
+  {
+    out << ";; assert-sources unavailable: requires preprocessing proofs "
+           "(--proof-mode=pp-only or stronger)"
+        << std::endl;
+    return;
+  }
+  out << ";; assert-sources start" << std::endl;
+  for (const Node& a : ap.ref())
+  {
+    std::vector<Node> inputs;
+    getInputSourcesOf(a, inputs);
+    out << "(assert-sources (";
+    bool first = true;
+    for (const Node& in : inputs)
+    {
+      std::vector<std::string> tags;
+      if (!d_asserts.getAssertionTags(in, tags))
+      {
+        tags.push_back("?");
+      }
+      for (const std::string& tag : tags)
+      {
+        out << (first ? "" : " ") << tag;
+        first = false;
+      }
+    }
+    out << ") " << a << ")" << std::endl;
+  }
+  out << ";; assert-sources end" << std::endl;
 }
 
 void SmtSolver::assertToInternal(preprocessing::AssertionPipeline& ap)
