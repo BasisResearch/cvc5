@@ -213,7 +213,7 @@ name   = "Base"
 [[option.mode.ASSERT_SOURCES]]
   name = "assert-sources"
   help = "print each preprocessed assertion with the :assert-id tags of the input assertions it was derived from (requires preprocessing proofs, e.g. --proof-mode=pp-only)"
-  description = "With ``-o assert-sources``, cvc5 prints, after preprocessing, each assertion of the preprocessed problem together with the ``:assert-id`` tags of the input assertions it was derived from; an input without a tag prints as ``?``. Requires preprocessing proofs (``--proof-mode=pp-only`` or stronger)."
+  description = "With ``-o assert-sources``, cvc5 prints, after preprocessing, each assertion of the preprocessed problem together with the ``:assert-id`` tags of the input assertions it was derived from; an input without a tag prints as ``?``. With ``--dump-instantiations`` it also prints, per instantiated quantifier, the tags of the input assertions the quantifier came from. Requires preprocessing proofs (``--proof-mode=pp-only`` or stronger)."
   example-file = "regress0/printer/assert-sources-output.smt2"
 [[option.mode.POST_ASSERTS]]
   name = "post-asserts"

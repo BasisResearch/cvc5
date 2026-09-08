@@ -119,6 +119,24 @@ class SmtSolver : protected EnvObj
    * recorded and inputs is unchanged.
    */
   bool getInputSourcesOf(const Node& n, std::vector<Node>& inputs);
+  /**
+   * Get the input assertions that quantified formula q came from. q is looked
+   * up in the index of quantifier subterms of the preprocessed assertions
+   * (built by indexQuantifierSources when preprocessing proofs are on), and
+   * each containing assertion is traced back with getInputSourcesOf. If q is
+   * not indexed, it is traced directly, which covers a quantifier that was
+   * itself a top-level assertion.
+   *
+   * @param q The quantified formula, as the quantifiers engine knows it.
+   * @param inputs Updated with the input assertions q came from.
+   * @return false if preprocessing proofs are off.
+   */
+  bool getQuantifierSources(const Node& q, std::vector<Node>& inputs);
+  /**
+   * Print the :assert-id tags of the given input assertions as a
+   * parenthesised list, an untagged input printing as `?`.
+   */
+  void printSourceTags(std::ostream& out, const std::vector<Node>& inputs);
   //------------------------------------------ end access methods
   /**
    * Preprocess the assertions. This calls the preprocessor on the assertions
@@ -148,6 +166,13 @@ class SmtSolver : protected EnvObj
    * pipeline with the :assert-id tags of the inputs it was derived from.
    */
   void printAssertionSources(const preprocessing::AssertionPipeline& ap);
+  /**
+   * Record, for every quantified formula occurring in the preprocessed
+   * pipeline, the pipeline assertions it occurs in (see d_quantSrc). Called
+   * when the pipeline is handed to the prop engine and preprocessing proofs
+   * are on.
+   */
+  void indexQuantifierSources(const preprocessing::AssertionPipeline& ap);
   /** The preprocessor of this SMT solver */
   Preprocessor d_pp;
   /** Assertions manager */
@@ -163,6 +188,12 @@ class SmtSolver : protected EnvObj
   NodeList d_ppAssertions;
   /** The skolem map associated with d_ppAssertions */
   context::CDHashMap<size_t, Node> d_ppSkolemMap;
+  /**
+   * Quantified formulas of the preprocessed pipeline, mapped to the pipeline
+   * assertions they occur in. Only populated when preprocessing proofs are
+   * on; used to attribute instantiations to input assertions.
+   */
+  context::CDHashMap<Node, std::vector<Node>> d_quantSrc;
 };
 
 }  // namespace smt

@@ -2057,6 +2057,17 @@ void SolverEngine::printInstantiations(std::ostream& out)
              == options::PrintInstMode::LIST);
       out << i.second;
     }
+    if (d_env->isOutputOn(OutputTag::ASSERT_SOURCES))
+    {
+      // the :assert-id tags of the input assertions this quantifier came from
+      std::vector<Node> inputs;
+      if (d_smtSolver->getQuantifierSources(i.first, inputs))
+      {
+        out << "(instantiation-sources " << name << " ";
+        d_smtSolver->printSourceTags(out, inputs);
+        out << ")" << std::endl;
+      }
+    }
     printed = true;
   }
   // if we did not print anything, we indicate this

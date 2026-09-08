@@ -12,6 +12,9 @@
 
 #include "smt/smt_solver.h"
 
+#include <algorithm>
+
+#include "expr/node_algorithm.h"
 #include "options/arith_options.h"
 #include "options/arrays_options.h"
 #include "options/bags_options.h"
@@ -48,7 +51,8 @@ SmtSolver::SmtSolver(Env& env, SolverEngineStatistics& stats)
       d_theoryEngine(nullptr),
       d_propEngine(nullptr),
       d_ppAssertions(userContext()),
-      d_ppSkolemMap(userContext())
+      d_ppSkolemMap(userContext()),
+      d_quantSrc(userContext())
 {
 }
 
@@ -178,24 +182,88 @@ void SmtSolver::printAssertionSources(const preprocessing::AssertionPipeline& ap
   {
     std::vector<Node> inputs;
     getInputSourcesOf(a, inputs);
-    out << "(assert-sources (";
-    bool first = true;
-    for (const Node& in : inputs)
-    {
-      std::vector<std::string> tags;
-      if (!d_asserts.getAssertionTags(in, tags))
-      {
-        tags.push_back("?");
-      }
-      for (const std::string& tag : tags)
-      {
-        out << (first ? "" : " ") << tag;
-        first = false;
-      }
-    }
-    out << ") " << a << ")" << std::endl;
+    out << "(assert-sources ";
+    printSourceTags(out, inputs);
+    out << " " << a << ")" << std::endl;
   }
   out << ";; assert-sources end" << std::endl;
+}
+
+void SmtSolver::printSourceTags(std::ostream& out,
+                                const std::vector<Node>& inputs)
+{
+  out << "(";
+  bool first = true;
+  for (const Node& in : inputs)
+  {
+    std::vector<std::string> tags;
+    if (!d_asserts.getAssertionTags(in, tags))
+    {
+      tags.push_back("?");
+    }
+    for (const std::string& tag : tags)
+    {
+      out << (first ? "" : " ") << tag;
+      first = false;
+    }
+  }
+  out << ")";
+}
+
+void SmtSolver::indexQuantifierSources(
+    const preprocessing::AssertionPipeline& ap)
+{
+  for (const Node& a : ap.ref())
+  {
+    std::unordered_set<Node> qs;
+    expr::getKindSubterms(a, Kind::FORALL, false, qs);
+    expr::getKindSubterms(a, Kind::EXISTS, false, qs);
+    for (const Node& q : qs)
+    {
+      std::vector<Node> srcs;
+      context::CDHashMap<Node, std::vector<Node>>::const_iterator it =
+          d_quantSrc.find(q);
+      if (it != d_quantSrc.end())
+      {
+        srcs = (*it).second;
+        if (std::find(srcs.begin(), srcs.end(), a) != srcs.end())
+        {
+          continue;
+        }
+      }
+      srcs.push_back(a);
+      d_quantSrc[q] = srcs;
+    }
+  }
+}
+
+bool SmtSolver::getQuantifierSources(const Node& q, std::vector<Node>& inputs)
+{
+  if (d_pp.getPreprocessProofGenerator() == nullptr)
+  {
+    return false;
+  }
+  context::CDHashMap<Node, std::vector<Node>>::const_iterator it =
+      d_quantSrc.find(q);
+  if (it == d_quantSrc.end())
+  {
+    // not a subterm of any pipeline assertion we saw; it may itself have
+    // been a top-level assertion
+    return getInputSourcesOf(q, inputs);
+  }
+  for (const Node& a : (*it).second)
+  {
+    std::vector<Node> ins;
+    getInputSourcesOf(a, ins);
+    for (const Node& in : ins)
+    {
+      if (std::find(inputs.begin(), inputs.end(), in) == inputs.end())
+      {
+        inputs.push_back(in);
+      }
+    }
+  }
+  return true;
 }
 
 void SmtSolver::assertToInternal(preprocessing::AssertionPipeline& ap)
@@ -215,6 +283,10 @@ void SmtSolver::assertToInternal(preprocessing::AssertionPipeline& ap)
   // assert to prop engine, which will convert to CNF
   d_env.verbose(2) << "converting to CNF..." << endl;
   d_propEngine->assertInputFormulas(assertions, ism);
+  if (d_pp.getPreprocessProofGenerator() != nullptr)
+  {
+    indexQuantifierSources(ap);
+  }
 
   // It is important to distinguish the input assertions from the skolem
   // definitions, as the decision justification heuristic treates the latter
