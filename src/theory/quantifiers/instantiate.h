@@ -401,8 +401,20 @@ class Instantiate : public QuantifiersUtil
   context::CDO<std::string> d_replayKey;
   /** Whether the current user context allows restored instances only */
   context::CDO<bool> d_replayOnly;
-  /** Quantified formulas already replayed in the current user context */
+  /**
+   * A tag per key, fresh on every save or import under it, so that replay
+   * progress belongs to one key's vectors as saved at one time.
+   */
+  std::map<std::string, Node> d_savedTag;
+  /** The number of saves and imports so far, the source of fresh tags */
+  uint64_t d_saveCount;
+  /**
+   * (SEXPR q tag) for each quantified formula replayed in the current user
+   * context from the vectors carrying tag.
+   */
   context::CDHashSet<Node> d_replayed;
+  /** The replay record for q under key's current vectors, null if none. */
+  Node replayRecord(const std::string& key, const Node& q) const;
 };
 
 }  // namespace quantifiers

@@ -12,6 +12,8 @@
 
 #include "theory/quantifiers/instantiate.h"
 
+#include "util/rational.h"
+
 #include "expr/node_algorithm.h"
 #include "options/base_options.h"
 #include "options/quantifiers_options.h"
@@ -56,6 +58,7 @@ Instantiate::Instantiate(Env& env,
                    : nullptr),
       d_replayKey(userContext(), std::string()),
       d_replayOnly(userContext(), false),
+      d_saveCount(0),
       d_replayed(userContext())
 {
   // We need to use user context-dependent trie for the main instantiation
@@ -768,6 +771,8 @@ void Instantiate::saveInstantiations(
 {
   std::map<Node, std::vector<std::vector<Node>>>& saved = d_saved[key];
   saved.clear();
+  // New vectors: whatever was replayed from the old ones does not cover them.
+  d_savedTag[key] = nodeManager()->mkConstInt(Rational(++d_saveCount));
   for (auto& entry : insts)
   {
     if (entry.second.empty())
@@ -787,6 +792,16 @@ void Instantiate::restoreInstantiations(const std::string& key, bool only)
 
 bool Instantiate::replayOnly() const { return d_replayOnly.get(); }
 
+Node Instantiate::replayRecord(const std::string& key, const Node& q) const
+{
+  auto it = d_savedTag.find(key);
+  if (it == d_savedTag.end())
+  {
+    return Node::null();
+  }
+  return NodeManager::mkNode(Kind::SEXPR, q, it->second);
+}
+
 bool Instantiate::hasPendingReplay() const
 {
   const std::string& key = d_replayKey.get();
@@ -795,13 +810,25 @@ bool Instantiate::hasPendingReplay() const
     return false;
   }
   auto it = d_saved.find(key);
-  return it != d_saved.end() && d_replayed.size() < it->second.size();
+  if (it == d_saved.end())
+  {
+    return false;
+  }
+  for (const std::pair<const Node, std::vector<std::vector<Node>>>& s :
+       it->second)
+  {
+    if (d_replayed.find(replayRecord(key, s.first)) == d_replayed.end())
+    {
+      return true;
+    }
+  }
+  return false;
 }
 
 void Instantiate::replaySaved(Node q)
 {
   const std::string& key = d_replayKey.get();
-  if (key.empty() || d_replayed.find(q) != d_replayed.end())
+  if (key.empty())
   {
     return;
   }
@@ -815,7 +842,12 @@ void Instantiate::replaySaved(Node q)
   {
     return;
   }
-  d_replayed.insert(q);
+  Node record = replayRecord(key, q);
+  if (d_replayed.find(record) != d_replayed.end())
+  {
+    return;
+  }
+  d_replayed.insert(record);
   ++(d_statistics.d_replay_quants);
   // Each vector goes through the ordinary path: duplicate and entailment
   // checks, preprocessing, the lemma (=> q body) and its proof. The lemma is

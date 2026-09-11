@@ -2267,7 +2267,9 @@ void SolverEngine::importInstantiations(
 
 void SolverEngine::restoreInstantiations(const std::string& key, bool only)
 {
-  finishInit();
+  // The restore is user-context state: apply pending pops first (such as the
+  // assumption scope of a check-sat-assuming), or the next call undoes it.
+  beginCall();
   getAvailableQuantifiersEngine("restoreInstantiations")
       ->restoreInstantiations(key, only);
 }
