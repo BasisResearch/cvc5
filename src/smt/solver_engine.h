@@ -713,6 +713,18 @@ class CVC5_EXPORT SolverEngine
    */
   void getInstantiationTermVectors(
       std::map<Node, std::vector<std::vector<Node>>>& insts);
+  /**
+   * Save the instantiation term vectors of the last check under key, in a
+   * store that survives pop. Replaces what key held.
+   */
+  void saveInstantiations(const std::string& key);
+  /**
+   * Replay the vectors saved under key in the current user context: each
+   * asserted quantified formula is instantiated with its own saved vectors
+   * through the ordinary instantiation path. If only is true, no other
+   * instantiation happens in this user context.
+   */
+  void restoreInstantiations(const std::string& key, bool only);
 
   /**
    * Get an unsatisfiable core (only if immediately preceded by an UNSAT

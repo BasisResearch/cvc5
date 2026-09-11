@@ -1079,6 +1079,43 @@ class CVC5_EXPORT GetAssertionSourcesCommand : public Cmd
   std::vector<std::string> d_tags;
 };
 
+/** (save-instantiations <symbol>), see Solver::saveInstantiations */
+class CVC5_EXPORT SaveInstantiationsCommand : public Cmd
+{
+ public:
+  SaveInstantiationsCommand(const std::string& key);
+
+  void invoke(cvc5::Solver* solver, parser::SymManager* sm) override;
+
+  std::string getCommandName() const override;
+  void toStream(std::ostream& out) const override;
+
+ protected:
+  /** The name to save under */
+  std::string d_key;
+};
+
+/**
+ * (restore-instantiations <symbol> [:only]), see
+ * Solver::restoreInstantiations
+ */
+class CVC5_EXPORT RestoreInstantiationsCommand : public Cmd
+{
+ public:
+  RestoreInstantiationsCommand(const std::string& key, bool only);
+
+  void invoke(cvc5::Solver* solver, parser::SymManager* sm) override;
+
+  std::string getCommandName() const override;
+  void toStream(std::ostream& out) const override;
+
+ protected:
+  /** The name saved under */
+  std::string d_key;
+  /** Whether restored instances are the only ones allowed */
+  bool d_only;
+};
+
 class CVC5_EXPORT GetDifficultyCommand : public Cmd
 {
  public:

@@ -358,6 +358,8 @@ enum class InferenceId
   QUANTIFIERS_INST_E_MATCHING_MT,
   // E-matching using linear implementation of multi-triggers
   QUANTIFIERS_INST_E_MATCHING_MTL,
+  // instantiation replayed from a saved term vector
+  QUANTIFIERS_INST_REPLAY,
   // instantiation due to higher-order matching on top of e-matching
   QUANTIFIERS_INST_E_MATCHING_HO,
   // E-matching based on variable triggers

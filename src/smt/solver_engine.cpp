@@ -2077,6 +2077,46 @@ void SolverEngine::printInstantiations(std::ostream& out)
   }
 }
 
+void SolverEngine::saveInstantiations(const std::string& key)
+{
+  // see if another solver engine was responsible for the last status
+  SolverEngine* ssolver = d_state->getStatusSolver();
+  if (ssolver != nullptr)
+  {
+    return ssolver->saveInstantiations(key);
+  }
+  QuantifiersEngine* qe = getAvailableQuantifiersEngine("saveInstantiations");
+  if (!(d_env->getOptions().smt.produceProofs && d_env->isTheoryProofProducing()
+        && getSmtMode() == SmtMode::UNSAT))
+  {
+    qe->saveInstantiations(key);
+    return;
+  }
+  // After unsat with proofs, keep only the instantiations the refutation
+  // used. The rest belong to branches the search abandoned, and replaying
+  // them up front steers the next search away from the refutation.
+  std::map<Node, InstantiationList> rinsts;
+  std::map<Node, std::vector<Node>> sks;
+  getRelevantQuantTermVectors(rinsts, sks);
+  std::map<Node, std::vector<std::vector<Node>>> insts;
+  for (const std::pair<const Node, InstantiationList>& i : rinsts)
+  {
+    std::vector<std::vector<Node>>& tvecs = insts[i.first];
+    for (const InstantiationVec& v : i.second.d_inst)
+    {
+      tvecs.push_back(v.d_vec);
+    }
+  }
+  qe->saveInstantiations(key, insts);
+}
+
+void SolverEngine::restoreInstantiations(const std::string& key, bool only)
+{
+  finishInit();
+  getAvailableQuantifiersEngine("restoreInstantiations")
+      ->restoreInstantiations(key, only);
+}
+
 void SolverEngine::getInstantiationTermVectors(
     std::map<Node, std::vector<std::vector<Node>>>& insts)
 {

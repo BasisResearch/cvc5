@@ -1052,6 +1052,24 @@ bool Smt2State::hasGrammars() const
 
 bool Smt2State::usingFreshBinders() const { return d_freshBinders; }
 
+Term Smt2State::mkQidConst(const std::string& name)
+{
+  // As with binders, the same text must parse to the same quantified formula,
+  // so the constant naming it is reused unless binders are fresh.
+  if (d_freshBinders)
+  {
+    return d_tm.mkConst(d_tm.getBooleanSort(), name);
+  }
+  auto it = d_qidCache.find(name);
+  if (it != d_qidCache.end())
+  {
+    return it->second;
+  }
+  Term c = d_tm.mkConst(d_tm.getBooleanSort(), name);
+  d_qidCache[name] = c;
+  return c;
+}
+
 void Smt2State::checkThatLogicIsSet()
 {
   if (!logicIsSet())

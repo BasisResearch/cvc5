@@ -8034,6 +8034,30 @@ std::vector<std::string> Solver::getAssertionSourcesOf(const Term& term) const
   CVC5_API_TRY_CATCH_END;
 }
 
+void Solver::saveInstantiations(const std::string& key) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_RECOVERABLE_CHECK(d_slv->getSmtMode() == internal::SmtMode::UNSAT
+                             || d_slv->getSmtMode() == internal::SmtMode::SAT
+                             || d_slv->getSmtMode()
+                                    == internal::SmtMode::SAT_UNKNOWN)
+      << "cannot save instantiations unless after a UNSAT, SAT or UNKNOWN "
+         "response.";
+  //////// all checks before this line
+  d_slv->saveInstantiations(key);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+void Solver::restoreInstantiations(const std::string& key, bool only) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  //////// all checks before this line
+  d_slv->restoreInstantiations(key, only);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
 std::map<Term, Term> Solver::getDifficulty() const
 {
   CVC5_API_TRY_CATCH_BEGIN;

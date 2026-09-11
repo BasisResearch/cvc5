@@ -75,6 +75,8 @@ Smt2CmdParser::Smt2CmdParser(Smt2Lexer& lex,
     d_table["get-abduct-next"] = Token::GET_ABDUCT_NEXT_TOK;
     d_table["get-abduct"] = Token::GET_ABDUCT_TOK;
     d_table["get-assertion-sources"] = Token::GET_ASSERTION_SOURCES_TOK;
+    d_table["save-instantiations"] = Token::SAVE_INSTANTIATIONS_TOK;
+    d_table["restore-instantiations"] = Token::RESTORE_INSTANTIATIONS_TOK;
     d_table["get-difficulty"] = Token::GET_DIFFICULTY_TOK;
     d_table["get-interpolant-next"] = Token::GET_INTERPOL_NEXT_TOK;
     d_table["get-interpolant"] = Token::GET_INTERPOL_TOK;
@@ -625,6 +627,33 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
         t = d_tparser.parseTerm();
       }
       cmd.reset(new GetAssertionSourcesCommand(t, tagsOnly));
+    }
+    break;
+    // (save-instantiations <symbol>)
+    case Token::SAVE_INSTANTIATIONS_TOK:
+    {
+      d_state.checkThatLogicIsSet();
+      std::string key = d_tparser.parseSymbol(CHECK_NONE, SYM_VARIABLE);
+      cmd.reset(new SaveInstantiationsCommand(key));
+    }
+    break;
+    // (restore-instantiations <symbol> [:only])
+    case Token::RESTORE_INSTANTIATIONS_TOK:
+    {
+      d_state.checkThatLogicIsSet();
+      std::string key = d_tparser.parseSymbol(CHECK_NONE, SYM_VARIABLE);
+      bool only = false;
+      if (d_lex.peekToken() == Token::KEYWORD)
+      {
+        d_lex.eatToken(Token::KEYWORD);
+        if (d_lex.tokenStr() != std::string(":only"))
+        {
+          d_lex.parseError("Unknown restore-instantiations option "
+                           + std::string(d_lex.tokenStr()));
+        }
+        only = true;
+      }
+      cmd.reset(new RestoreInstantiationsCommand(key, only));
     }
     break;
     // (get-difficulty)

@@ -18,6 +18,7 @@
 #include <map>
 
 #include "context/cdhashset.h"
+#include "context/cdo.h"
 #include "expr/node.h"
 #include "proof/proof.h"
 #include "theory/inference_id.h"
@@ -273,6 +274,34 @@ class Instantiate : public QuantifiersUtil
   void getInstantiations(Node q, std::vector<Node>& insts);
   //--------------------------------------end user-level interface utilities
 
+  //--------------------------------------saved instantiations
+  /**
+   * Save the term vectors of every instantiation in the current user context
+   * under key, replacing what key held. The store is not context-dependent,
+   * so it survives a pop.
+   */
+  void saveInstantiations(const std::string& key);
+  /** Save the given term vectors under key, replacing what key held. */
+  void saveInstantiations(const std::string& key,
+                          std::map<Node, std::vector<std::vector<Node>>>& insts);
+  /**
+   * Replay the vectors saved under key in the current user context. From the
+   * next check on, each asserted quantified formula with saved vectors is
+   * instantiated with them once per user context, through addInstantiation.
+   * Vectors are keyed by the formula's node, so a formula this context never
+   * asserts is never instantiated. If only is true, no instantiation
+   * strategy runs in this user context, so its checks answer from the
+   * restored instances alone: unsat or unknown.
+   */
+  void restoreInstantiations(const std::string& key, bool only);
+  /** Whether the current user context allows restored instances only. */
+  bool replayOnly() const;
+  /** Whether restored vectors may still be waiting for their formula. */
+  bool hasPendingReplay() const;
+  /** Instantiate q with its restored vectors, once per user context. */
+  void replaySaved(Node q);
+  //--------------------------------------end saved instantiations
+
   /** Are proofs enabled for this object? */
   bool isProofEnabled() const;
 
@@ -289,6 +318,10 @@ class Instantiate : public QuantifiersUtil
     IntStat d_inst_duplicate;
     IntStat d_inst_duplicate_eq;
     IntStat d_inst_duplicate_ent;
+    /** term vectors saved by saveInstantiations */
+    IntStat d_replay_saved;
+    /** quantified formulas instantiated from restored vectors */
+    IntStat d_replay_quants;
     Statistics(StatisticsRegistry& sr);
   }; /* class Instantiate::Statistics */
   Statistics d_statistics;
@@ -358,6 +391,15 @@ class Instantiate : public QuantifiersUtil
   std::unique_ptr<CDProof> d_pfInst;
   /** Whether we are using context-dependent trie index */
   bool d_useCdInstTrie;
+  /** Saved term vectors per key and quantified formula, not context-dependent */
+  std::map<std::string, std::map<Node, std::vector<std::vector<Node>>>>
+      d_saved;
+  /** The key restored in the current user context, empty if none */
+  context::CDO<std::string> d_replayKey;
+  /** Whether the current user context allows restored instances only */
+  context::CDO<bool> d_replayOnly;
+  /** Quantified formulas already replayed in the current user context */
+  context::CDHashSet<Node> d_replayed;
 };
 
 }  // namespace quantifiers

@@ -571,7 +571,7 @@ Term Smt2TermParser::parseTerm()
               std::string sym = parseSymbol(CHECK_NONE, SYM_VARIABLE);
               // must create a variable whose name is the name of the quantified
               // formula, not a string.
-              attrValue = tm.mkConst(tm.getBooleanSort(), sym);
+              attrValue = d_state.mkQidConst(sym);
             }
             else if (key == ":skolem-add-to-pool")
             {

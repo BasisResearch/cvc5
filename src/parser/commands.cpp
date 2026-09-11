@@ -2374,6 +2374,82 @@ void GetAssertionSourcesCommand::toStream(std::ostream& out) const
 }
 
 /* -------------------------------------------------------------------------- */
+/* class SaveInstantiationsCommand */
+/* -------------------------------------------------------------------------- */
+
+SaveInstantiationsCommand::SaveInstantiationsCommand(const std::string& key)
+    : d_key(key)
+{
+}
+
+void SaveInstantiationsCommand::invoke(cvc5::Solver* solver,
+                                       CVC5_UNUSED SymManager* sm)
+{
+  try
+  {
+    solver->saveInstantiations(d_key);
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.what());
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+std::string SaveInstantiationsCommand::getCommandName() const
+{
+  return "save-instantiations";
+}
+
+void SaveInstantiationsCommand::toStream(std::ostream& out) const
+{
+  out << "(save-instantiations " << d_key << ")";
+}
+
+/* -------------------------------------------------------------------------- */
+/* class RestoreInstantiationsCommand */
+/* -------------------------------------------------------------------------- */
+
+RestoreInstantiationsCommand::RestoreInstantiationsCommand(
+    const std::string& key, bool only)
+    : d_key(key), d_only(only)
+{
+}
+
+void RestoreInstantiationsCommand::invoke(cvc5::Solver* solver,
+                                          CVC5_UNUSED SymManager* sm)
+{
+  try
+  {
+    solver->restoreInstantiations(d_key, d_only);
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.what());
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+std::string RestoreInstantiationsCommand::getCommandName() const
+{
+  return "restore-instantiations";
+}
+
+void RestoreInstantiationsCommand::toStream(std::ostream& out) const
+{
+  out << "(restore-instantiations " << d_key << (d_only ? " :only" : "")
+      << ")";
+}
+
+/* -------------------------------------------------------------------------- */
 /* class GetDifficultyCommand */
 /* -------------------------------------------------------------------------- */
 

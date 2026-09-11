@@ -6103,6 +6103,49 @@ class CVC5_EXPORT Solver
   std::vector<std::string> getAssertionSourcesOf(const Term& term) const;
 
   /**
+   * Save the instantiations of the last check under a key, in a store that
+   * survives pop. Replaces what the key held. Each saved entry is a quantified
+   * formula as this solver holds it and the terms it was instantiated with.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (save-instantiations <symbol>)
+   * \endverbatim
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param key The name to save under.
+   */
+  void saveInstantiations(const std::string& key) const;
+
+  /**
+   * Replay the instantiations saved under a key in the current user context.
+   * From the next check on, each asserted quantified formula with saved terms
+   * is instantiated with them, once per user context, through the ordinary
+   * instantiation path. A formula this context never asserts is not
+   * instantiated, so every replayed lemma is an instance of an assertion.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (restore-instantiations <symbol> [:only])
+   * \endverbatim
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param key The name saved under.
+   * @param only Whether to allow no other instantiation in this user context,
+   *             so that its checks answer unsat or unknown from the restored
+   *             instances alone.
+   */
+  void restoreInstantiations(const std::string& key, bool only = false) const;
+
+  /**
    * Get a timeout core.
    *
    * \verbatim embed:rst:leading-asterisk
