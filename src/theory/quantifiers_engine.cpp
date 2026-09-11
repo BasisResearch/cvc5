@@ -836,6 +836,13 @@ void QuantifiersEngine::saveInstantiations(
   d_qim.getInstantiate()->saveInstantiations(key, insts);
 }
 
+void QuantifiersEngine::getSavedInstantiations(
+    const std::string& key,
+    std::map<Node, std::vector<std::vector<Node>>>& out)
+{
+  d_qim.getInstantiate()->getSaved(key, out);
+}
+
 void QuantifiersEngine::restoreInstantiations(const std::string& key,
                                               bool only)
 {

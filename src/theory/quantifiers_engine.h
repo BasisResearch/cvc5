@@ -117,6 +117,10 @@ class QuantifiersEngine : protected EnvObj
                           std::map<Node, std::vector<std::vector<Node>>>& insts);
   /** Replay the vectors saved under key in this user context. */
   void restoreInstantiations(const std::string& key, bool only);
+  /** The term vectors saved under key. */
+  void getSavedInstantiations(
+      const std::string& key,
+      std::map<Node, std::vector<std::vector<Node>>>& out);
   /** get instantiation term vectors */
   void getInstantiationTermVectors(Node q,
                                    std::vector<std::vector<Node> >& tvecs);

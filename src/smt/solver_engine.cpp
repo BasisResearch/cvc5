@@ -23,6 +23,8 @@
 #include "expr/non_closed_node_converter.h"
 #include "expr/plugin.h"
 #include "expr/skolem_manager.h"
+
+#include <functional>
 #include "expr/subtype_elim_node_converter.h"
 #include "expr/sygus_term_enumerator.h"
 #include "options/base_options.h"
@@ -2105,6 +2107,159 @@ void SolverEngine::saveInstantiations(const std::string& key)
     for (const InstantiationVec& v : i.second.d_inst)
     {
       tvecs.push_back(v.d_vec);
+    }
+  }
+  qe->saveInstantiations(key, insts);
+}
+
+void SolverEngine::exportInstantiations(
+    const std::string& key,
+    std::vector<std::tuple<Node, Node, size_t>>& skolems,
+    std::vector<std::pair<Node, std::vector<std::vector<Node>>>>& out,
+    std::map<std::string, size_t>& dropped)
+{
+  QuantifiersEngine* qe =
+      getAvailableQuantifiersEngine("exportInstantiations");
+  std::map<Node, std::vector<std::vector<Node>>> saved;
+  qe->getSavedInstantiations(key, saved);
+  // skolem -> the variable naming it in the export
+  std::map<Node, Node> names;
+  // The original form of n with each skolemization skolem replaced by its
+  // name, or null with reason set if n mentions another kind of skolem.
+  std::function<Node(const Node&, std::string&)> portable;
+  portable = [&](const Node& n, std::string& reason) -> Node {
+    Node o = SkolemManager::getOriginalForm(n);
+    std::unordered_set<Node> sks;
+    expr::getKindSubterms(o, Kind::SKOLEM, true, sks);
+    std::vector<Node> from;
+    std::vector<Node> to;
+    for (const Node& k : sks)
+    {
+      auto it = names.find(k);
+      if (it == names.end())
+      {
+        SkolemId id;
+        Node cacheVal;
+        if (!SkolemManager::isSkolemFunction(k, id, cacheVal))
+        {
+          reason = "unnamed skolem";
+          return Node::null();
+        }
+        if (id != SkolemId::QUANTIFIERS_SKOLEMIZE
+            || cacheVal.getKind() != Kind::SEXPR
+            || cacheVal.getNumChildren() != 2)
+        {
+          std::stringstream ss;
+          ss << id;
+          reason = ss.str();
+          return Node::null();
+        }
+        Node q = portable(cacheVal[0], reason);
+        if (q.isNull())
+        {
+          return Node::null();
+        }
+        Node var = k.getNodeManager()->mkBoundVar(
+            "import_skolem_" + std::to_string(skolems.size()), k.getType());
+        size_t index =
+            cacheVal[1].getConst<Rational>().getNumerator().toUnsignedInt();
+        skolems.emplace_back(var, q, index);
+        it = names.emplace(k, var).first;
+      }
+      from.push_back(k);
+      to.push_back(it->second);
+    }
+    return from.empty() ? o
+                        : o.substitute(from.begin(), from.end(), to.begin(),
+                                       to.end());
+  };
+  for (const std::pair<const Node, std::vector<std::vector<Node>>>& s : saved)
+  {
+    std::string reason;
+    Node q = portable(s.first, reason);
+    if (q.isNull())
+    {
+      dropped[reason] += s.second.size();
+      continue;
+    }
+    std::vector<std::vector<Node>> keep;
+    for (const std::vector<Node>& tvec : s.second)
+    {
+      std::vector<Node> terms;
+      for (const Node& t : tvec)
+      {
+        Node p = portable(t, reason);
+        if (p.isNull())
+        {
+          break;
+        }
+        terms.push_back(p);
+      }
+      if (terms.size() != tvec.size())
+      {
+        ++dropped[reason];
+        continue;
+      }
+      keep.push_back(terms);
+    }
+    if (!keep.empty())
+    {
+      out.emplace_back(q, keep);
+    }
+  }
+}
+
+Node SolverEngine::getQuantifierSkolem(const Node& q, size_t index)
+{
+  Node rq = d_env->getRewriter()->rewrite(q);
+  if (rq.getKind() != Kind::FORALL || index >= rq[0].getNumChildren())
+  {
+    throw ModalException(
+        "getQuantifierSkolem: not a quantified formula with that variable");
+  }
+  NodeManager* nm = rq.getNodeManager();
+  std::vector<Node> cacheVals{rq, nm->mkConstInt(Rational(index))};
+  return nm->getSkolemManager()->mkSkolemFunction(
+      SkolemId::QUANTIFIERS_SKOLEMIZE, cacheVals);
+}
+
+void SolverEngine::importInstantiations(
+    const std::string& key,
+    const std::vector<std::pair<Node, std::vector<std::vector<Node>>>>& in)
+{
+  finishInit();
+  QuantifiersEngine* qe =
+      getAvailableQuantifiersEngine("importInstantiations");
+  Rewriter* rw = d_env->getRewriter();
+  std::map<Node, std::vector<std::vector<Node>>> insts;
+  for (const std::pair<Node, std::vector<std::vector<Node>>>& entry : in)
+  {
+    Node q = rw->rewrite(entry.first);
+    if (q.getKind() != Kind::FORALL)
+    {
+      continue;
+    }
+    std::vector<std::vector<Node>>& tvecs = insts[q];
+    for (const std::vector<Node>& tvec : entry.second)
+    {
+      if (tvec.size() != q[0].getNumChildren())
+      {
+        continue;
+      }
+      std::vector<Node> terms;
+      for (size_t i = 0, n = tvec.size(); i < n; i++)
+      {
+        Node t = rw->rewrite(tvec[i]);
+        if (t.getType() != q[0][i].getType())
+        {
+          break;
+        }
+        terms.push_back(t);
+      }
+      if (terms.size() == tvec.size())
+      {
+        tvecs.push_back(terms);
+      }
     }
   }
   qe->saveInstantiations(key, insts);

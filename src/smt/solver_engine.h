@@ -725,6 +725,34 @@ class CVC5_EXPORT SolverEngine
    * instantiation happens in this user context.
    */
   void restoreInstantiations(const std::string& key, bool only);
+  /**
+   * What key holds, in a form another process can parse: each quantified
+   * formula and its term vectors in original form, purification skolems
+   * replaced by the terms they purify. A skolemization skolem is named by a
+   * fresh variable, listed in skolems with the formula and variable index it
+   * skolemizes (inner ones first), which getQuantifierSkolem rebuilds in
+   * another process. A vector, or a formula, mentioning any other skolem has
+   * no input form; it is left out and counted in dropped by skolem kind.
+   */
+  void exportInstantiations(
+      const std::string& key,
+      std::vector<std::tuple<Node, Node, size_t>>& skolems,
+      std::vector<std::pair<Node, std::vector<std::vector<Node>>>>& out,
+      std::map<std::string, size_t>& dropped);
+  /**
+   * The skolem this solver introduces for variable index of q when q is
+   * asserted false, after rewriting q to the form this solver registers.
+   */
+  Node getQuantifierSkolem(const Node& q, size_t index);
+  /**
+   * Store the given formulas and term vectors under key, replacing what it
+   * held, as if saved here. Each formula and term is rewritten to the form
+   * this solver registers; vectors whose arity or sorts no longer match
+   * their formula are skipped. restoreInstantiations replays them.
+   */
+  void importInstantiations(
+      const std::string& key,
+      const std::vector<std::pair<Node, std::vector<std::vector<Node>>>>& in);
 
   /**
    * Get an unsatisfiable core (only if immediately preceded by an UNSAT

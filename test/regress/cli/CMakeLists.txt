@@ -1879,6 +1879,7 @@ set(regress_0_tests
   regress0/quantifiers/quant-model-simplification.smt2
   regress0/quantifiers/quant-qid-decl.smt2
   regress0/quantifiers/rew-to-scala.smt2
+  regress0/quantifiers/save-restore-instantiations-import.smt2
   regress0/quantifiers/save-restore-instantiations-redeclared.smt2
   regress0/quantifiers/save-restore-instantiations.smt2
   regress0/quantifiers/selector-trigger.smt2

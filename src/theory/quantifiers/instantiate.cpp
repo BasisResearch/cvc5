@@ -828,6 +828,17 @@ void Instantiate::replaySaved(Node q)
   }
 }
 
+void Instantiate::getSaved(
+    const std::string& key,
+    std::map<Node, std::vector<std::vector<Node>>>& out) const
+{
+  auto it = d_saved.find(key);
+  if (it != d_saved.end())
+  {
+    out = it->second;
+  }
+}
+
 bool Instantiate::isProofEnabled() const
 {
   return d_env.isTheoryProofProducing();

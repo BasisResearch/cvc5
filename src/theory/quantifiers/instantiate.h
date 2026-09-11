@@ -300,6 +300,9 @@ class Instantiate : public QuantifiersUtil
   bool hasPendingReplay() const;
   /** Instantiate q with its restored vectors, once per user context. */
   void replaySaved(Node q);
+  /** Copy what key holds into out, empty if nothing was saved under it. */
+  void getSaved(const std::string& key,
+                std::map<Node, std::vector<std::vector<Node>>>& out) const;
   //--------------------------------------end saved instantiations
 
   /** Are proofs enabled for this object? */
