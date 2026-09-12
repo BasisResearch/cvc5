@@ -12,6 +12,8 @@
 
 #include "smt/solver_engine.h"
 
+#include <functional>
+
 #include "base/check.h"
 #include "base/exception.h"
 #include "base/modal_exception.h"
@@ -23,8 +25,6 @@
 #include "expr/non_closed_node_converter.h"
 #include "expr/plugin.h"
 #include "expr/skolem_manager.h"
-
-#include <functional>
 #include "expr/subtype_elim_node_converter.h"
 #include "expr/sygus_term_enumerator.h"
 #include "options/base_options.h"
@@ -2118,8 +2118,7 @@ void SolverEngine::exportInstantiations(
     std::vector<std::pair<Node, std::vector<std::vector<Node>>>>& out,
     std::map<std::string, size_t>& dropped)
 {
-  QuantifiersEngine* qe =
-      getAvailableQuantifiersEngine("exportInstantiations");
+  QuantifiersEngine* qe = getAvailableQuantifiersEngine("exportInstantiations");
   std::map<Node, std::vector<std::vector<Node>>> saved;
   qe->getSavedInstantiations(key, saved);
   // skolem -> the variable naming it in the export
@@ -2169,9 +2168,9 @@ void SolverEngine::exportInstantiations(
       from.push_back(k);
       to.push_back(it->second);
     }
-    return from.empty() ? o
-                        : o.substitute(from.begin(), from.end(), to.begin(),
-                                       to.end());
+    return from.empty()
+               ? o
+               : o.substitute(from.begin(), from.end(), to.begin(), to.end());
   };
   for (const std::pair<const Node, std::vector<std::vector<Node>>>& s : saved)
   {
@@ -2211,6 +2210,9 @@ void SolverEngine::exportInstantiations(
 
 Node SolverEngine::getQuantifierSkolem(const Node& q, size_t index)
 {
+  // The parser calls this while reading an import, which can come before
+  // anything else has initialized the solver; rewriting needs it initialized.
+  finishInit();
   Node rq = d_env->getRewriter()->rewrite(q);
   if (rq.getKind() != Kind::FORALL || index >= rq[0].getNumChildren())
   {
@@ -2228,8 +2230,7 @@ void SolverEngine::importInstantiations(
     const std::vector<std::pair<Node, std::vector<std::vector<Node>>>>& in)
 {
   finishInit();
-  QuantifiersEngine* qe =
-      getAvailableQuantifiersEngine("importInstantiations");
+  QuantifiersEngine* qe = getAvailableQuantifiersEngine("importInstantiations");
   Rewriter* rw = d_env->getRewriter();
   std::map<Node, std::vector<std::vector<Node>>> insts;
   for (const std::pair<Node, std::vector<std::vector<Node>>>& entry : in)

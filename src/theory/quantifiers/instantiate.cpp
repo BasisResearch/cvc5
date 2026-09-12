@@ -12,8 +12,6 @@
 
 #include "theory/quantifiers/instantiate.h"
 
-#include "util/rational.h"
-
 #include "expr/node_algorithm.h"
 #include "options/base_options.h"
 #include "options/quantifiers_options.h"
@@ -31,6 +29,7 @@
 #include "theory/quantifiers/term_registry.h"
 #include "theory/quantifiers/term_util.h"
 #include "theory/rewriter.h"
+#include "util/rational.h"
 
 using namespace cvc5::internal::kind;
 using namespace cvc5::context;
@@ -59,7 +58,8 @@ Instantiate::Instantiate(Env& env,
       d_replayKey(userContext(), std::string()),
       d_replayOnly(userContext(), false),
       d_saveCount(0),
-      d_replayed(userContext())
+      d_replayed(userContext()),
+      d_replayProgress(userContext())
 {
   // We need to use user context-dependent trie for the main instantiation
   // trie if incremental.
@@ -847,17 +847,34 @@ void Instantiate::replaySaved(Node q)
   {
     return;
   }
-  d_replayed.insert(record);
-  ++(d_statistics.d_replay_quants);
+  // A resource or time limit can interrupt this loop at any vector (each
+  // addInstantiation begins at a safe point). Each vector's lemma is sent
+  // before its progress is recorded, and the formula counts as replayed only
+  // once every vector is through, so a later round resumes where this one
+  // stopped rather than skipping the rest.
+  auto pit = d_replayProgress.find(record);
+  size_t next = pit == d_replayProgress.end() ? 0 : pit->second;
+  if (next == 0)
+  {
+    ++(d_statistics.d_replay_quants);
+  }
+  const std::vector<std::vector<Node>>& vecs = it->second;
   // Each vector goes through the ordinary path: duplicate and entailment
   // checks, preprocessing, the lemma (=> q body) and its proof. The lemma is
   // an instance of q for any well-typed terms, so a vector saved in another
   // user context is sound here even where its terms mean nothing.
-  for (const std::vector<Node>& saved : it->second)
+  for (size_t i = next, n = vecs.size(); i < n; i++)
   {
-    std::vector<Node> terms = saved;
+    if (d_qstate.isInConflict())
+    {
+      return;
+    }
+    std::vector<Node> terms = vecs[i];
     addInstantiation(q, terms, InferenceId::QUANTIFIERS_INST_REPLAY);
+    d_qim.doPending();
+    d_replayProgress.insert(record, i + 1);
   }
+  d_replayed.insert(record);
 }
 
 void Instantiate::getSaved(

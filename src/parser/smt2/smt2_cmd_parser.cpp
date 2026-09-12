@@ -742,7 +742,8 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
                      uint32_t index =
                          static_cast<uint32_t>(std::stoul(lex.tokenStr()));
                      lex.eatToken(Token::RPAREN_TOK);
-                     Term sk = d_state.getSolver()->getQuantifierSkolem(q, index);
+                     Term sk =
+                         d_state.getSolver()->getQuantifierSkolem(q, index);
                      d_state.defineVar(name, sk);
                    });
         }

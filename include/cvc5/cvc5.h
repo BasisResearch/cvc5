@@ -6206,8 +6206,8 @@ class CVC5_EXPORT Solver
    */
   void importInstantiations(
       const std::string& key,
-      const std::vector<std::pair<Term, std::vector<std::vector<Term>>>>&
-          insts) const;
+      const std::vector<std::pair<Term, std::vector<std::vector<Term>>>>& insts)
+      const;
 
   /**
    * Get a timeout core.

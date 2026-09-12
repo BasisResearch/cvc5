@@ -113,8 +113,9 @@ class QuantifiersEngine : protected EnvObj
   /** Save this user context's instantiation term vectors under key. */
   void saveInstantiations(const std::string& key);
   /** Save the given term vectors under key. */
-  void saveInstantiations(const std::string& key,
-                          std::map<Node, std::vector<std::vector<Node>>>& insts);
+  void saveInstantiations(
+      const std::string& key,
+      std::map<Node, std::vector<std::vector<Node>>>& insts);
   /** Replay the vectors saved under key in this user context. */
   void restoreInstantiations(const std::string& key, bool only);
   /** The term vectors saved under key. */

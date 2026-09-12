@@ -282,8 +282,9 @@ class Instantiate : public QuantifiersUtil
    */
   void saveInstantiations(const std::string& key);
   /** Save the given term vectors under key, replacing what key held. */
-  void saveInstantiations(const std::string& key,
-                          std::map<Node, std::vector<std::vector<Node>>>& insts);
+  void saveInstantiations(
+      const std::string& key,
+      std::map<Node, std::vector<std::vector<Node>>>& insts);
   /**
    * Replay the vectors saved under key in the current user context. From the
    * next check on, each asserted quantified formula with saved vectors is
@@ -394,9 +395,9 @@ class Instantiate : public QuantifiersUtil
   std::unique_ptr<CDProof> d_pfInst;
   /** Whether we are using context-dependent trie index */
   bool d_useCdInstTrie;
-  /** Saved term vectors per key and quantified formula, not context-dependent */
-  std::map<std::string, std::map<Node, std::vector<std::vector<Node>>>>
-      d_saved;
+  /** Saved term vectors per key and quantified formula, not context-dependent
+   */
+  std::map<std::string, std::map<Node, std::vector<std::vector<Node>>>> d_saved;
   /** The key restored in the current user context, empty if none */
   context::CDO<std::string> d_replayKey;
   /** Whether the current user context allows restored instances only */
@@ -413,6 +414,11 @@ class Instantiate : public QuantifiersUtil
    * context from the vectors carrying tag.
    */
   context::CDHashSet<Node> d_replayed;
+  /**
+   * For a replay record not yet complete, the number of its vectors whose
+   * lemmas have been sent. A round interrupted part way through resumes here.
+   */
+  context::CDHashMap<Node, size_t> d_replayProgress;
   /** The replay record for q under key's current vectors, null if none. */
   Node replayRecord(const std::string& key, const Node& q) const;
 };

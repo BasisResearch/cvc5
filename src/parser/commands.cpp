@@ -2407,7 +2407,7 @@ std::string SaveInstantiationsCommand::getCommandName() const
 
 void SaveInstantiationsCommand::toStream(std::ostream& out) const
 {
-  out << "(save-instantiations " << d_key << ")";
+  out << "(save-instantiations " << cvc5::internal::quoteSymbol(d_key) << ")";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2445,8 +2445,8 @@ std::string RestoreInstantiationsCommand::getCommandName() const
 
 void RestoreInstantiationsCommand::toStream(std::ostream& out) const
 {
-  out << "(restore-instantiations " << d_key << (d_only ? " :only" : "")
-      << ")";
+  out << "(restore-instantiations " << cvc5::internal::quoteSymbol(d_key)
+      << (d_only ? " :only" : "") << ")";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2479,10 +2479,10 @@ void printImportInstantiations(
     std::ostream& out,
     const std::string& key,
     const std::vector<std::tuple<cvc5::Term, cvc5::Term, uint32_t>>& skolems,
-    const std::vector<std::pair<cvc5::Term, std::vector<std::vector<cvc5::Term>>>>&
-        insts)
+    const std::vector<
+        std::pair<cvc5::Term, std::vector<std::vector<cvc5::Term>>>>& insts)
 {
-  out << "(import-instantiations " << key;
+  out << "(import-instantiations " << cvc5::internal::quoteSymbol(key);
   if (!skolems.empty())
   {
     out << " :skolems (";
@@ -2564,7 +2564,7 @@ std::string ExportInstantiationsCommand::getCommandName() const
 
 void ExportInstantiationsCommand::toStream(std::ostream& out) const
 {
-  out << "(export-instantiations " << d_key << ")";
+  out << "(export-instantiations " << cvc5::internal::quoteSymbol(d_key) << ")";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2573,8 +2573,8 @@ void ExportInstantiationsCommand::toStream(std::ostream& out) const
 
 ImportInstantiationsCommand::ImportInstantiationsCommand(
     const std::string& key,
-    const std::vector<std::pair<cvc5::Term, std::vector<std::vector<cvc5::Term>>>>&
-        insts)
+    const std::vector<
+        std::pair<cvc5::Term, std::vector<std::vector<cvc5::Term>>>>& insts)
     : d_key(key), d_insts(insts)
 {
 }

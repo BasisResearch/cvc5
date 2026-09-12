@@ -243,8 +243,7 @@ const char* toString(InferenceId i)
       return "QUANTIFIERS_INST_E_MATCHING";
     case InferenceId::QUANTIFIERS_INST_E_MATCHING_SIMPLE:
       return "QUANTIFIERS_INST_E_MATCHING_SIMPLE";
-    case InferenceId::QUANTIFIERS_INST_REPLAY:
-      return "QUANTIFIERS_INST_REPLAY";
+    case InferenceId::QUANTIFIERS_INST_REPLAY: return "QUANTIFIERS_INST_REPLAY";
     case InferenceId::QUANTIFIERS_INST_E_MATCHING_MT:
       return "QUANTIFIERS_INST_E_MATCHING_MT";
     case InferenceId::QUANTIFIERS_INST_E_MATCHING_MTL:

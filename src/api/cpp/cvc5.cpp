@@ -8057,7 +8057,8 @@ Solver::exportInstantiations(const std::string& key) const
   CVC5_API_TRY_CATCH_BEGIN;
   //////// all checks before this line
   std::vector<std::tuple<internal::Node, internal::Node, size_t>> skolems;
-  std::vector<std::pair<internal::Node, std::vector<std::vector<internal::Node>>>>
+  std::vector<
+      std::pair<internal::Node, std::vector<std::vector<internal::Node>>>>
       out;
   std::map<std::string, size_t> dropped;
   d_slv->exportInstantiations(key, skolems, out, dropped);
@@ -8104,7 +8105,8 @@ void Solver::importInstantiations(
 {
   CVC5_API_TRY_CATCH_BEGIN;
   //////// all checks before this line
-  std::vector<std::pair<internal::Node, std::vector<std::vector<internal::Node>>>>
+  std::vector<
+      std::pair<internal::Node, std::vector<std::vector<internal::Node>>>>
       in;
   for (const auto& entry : insts)
   {
