@@ -2374,6 +2374,241 @@ void GetAssertionSourcesCommand::toStream(std::ostream& out) const
 }
 
 /* -------------------------------------------------------------------------- */
+/* class SaveInstantiationsCommand */
+/* -------------------------------------------------------------------------- */
+
+SaveInstantiationsCommand::SaveInstantiationsCommand(const std::string& key)
+    : d_key(key)
+{
+}
+
+void SaveInstantiationsCommand::invoke(cvc5::Solver* solver,
+                                       CVC5_UNUSED SymManager* sm)
+{
+  try
+  {
+    solver->saveInstantiations(d_key);
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.what());
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+std::string SaveInstantiationsCommand::getCommandName() const
+{
+  return "save-instantiations";
+}
+
+void SaveInstantiationsCommand::toStream(std::ostream& out) const
+{
+  out << "(save-instantiations " << cvc5::internal::quoteSymbol(d_key) << ")";
+}
+
+/* -------------------------------------------------------------------------- */
+/* class RestoreInstantiationsCommand */
+/* -------------------------------------------------------------------------- */
+
+RestoreInstantiationsCommand::RestoreInstantiationsCommand(
+    const std::string& key, bool only)
+    : d_key(key), d_only(only)
+{
+}
+
+void RestoreInstantiationsCommand::invoke(cvc5::Solver* solver,
+                                          CVC5_UNUSED SymManager* sm)
+{
+  try
+  {
+    solver->restoreInstantiations(d_key, d_only);
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.what());
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+std::string RestoreInstantiationsCommand::getCommandName() const
+{
+  return "restore-instantiations";
+}
+
+void RestoreInstantiationsCommand::toStream(std::ostream& out) const
+{
+  out << "(restore-instantiations " << cvc5::internal::quoteSymbol(d_key)
+      << (d_only ? " :only" : "") << ")";
+}
+
+/* -------------------------------------------------------------------------- */
+/* class ExportInstantiationsCommand */
+/* -------------------------------------------------------------------------- */
+
+namespace {
+/** s as an SMT-LIB string literal: quoted, with each " doubled. */
+std::string quoteString(const std::string& s)
+{
+  std::string out = "\"";
+  for (char c : s)
+  {
+    out += c;
+    if (c == '"')
+    {
+      out += '"';
+    }
+  }
+  return out + "\"";
+}
+
+/**
+ * Print (import-instantiations key [:skolems ("(name q i)" ...)]
+ * "(q (t...) ...)" ...), one formula a line. Each row and entry is a string,
+ * so the importer can parse each on its own and skip the ones this solver
+ * cannot, such as those naming a symbol it has not declared.
+ */
+void printImportInstantiations(
+    std::ostream& out,
+    const std::string& key,
+    const std::vector<std::tuple<cvc5::Term, cvc5::Term, uint32_t>>& skolems,
+    const std::vector<
+        std::pair<cvc5::Term, std::vector<std::vector<cvc5::Term>>>>& insts)
+{
+  out << "(import-instantiations " << cvc5::internal::quoteSymbol(key);
+  if (!skolems.empty())
+  {
+    out << " :skolems (";
+    for (const auto& s : skolems)
+    {
+      std::stringstream row;
+      row << "(" << std::get<0>(s) << " " << std::get<1>(s) << " "
+          << std::get<2>(s) << ")";
+      out << std::endl << quoteString(row.str());
+    }
+    out << ")";
+  }
+  for (const auto& entry : insts)
+  {
+    std::stringstream e;
+    e << "(" << entry.first;
+    for (const std::vector<cvc5::Term>& tvec : entry.second)
+    {
+      e << " (";
+      for (size_t i = 0, n = tvec.size(); i < n; i++)
+      {
+        e << (i == 0 ? "" : " ") << tvec[i];
+      }
+      e << ")";
+    }
+    e << ")";
+    out << std::endl << quoteString(e.str());
+  }
+  out << ")";
+}
+}  // namespace
+
+ExportInstantiationsCommand::ExportInstantiationsCommand(const std::string& key)
+    : d_key(key)
+{
+}
+
+void ExportInstantiationsCommand::invoke(cvc5::Solver* solver,
+                                         CVC5_UNUSED SymManager* sm)
+{
+  try
+  {
+    std::tie(d_skolems, d_insts, d_dropped) =
+        solver->exportInstantiations(d_key);
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.what());
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+void ExportInstantiationsCommand::printResult(CVC5_UNUSED cvc5::Solver* solver,
+                                              std::ostream& out) const
+{
+  size_t total = 0;
+  for (const auto& d : d_dropped)
+  {
+    total += d.second;
+  }
+  out << "; dropped " << total;
+  for (const auto& d : d_dropped)
+  {
+    out << " (" << d.first << " " << d.second << ")";
+  }
+  out << std::endl;
+  printImportInstantiations(out, d_key, d_skolems, d_insts);
+  out << std::endl;
+}
+
+std::string ExportInstantiationsCommand::getCommandName() const
+{
+  return "export-instantiations";
+}
+
+void ExportInstantiationsCommand::toStream(std::ostream& out) const
+{
+  out << "(export-instantiations " << cvc5::internal::quoteSymbol(d_key) << ")";
+}
+
+/* -------------------------------------------------------------------------- */
+/* class ImportInstantiationsCommand */
+/* -------------------------------------------------------------------------- */
+
+ImportInstantiationsCommand::ImportInstantiationsCommand(
+    const std::string& key,
+    const std::vector<
+        std::pair<cvc5::Term, std::vector<std::vector<cvc5::Term>>>>& insts)
+    : d_key(key), d_insts(insts)
+{
+}
+
+void ImportInstantiationsCommand::invoke(cvc5::Solver* solver,
+                                         CVC5_UNUSED SymManager* sm)
+{
+  try
+  {
+    solver->importInstantiations(d_key, d_insts);
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.what());
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+std::string ImportInstantiationsCommand::getCommandName() const
+{
+  return "import-instantiations";
+}
+
+void ImportInstantiationsCommand::toStream(std::ostream& out) const
+{
+  // The skolems are resolved already; they print as this solver's terms.
+  printImportInstantiations(out, d_key, {}, d_insts);
+}
+
+/* -------------------------------------------------------------------------- */
 /* class GetDifficultyCommand */
 /* -------------------------------------------------------------------------- */
 

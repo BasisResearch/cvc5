@@ -713,6 +713,46 @@ class CVC5_EXPORT SolverEngine
    */
   void getInstantiationTermVectors(
       std::map<Node, std::vector<std::vector<Node>>>& insts);
+  /**
+   * Save the instantiation term vectors of the last check under key, in a
+   * store that survives pop. Replaces what key held.
+   */
+  void saveInstantiations(const std::string& key);
+  /**
+   * Replay the vectors saved under key in the current user context: each
+   * asserted quantified formula is instantiated with its own saved vectors
+   * through the ordinary instantiation path. If only is true, no other
+   * instantiation happens in this user context.
+   */
+  void restoreInstantiations(const std::string& key, bool only);
+  /**
+   * What key holds, in a form another process can parse: each quantified
+   * formula and its term vectors in original form, purification skolems
+   * replaced by the terms they purify. A skolemization skolem is named by a
+   * fresh variable, listed in skolems with the formula and variable index it
+   * skolemizes (inner ones first), which getQuantifierSkolem rebuilds in
+   * another process. A vector, or a formula, mentioning any other skolem has
+   * no input form; it is left out and counted in dropped by skolem kind.
+   */
+  void exportInstantiations(
+      const std::string& key,
+      std::vector<std::tuple<Node, Node, size_t>>& skolems,
+      std::vector<std::pair<Node, std::vector<std::vector<Node>>>>& out,
+      std::map<std::string, size_t>& dropped);
+  /**
+   * The skolem this solver introduces for variable index of q when q is
+   * asserted false, after rewriting q to the form this solver registers.
+   */
+  Node getQuantifierSkolem(const Node& q, size_t index);
+  /**
+   * Store the given formulas and term vectors under key, replacing what it
+   * held, as if saved here. Each formula and term is rewritten to the form
+   * this solver registers; vectors whose arity or sorts no longer match
+   * their formula are skipped. restoreInstantiations replays them.
+   */
+  void importInstantiations(
+      const std::string& key,
+      const std::vector<std::pair<Node, std::vector<std::vector<Node>>>>& in);
 
   /**
    * Get an unsatisfiable core (only if immediately preceded by an UNSAT
@@ -882,6 +922,14 @@ class CVC5_EXPORT SolverEngine
    * Return the set of assertions, after applying top-level substitutions.
    */
   std::vector<Node> getSubstitutedAssertions();
+
+  /**
+   * The term vectors saveInstantiations stores, taken from the solver that
+   * answered the last check: every instantiation, or after unsat with proofs
+   * only those the refutation used.
+   */
+  void getInstantiationsToSave(
+      std::map<Node, std::vector<std::vector<Node>>>& insts);
 
   // disallow copy/assignment
   SolverEngine(const SolverEngine&) = delete;

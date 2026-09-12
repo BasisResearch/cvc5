@@ -1867,6 +1867,43 @@ TEST_F(TestApiBlackSolver, getInstantiations)
   ASSERT_NO_THROW(d_solver->getInstantiations());
 }
 
+TEST_F(TestApiBlackSolver, getQuantifierSkolem)
+{
+  Term p = d_solver->declareFun("p", {d_int}, d_bool);
+  Term x = d_tm.mkVar(d_int, "x");
+  Term bvl = d_tm.mkTerm(Kind::VARIABLE_LIST, {x});
+  Term q =
+      d_tm.mkTerm(Kind::FORALL, {bvl, d_tm.mkTerm(Kind::APPLY_UF, {p, x})});
+  ASSERT_NO_THROW(d_solver->getQuantifierSkolem(q, 0));
+  ASSERT_THROW(d_solver->getQuantifierSkolem(q, 1), CVC5ApiException);
+  ASSERT_THROW(d_solver->getQuantifierSkolem(Term(), 0), CVC5ApiException);
+
+  TermManager tm;
+  Solver slv(tm);
+  ASSERT_THROW(slv.getQuantifierSkolem(q, 0), CVC5ApiException);
+}
+
+TEST_F(TestApiBlackSolver, importInstantiations)
+{
+  Term p = d_solver->declareFun("p", {d_int}, d_bool);
+  Term x = d_tm.mkVar(d_int, "x");
+  Term bvl = d_tm.mkTerm(Kind::VARIABLE_LIST, {x});
+  Term q =
+      d_tm.mkTerm(Kind::FORALL, {bvl, d_tm.mkTerm(Kind::APPLY_UF, {p, x})});
+  Term five = d_tm.mkInteger(5);
+  using Insts = std::vector<std::pair<Term, std::vector<std::vector<Term>>>>;
+  ASSERT_NO_THROW(d_solver->importInstantiations("k", Insts{{q, {{five}}}}));
+  ASSERT_THROW(d_solver->importInstantiations("k", Insts{{Term(), {{five}}}}),
+               CVC5ApiException);
+  ASSERT_THROW(d_solver->importInstantiations("k", Insts{{q, {{Term()}}}}),
+               CVC5ApiException);
+
+  TermManager tm;
+  Solver slv(tm);
+  ASSERT_THROW(slv.importInstantiations("k", Insts{{q, {{five}}}}),
+               CVC5ApiException);
+}
+
 TEST_F(TestApiBlackSolver, setInfo)
 {
   ASSERT_THROW(d_solver->setInfo("cvc5-lagic", "QF_BV"), CVC5ApiException);

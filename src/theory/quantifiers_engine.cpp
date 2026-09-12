@@ -442,6 +442,29 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
       return;
     }
 
+    // Replay restored instantiations of the formulas asserted so far, before
+    // any strategy runs, so that strategies see them as duplicates.
+    quantifiers::Instantiate* inst = d_qim.getInstantiate();
+    if (inst->hasPendingReplay())
+    {
+      for (size_t i = 0, n = d_model->getNumAssertedQuantifiers(); i < n; i++)
+      {
+        inst->replaySaved(d_model->getAssertedQuantifier(i));
+      }
+      d_qim.doPending();
+      if (d_qim.hasSentLemma())
+      {
+        return;
+      }
+    }
+    if (inst->replayOnly())
+    {
+      // Answer from the restored instances alone. No strategy runs, so a
+      // model found now says nothing about the quantified formulas.
+      setModelUnsoundId = IncompleteId::QUANTIFIERS_REPLAY_ONLY;
+      return;
+    }
+
     if (e == Theory::EFFORT_LAST_CALL)
     {
       ++(stats.d_instantiation_rounds_lc);
@@ -799,6 +822,29 @@ void QuantifiersEngine::getInstantiationTermVectors(
 void QuantifiersEngine::getInstantiations(Node q, std::vector<Node>& insts)
 {
   d_qim.getInstantiate()->getInstantiations(q, insts);
+}
+
+void QuantifiersEngine::saveInstantiations(const std::string& key)
+{
+  d_qim.getInstantiate()->saveInstantiations(key);
+}
+
+void QuantifiersEngine::saveInstantiations(
+    const std::string& key,
+    std::map<Node, std::vector<std::vector<Node>>>& insts)
+{
+  d_qim.getInstantiate()->saveInstantiations(key, insts);
+}
+
+void QuantifiersEngine::getSavedInstantiations(
+    const std::string& key, std::map<Node, std::vector<std::vector<Node>>>& out)
+{
+  d_qim.getInstantiate()->getSaved(key, out);
+}
+
+void QuantifiersEngine::restoreInstantiations(const std::string& key, bool only)
+{
+  d_qim.getInstantiate()->restoreInstantiations(key, only);
 }
 
 void QuantifiersEngine::getInstantiatedQuantifiedFormulas(std::vector<Node>& qs)

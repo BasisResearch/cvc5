@@ -29,6 +29,7 @@
 #include "theory/quantifiers/term_registry.h"
 #include "theory/quantifiers/term_util.h"
 #include "theory/rewriter.h"
+#include "util/rational.h"
 
 using namespace cvc5::internal::kind;
 using namespace cvc5::context;
@@ -53,7 +54,12 @@ Instantiate::Instantiate(Env& env,
       d_cimt(context()),
       d_pfInst(isProofEnabled()
                    ? new CDProof(env, userContext(), "Instantiate::pfInst")
-                   : nullptr)
+                   : nullptr),
+      d_replayKey(userContext(), std::string()),
+      d_replayOnly(userContext(), false),
+      d_saveCount(0),
+      d_replayed(userContext()),
+      d_replayProgress(userContext())
 {
   // We need to use user context-dependent trie for the main instantiation
   // trie if incremental.
@@ -204,8 +210,11 @@ bool Instantiate::addInstantiationInternal(
   // simplicity, we do not pursue this option (as it would likely only
   // lead to very small gains).
 
-  // check for positive entailment
-  if (options().quantifiers.instNoEntail)
+  // check for positive entailment. Entailment holds in the current SAT
+  // context only, and a replayed instantiation is offered once per user
+  // context, so skipping one now would lose it after a backtrack.
+  if (options().quantifiers.instNoEntail
+      && id != InferenceId::QUANTIFIERS_INST_REPLAY)
   {
     EntailmentCheck* ec = d_treg.getEntailmentCheck();
     // should check consistency of equality engine
@@ -749,6 +758,136 @@ void Instantiate::getInstantiations(Node q, std::vector<Node>& insts)
   }
 }
 
+void Instantiate::saveInstantiations(const std::string& key)
+{
+  std::map<Node, std::vector<std::vector<Node>>> insts;
+  getInstantiationTermVectors(insts);
+  saveInstantiations(key, insts);
+}
+
+void Instantiate::saveInstantiations(
+    const std::string& key,
+    std::map<Node, std::vector<std::vector<Node>>>& insts)
+{
+  std::map<Node, std::vector<std::vector<Node>>>& saved = d_saved[key];
+  saved.clear();
+  // New vectors: whatever was replayed from the old ones does not cover them.
+  d_savedTag[key] = nodeManager()->mkConstInt(Rational(++d_saveCount));
+  for (auto& entry : insts)
+  {
+    if (entry.second.empty())
+    {
+      continue;
+    }
+    d_statistics.d_replay_saved += entry.second.size();
+    saved[entry.first] = std::move(entry.second);
+  }
+}
+
+void Instantiate::restoreInstantiations(const std::string& key, bool only)
+{
+  d_replayKey = key;
+  d_replayOnly = only;
+}
+
+bool Instantiate::replayOnly() const { return d_replayOnly.get(); }
+
+Node Instantiate::replayRecord(const std::string& key, const Node& q) const
+{
+  auto it = d_savedTag.find(key);
+  if (it == d_savedTag.end())
+  {
+    return Node::null();
+  }
+  return NodeManager::mkNode(Kind::SEXPR, q, it->second);
+}
+
+bool Instantiate::hasPendingReplay() const
+{
+  const std::string& key = d_replayKey.get();
+  if (key.empty())
+  {
+    return false;
+  }
+  auto it = d_saved.find(key);
+  if (it == d_saved.end())
+  {
+    return false;
+  }
+  for (const std::pair<const Node, std::vector<std::vector<Node>>>& s :
+       it->second)
+  {
+    if (d_replayed.find(replayRecord(key, s.first)) == d_replayed.end())
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+void Instantiate::replaySaved(Node q)
+{
+  const std::string& key = d_replayKey.get();
+  if (key.empty())
+  {
+    return;
+  }
+  auto sit = d_saved.find(key);
+  if (sit == d_saved.end())
+  {
+    return;
+  }
+  auto it = sit->second.find(q);
+  if (it == sit->second.end())
+  {
+    return;
+  }
+  Node record = replayRecord(key, q);
+  if (d_replayed.find(record) != d_replayed.end())
+  {
+    return;
+  }
+  // A resource or time limit can interrupt this loop at any vector (each
+  // addInstantiation begins at a safe point). Each vector's lemma is sent
+  // before its progress is recorded, and the formula counts as replayed only
+  // once every vector is through, so a later round resumes where this one
+  // stopped rather than skipping the rest.
+  auto pit = d_replayProgress.find(record);
+  size_t next = pit == d_replayProgress.end() ? 0 : pit->second;
+  if (next == 0)
+  {
+    ++(d_statistics.d_replay_quants);
+  }
+  const std::vector<std::vector<Node>>& vecs = it->second;
+  // Each vector goes through the ordinary path: duplicate and entailment
+  // checks, preprocessing, the lemma (=> q body) and its proof. The lemma is
+  // an instance of q for any well-typed terms, so a vector saved in another
+  // user context is sound here even where its terms mean nothing.
+  for (size_t i = next, n = vecs.size(); i < n; i++)
+  {
+    if (d_qstate.isInConflict())
+    {
+      return;
+    }
+    std::vector<Node> terms = vecs[i];
+    addInstantiation(q, terms, InferenceId::QUANTIFIERS_INST_REPLAY);
+    d_qim.doPending();
+    d_replayProgress.insert(record, i + 1);
+  }
+  d_replayed.insert(record);
+}
+
+void Instantiate::getSaved(
+    const std::string& key,
+    std::map<Node, std::vector<std::vector<Node>>>& out) const
+{
+  auto it = d_saved.find(key);
+  if (it != d_saved.end())
+  {
+    out = it->second;
+  }
+}
+
 bool Instantiate::isProofEnabled() const
 {
   return d_env.isTheoryProofProducing();
@@ -812,7 +951,9 @@ Instantiate::Statistics::Statistics(StatisticsRegistry& sr)
       d_inst_duplicate(sr.registerInt("Instantiate::Duplicate_Inst")),
       d_inst_duplicate_eq(sr.registerInt("Instantiate::Duplicate_Inst_Eq")),
       d_inst_duplicate_ent(
-          sr.registerInt("Instantiate::Duplicate_Inst_Entailed"))
+          sr.registerInt("Instantiate::Duplicate_Inst_Entailed")),
+      d_replay_saved(sr.registerInt("Instantiate::Replay_Saved")),
+      d_replay_quants(sr.registerInt("Instantiate::Replay_Quantifiers"))
 {
 }
 

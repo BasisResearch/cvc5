@@ -6103,6 +6103,113 @@ class CVC5_EXPORT Solver
   std::vector<std::string> getAssertionSourcesOf(const Term& term) const;
 
   /**
+   * Save the instantiations of the last check under a key, in a store that
+   * survives pop. Replaces what the key held. Each saved entry is a quantified
+   * formula as this solver holds it and the terms it was instantiated with.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (save-instantiations <symbol>)
+   * \endverbatim
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param key The name to save under.
+   */
+  void saveInstantiations(const std::string& key) const;
+
+  /**
+   * Replay the instantiations saved under a key in the current user context.
+   * From the next check on, each asserted quantified formula with saved terms
+   * is instantiated with them, once per user context, through the ordinary
+   * instantiation path. A formula this context never asserts is not
+   * instantiated, so every replayed lemma is an instance of an assertion.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (restore-instantiations <symbol> [:only])
+   * \endverbatim
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param key The name saved under.
+   * @param only Whether to allow no other instantiation in this user context,
+   *             so that its checks answer unsat or unknown from the restored
+   *             instances alone.
+   */
+  void restoreInstantiations(const std::string& key, bool only = false) const;
+
+  /**
+   * What saveInstantiations stored under a key, in a form another process
+   * can parse: each quantified formula with its term vectors, in original
+   * form. Skolemization skolems are named by variables, each listed with the
+   * formula and variable index it skolemizes (see getQuantifierSkolem).
+   * Vectors that mention any other skolem are left out and counted by kind.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (export-instantiations <symbol>)
+   * \endverbatim
+   *
+   * The reply is an `import-instantiations` command for the same key.
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param key The name saved under.
+   * @return The named skolems (variable, formula, index), the formulas with
+   *         their vectors, and the vectors left out by skolem kind.
+   */
+  std::tuple<std::vector<std::tuple<Term, Term, uint32_t>>,
+             std::vector<std::pair<Term, std::vector<std::vector<Term>>>>,
+             std::map<std::string, size_t>>
+  exportInstantiations(const std::string& key) const;
+
+  /**
+   * The skolem this solver introduces for a variable of a quantified formula
+   * asserted false, so that an imported instantiation can name it.
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param q The quantified formula.
+   * @param index The index of the variable in q.
+   * @return The skolem.
+   */
+  Term getQuantifierSkolem(const Term& q, uint32_t index) const;
+
+  /**
+   * Store quantified formulas and term vectors under a key, as if saved by
+   * this solver, replacing what the key held. restoreInstantiations replays
+   * them: each vector instantiates its formula where this context asserts
+   * it, so every replayed lemma is an instance of an assertion.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (import-instantiations <symbol> (<term> (<term>+)*)*)
+   * \endverbatim
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param key The name to store under.
+   * @param insts The formulas with their term vectors.
+   */
+  void importInstantiations(
+      const std::string& key,
+      const std::vector<std::pair<Term, std::vector<std::vector<Term>>>>& insts)
+      const;
+
+  /**
    * Get a timeout core.
    *
    * \verbatim embed:rst:leading-asterisk

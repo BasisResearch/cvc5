@@ -24,7 +24,7 @@ namespace cvc5::internal {
 /**
  * SMT-LIB 2 quoting for symbols
  */
-std::string quoteSymbol(const std::string& s);
+std::string quoteSymbol(const std::string& s) CVC5_EXPORT;
 
 /**
  * SMT-LIB 2 quoting for strings

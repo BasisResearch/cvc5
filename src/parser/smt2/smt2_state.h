@@ -257,6 +257,11 @@ class Smt2State : public ParserState
    * variables are assumed to be globally unique up to their name and type.
    */
   bool usingFreshBinders() const;
+  /**
+   * The Boolean constant a :qid attribute names its quantified formula with,
+   * the same constant for the same name unless fresh binders are in use.
+   */
+  Term mkQidConst(const std::string& name);
 
   void checkThatLogicIsSet();
 
@@ -479,6 +484,8 @@ class Smt2State : public ParserState
   bool d_isSygus;
   /** are we using fresh binders? */
   bool d_freshBinders;
+  /** The :qid constants by name, see mkQidConst */
+  std::unordered_map<std::string, Term> d_qidCache;
   /** Has the logic been set (either by forcing it or a set-logic command)? */
   bool d_logicSet;
   /** The current logic */

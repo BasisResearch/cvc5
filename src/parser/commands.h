@@ -1079,6 +1079,96 @@ class CVC5_EXPORT GetAssertionSourcesCommand : public Cmd
   std::vector<std::string> d_tags;
 };
 
+/** (save-instantiations <symbol>), see Solver::saveInstantiations */
+class CVC5_EXPORT SaveInstantiationsCommand : public Cmd
+{
+ public:
+  SaveInstantiationsCommand(const std::string& key);
+
+  void invoke(cvc5::Solver* solver, parser::SymManager* sm) override;
+
+  std::string getCommandName() const override;
+  void toStream(std::ostream& out) const override;
+
+ protected:
+  /** The name to save under */
+  std::string d_key;
+};
+
+/**
+ * (restore-instantiations <symbol> [:only]), see
+ * Solver::restoreInstantiations
+ */
+class CVC5_EXPORT RestoreInstantiationsCommand : public Cmd
+{
+ public:
+  RestoreInstantiationsCommand(const std::string& key, bool only);
+
+  void invoke(cvc5::Solver* solver, parser::SymManager* sm) override;
+
+  std::string getCommandName() const override;
+  void toStream(std::ostream& out) const override;
+
+ protected:
+  /** The name saved under */
+  std::string d_key;
+  /** Whether restored instances are the only ones allowed */
+  bool d_only;
+};
+
+/**
+ * (export-instantiations <symbol>), see Solver::exportInstantiations. The
+ * reply is an import-instantiations command for the same key, preceded by a
+ * comment counting the vectors left out.
+ */
+class CVC5_EXPORT ExportInstantiationsCommand : public Cmd
+{
+ public:
+  ExportInstantiationsCommand(const std::string& key);
+
+  void invoke(cvc5::Solver* solver, parser::SymManager* sm) override;
+  void printResult(cvc5::Solver* solver, std::ostream& out) const override;
+
+  std::string getCommandName() const override;
+  void toStream(std::ostream& out) const override;
+
+ protected:
+  /** The name saved under */
+  std::string d_key;
+  /** The named skolems: variable, formula, variable index */
+  std::vector<std::tuple<cvc5::Term, cvc5::Term, uint32_t>> d_skolems;
+  /** The exportable formulas with their term vectors */
+  std::vector<std::pair<cvc5::Term, std::vector<std::vector<cvc5::Term>>>>
+      d_insts;
+  /** The vectors left out, by skolem kind */
+  std::map<std::string, size_t> d_dropped;
+};
+
+/**
+ * (import-instantiations <symbol> (<term> (<term>+)*)*), see
+ * Solver::importInstantiations
+ */
+class CVC5_EXPORT ImportInstantiationsCommand : public Cmd
+{
+ public:
+  ImportInstantiationsCommand(
+      const std::string& key,
+      const std::vector<
+          std::pair<cvc5::Term, std::vector<std::vector<cvc5::Term>>>>& insts);
+
+  void invoke(cvc5::Solver* solver, parser::SymManager* sm) override;
+
+  std::string getCommandName() const override;
+  void toStream(std::ostream& out) const override;
+
+ protected:
+  /** The name to store under */
+  std::string d_key;
+  /** The formulas with their term vectors */
+  std::vector<std::pair<cvc5::Term, std::vector<std::vector<cvc5::Term>>>>
+      d_insts;
+};
+
 class CVC5_EXPORT GetDifficultyCommand : public Cmd
 {
  public:

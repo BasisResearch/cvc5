@@ -8034,6 +8034,112 @@ std::vector<std::string> Solver::getAssertionSourcesOf(const Term& term) const
   CVC5_API_TRY_CATCH_END;
 }
 
+void Solver::saveInstantiations(const std::string& key) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_RECOVERABLE_CHECK(d_slv->getSmtMode() == internal::SmtMode::UNSAT
+                             || d_slv->getSmtMode() == internal::SmtMode::SAT
+                             || d_slv->getSmtMode()
+                                    == internal::SmtMode::SAT_UNKNOWN)
+      << "cannot save instantiations unless after a UNSAT, SAT or UNKNOWN "
+         "response.";
+  //////// all checks before this line
+  d_slv->saveInstantiations(key);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+std::tuple<std::vector<std::tuple<Term, Term, uint32_t>>,
+           std::vector<std::pair<Term, std::vector<std::vector<Term>>>>,
+           std::map<std::string, size_t>>
+Solver::exportInstantiations(const std::string& key) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  //////// all checks before this line
+  std::vector<std::tuple<internal::Node, internal::Node, size_t>> skolems;
+  std::vector<
+      std::pair<internal::Node, std::vector<std::vector<internal::Node>>>>
+      out;
+  std::map<std::string, size_t> dropped;
+  d_slv->exportInstantiations(key, skolems, out, dropped);
+  auto term = [this](const internal::Node& n) {
+    return Term::nodeVectorToTerms(d_tm.d_nm, {n})[0];
+  };
+  std::vector<std::tuple<Term, Term, uint32_t>> sks;
+  for (const auto& s : skolems)
+  {
+    sks.emplace_back(term(std::get<0>(s)),
+                     term(std::get<1>(s)),
+                     static_cast<uint32_t>(std::get<2>(s)));
+  }
+  std::vector<std::pair<Term, std::vector<std::vector<Term>>>> res;
+  for (const auto& entry : out)
+  {
+    std::vector<std::vector<Term>> tvecs;
+    for (const std::vector<internal::Node>& tvec : entry.second)
+    {
+      tvecs.push_back(Term::nodeVectorToTerms(d_tm.d_nm, tvec));
+    }
+    res.emplace_back(term(entry.first), tvecs);
+  }
+  return {sks, res, dropped};
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+Term Solver::getQuantifierSkolem(const Term& q, uint32_t index) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_SOLVER_CHECK_TERM(q);
+  //////// all checks before this line
+  internal::Node n =
+      d_slv->getQuantifierSkolem(Term::termVectorToNodes({q})[0], index);
+  return Term::nodeVectorToTerms(d_tm.d_nm, {n})[0];
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+void Solver::importInstantiations(
+    const std::string& key,
+    const std::vector<std::pair<Term, std::vector<std::vector<Term>>>>& insts)
+    const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  for (const auto& entry : insts)
+  {
+    CVC5_API_SOLVER_CHECK_TERM(entry.first);
+    for (const std::vector<Term>& tvec : entry.second)
+    {
+      CVC5_API_SOLVER_CHECK_TERMS(tvec);
+    }
+  }
+  //////// all checks before this line
+  std::vector<
+      std::pair<internal::Node, std::vector<std::vector<internal::Node>>>>
+      in;
+  for (const auto& entry : insts)
+  {
+    std::vector<std::vector<internal::Node>> tvecs;
+    for (const std::vector<Term>& tvec : entry.second)
+    {
+      tvecs.push_back(Term::termVectorToNodes(tvec));
+    }
+    in.emplace_back(Term::termVectorToNodes({entry.first})[0], tvecs);
+  }
+  d_slv->importInstantiations(key, in);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+void Solver::restoreInstantiations(const std::string& key, bool only) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  //////// all checks before this line
+  d_slv->restoreInstantiations(key, only);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
 std::map<Term, Term> Solver::getDifficulty() const
 {
   CVC5_API_TRY_CATCH_BEGIN;

@@ -110,6 +110,18 @@ class QuantifiersEngine : protected EnvObj
   //----------user interface for instantiations (see quantifiers/instantiate.h)
   /** get list of quantified formulas that were instantiated */
   void getInstantiatedQuantifiedFormulas(std::vector<Node>& qs);
+  /** Save this user context's instantiation term vectors under key. */
+  void saveInstantiations(const std::string& key);
+  /** Save the given term vectors under key. */
+  void saveInstantiations(
+      const std::string& key,
+      std::map<Node, std::vector<std::vector<Node>>>& insts);
+  /** Replay the vectors saved under key in this user context. */
+  void restoreInstantiations(const std::string& key, bool only);
+  /** The term vectors saved under key. */
+  void getSavedInstantiations(
+      const std::string& key,
+      std::map<Node, std::vector<std::vector<Node>>>& out);
   /** get instantiation term vectors */
   void getInstantiationTermVectors(Node q,
                                    std::vector<std::vector<Node> >& tvecs);
