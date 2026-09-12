@@ -8090,6 +8090,7 @@ Solver::exportInstantiations(const std::string& key) const
 Term Solver::getQuantifierSkolem(const Term& q, uint32_t index) const
 {
   CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_SOLVER_CHECK_TERM(q);
   //////// all checks before this line
   internal::Node n =
       d_slv->getQuantifierSkolem(Term::termVectorToNodes({q})[0], index);
@@ -8104,6 +8105,14 @@ void Solver::importInstantiations(
     const
 {
   CVC5_API_TRY_CATCH_BEGIN;
+  for (const auto& entry : insts)
+  {
+    CVC5_API_SOLVER_CHECK_TERM(entry.first);
+    for (const std::vector<Term>& tvec : entry.second)
+    {
+      CVC5_API_SOLVER_CHECK_TERMS(tvec);
+    }
+  }
   //////// all checks before this line
   std::vector<
       std::pair<internal::Node, std::vector<std::vector<internal::Node>>>>

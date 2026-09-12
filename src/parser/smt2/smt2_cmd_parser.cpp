@@ -717,63 +717,77 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
         }
       };
       // Named skolems are bound only while this command's terms are parsed.
+      // Malformed outer syntax throws, so close the scope on that path too.
+      size_t level = d_state.scopeLevel();
       d_state.pushScope();
-      // Peek at most once between consumptions: a second peek reorders them.
-      Token next = d_lex.peekToken();
-      if (next == Token::KEYWORD)
+      std::vector<std::pair<Term, std::vector<std::vector<Term>>>> insts;
+      try
       {
-        d_lex.eatToken(Token::KEYWORD);
-        if (d_lex.tokenStr() != std::string(":skolems"))
+        // Peek at most once between consumptions: a second peek reorders
+        // them.
+        Token next = d_lex.peekToken();
+        if (next == Token::KEYWORD)
         {
-          d_lex.parseError("Unknown import-instantiations option "
-                           + std::string(d_lex.tokenStr()));
+          d_lex.eatToken(Token::KEYWORD);
+          if (d_lex.tokenStr() != std::string(":skolems"))
+          {
+            d_lex.parseError("Unknown import-instantiations option "
+                             + std::string(d_lex.tokenStr()));
+          }
+          d_lex.eatToken(Token::LPAREN_TOK);
+          while (d_lex.peekToken() == Token::STRING_LITERAL)
+          {
+            d_lex.eatToken(Token::STRING_LITERAL);
+            tryParse(unquote(d_lex.tokenStr()),
+                     [this](Smt2Lexer& lex, Smt2TermParser& tparser) {
+                       lex.eatToken(Token::LPAREN_TOK);
+                       std::string name =
+                           tparser.parseSymbol(CHECK_NONE, SYM_VARIABLE);
+                       Term q = tparser.parseTerm();
+                       lex.eatToken(Token::INTEGER_LITERAL);
+                       uint32_t index =
+                           static_cast<uint32_t>(std::stoul(lex.tokenStr()));
+                       lex.eatToken(Token::RPAREN_TOK);
+                       Term sk =
+                           d_state.getSolver()->getQuantifierSkolem(q, index);
+                       d_state.defineVar(name, sk);
+                     });
+          }
+          d_lex.eatToken(Token::RPAREN_TOK);
+          next = d_lex.peekToken();
         }
-        d_lex.eatToken(Token::LPAREN_TOK);
-        while (d_lex.peekToken() == Token::STRING_LITERAL)
+        while (next == Token::STRING_LITERAL)
         {
           d_lex.eatToken(Token::STRING_LITERAL);
           tryParse(unquote(d_lex.tokenStr()),
-                   [this](Smt2Lexer& lex, Smt2TermParser& tparser) {
+                   [&insts](Smt2Lexer& lex, Smt2TermParser& tparser) {
                      lex.eatToken(Token::LPAREN_TOK);
-                     std::string name =
-                         tparser.parseSymbol(CHECK_NONE, SYM_VARIABLE);
                      Term q = tparser.parseTerm();
-                     lex.eatToken(Token::INTEGER_LITERAL);
-                     uint32_t index =
-                         static_cast<uint32_t>(std::stoul(lex.tokenStr()));
-                     lex.eatToken(Token::RPAREN_TOK);
-                     Term sk =
-                         d_state.getSolver()->getQuantifierSkolem(q, index);
-                     d_state.defineVar(name, sk);
-                   });
-        }
-        d_lex.eatToken(Token::RPAREN_TOK);
-        next = d_lex.peekToken();
-      }
-      std::vector<std::pair<Term, std::vector<std::vector<Term>>>> insts;
-      while (next == Token::STRING_LITERAL)
-      {
-        d_lex.eatToken(Token::STRING_LITERAL);
-        tryParse(unquote(d_lex.tokenStr()),
-                 [&insts](Smt2Lexer& lex, Smt2TermParser& tparser) {
-                   lex.eatToken(Token::LPAREN_TOK);
-                   Term q = tparser.parseTerm();
-                   std::vector<std::vector<Term>> tvecs;
-                   while (lex.peekToken() == Token::LPAREN_TOK)
-                   {
-                     lex.eatToken(Token::LPAREN_TOK);
-                     std::vector<Term> tvec;
-                     while (lex.peekToken() != Token::RPAREN_TOK)
+                     std::vector<std::vector<Term>> tvecs;
+                     while (lex.peekToken() == Token::LPAREN_TOK)
                      {
-                       tvec.push_back(tparser.parseTerm());
+                       lex.eatToken(Token::LPAREN_TOK);
+                       std::vector<Term> tvec;
+                       while (lex.peekToken() != Token::RPAREN_TOK)
+                       {
+                         tvec.push_back(tparser.parseTerm());
+                       }
+                       lex.eatToken(Token::RPAREN_TOK);
+                       tvecs.push_back(tvec);
                      }
                      lex.eatToken(Token::RPAREN_TOK);
-                     tvecs.push_back(tvec);
-                   }
-                   lex.eatToken(Token::RPAREN_TOK);
-                   insts.emplace_back(q, tvecs);
-                 });
-        next = d_lex.peekToken();
+                     insts.emplace_back(q, tvecs);
+                   });
+          next = d_lex.peekToken();
+        }
+      }
+      catch (...)
+      {
+        while (d_state.scopeLevel() > level)
+        {
+          d_state.popScope();
+        }
+        throw;
       }
       d_state.popScope();
       cmd.reset(new ImportInstantiationsCommand(key, insts));

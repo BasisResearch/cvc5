@@ -312,6 +312,32 @@ TEST_F(TestApiBlackInputParser, incrementalSetString)
   ASSERT_EQ(out.str().empty(), true);
 }
 
+TEST_F(TestApiBlackInputParser, importInstantiationsMalformedClosesScope)
+{
+  InputParser p(d_solver.get(), d_symman.get());
+  Command cmd;
+  std::stringstream out;
+  std::vector<std::string> strs{"(set-logic ALL)", "(declare-fun f (Int) Int)"};
+  for (const std::string& s : strs)
+  {
+    p.setStringInput(
+        modes::InputLanguage::SMT_LIB_2_6, s, "input_parser_black");
+    cmd = p.nextCommand();
+    ASSERT_NO_THROW(cmd.invoke(d_solver.get(), d_symman.get(), out));
+  }
+  // The skolem row binds w in the command's scope; the 5 where the closing
+  // parenthesis of :skolems belongs is a parse error.
+  p.setStringInput(modes::InputLanguage::SMT_LIB_2_6,
+                   "(import-instantiations k :skolems "
+                   "(\"(w (forall ((j Int)) (> (f j) 0)) 0)\" 5))",
+                   "input_parser_black");
+  ASSERT_THROW(p.nextCommand(), ParserException);
+  // The error closed that scope, so w is no longer bound.
+  p.setStringInput(
+      modes::InputLanguage::SMT_LIB_2_6, "(+ w 1)", "input_parser_black");
+  ASSERT_THROW(p.nextTerm(), ParserException);
+}
+
 TEST_F(TestApiBlackInputParser, getDeclaredTermsAndSorts)
 {
   InputParser p(d_solver.get(), d_symman.get());

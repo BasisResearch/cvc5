@@ -923,6 +923,14 @@ class CVC5_EXPORT SolverEngine
    */
   std::vector<Node> getSubstitutedAssertions();
 
+  /**
+   * The term vectors saveInstantiations stores, taken from the solver that
+   * answered the last check: every instantiation, or after unsat with proofs
+   * only those the refutation used.
+   */
+  void getInstantiationsToSave(
+      std::map<Node, std::vector<std::vector<Node>>>& insts);
+
   // disallow copy/assignment
   SolverEngine(const SolverEngine&) = delete;
   SolverEngine& operator=(const SolverEngine&) = delete;

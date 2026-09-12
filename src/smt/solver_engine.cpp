@@ -2081,17 +2081,28 @@ void SolverEngine::printInstantiations(std::ostream& out)
 
 void SolverEngine::saveInstantiations(const std::string& key)
 {
+  std::map<Node, std::vector<std::vector<Node>>> insts;
+  getInstantiationsToSave(insts);
+  // Store here even when a subsolver answered the last check (as after
+  // get-timeout-core): restore, export and import all read this store.
+  getAvailableQuantifiersEngine("saveInstantiations")
+      ->saveInstantiations(key, insts);
+}
+
+void SolverEngine::getInstantiationsToSave(
+    std::map<Node, std::vector<std::vector<Node>>>& insts)
+{
   // see if another solver engine was responsible for the last status
   SolverEngine* ssolver = d_state->getStatusSolver();
   if (ssolver != nullptr)
   {
-    return ssolver->saveInstantiations(key);
+    return ssolver->getInstantiationsToSave(insts);
   }
   QuantifiersEngine* qe = getAvailableQuantifiersEngine("saveInstantiations");
   if (!(d_env->getOptions().smt.produceProofs && d_env->isTheoryProofProducing()
         && getSmtMode() == SmtMode::UNSAT))
   {
-    qe->saveInstantiations(key);
+    qe->getInstantiationTermVectors(insts);
     return;
   }
   // After unsat with proofs, keep only the instantiations the refutation
@@ -2100,7 +2111,6 @@ void SolverEngine::saveInstantiations(const std::string& key)
   std::map<Node, InstantiationList> rinsts;
   std::map<Node, std::vector<Node>> sks;
   getRelevantQuantTermVectors(rinsts, sks);
-  std::map<Node, std::vector<std::vector<Node>>> insts;
   for (const std::pair<const Node, InstantiationList>& i : rinsts)
   {
     std::vector<std::vector<Node>>& tvecs = insts[i.first];
@@ -2109,7 +2119,6 @@ void SolverEngine::saveInstantiations(const std::string& key)
       tvecs.push_back(v.d_vec);
     }
   }
-  qe->saveInstantiations(key, insts);
 }
 
 void SolverEngine::exportInstantiations(

@@ -1886,6 +1886,7 @@ set(regress_0_tests
   regress0/quantifiers/save-restore-instantiations-keys.smt2
   regress0/quantifiers/save-restore-instantiations-quoted-key.smt2
   regress0/quantifiers/save-restore-instantiations-redeclared.smt2
+  regress0/quantifiers/save-restore-instantiations-timeout-core.smt2
   regress0/quantifiers/save-restore-instantiations.smt2
   regress0/quantifiers/selector-trigger.smt2
   regress0/quantifiers/simp-len.smt2
