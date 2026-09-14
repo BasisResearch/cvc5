@@ -937,6 +937,8 @@ libcvc5_add_sources(
   theory/quantifiers/inst_strategy_sub_conflict.h
   theory/quantifiers/instantiate.cpp
   theory/quantifiers/instantiate.h
+  theory/quantifiers/matching_loops.cpp
+  theory/quantifiers/matching_loops.h
   theory/quantifiers/instantiation_list.cpp
   theory/quantifiers/instantiation_list.h
   theory/quantifiers/lazy_trie.cpp
