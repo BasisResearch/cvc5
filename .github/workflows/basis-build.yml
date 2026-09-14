@@ -65,6 +65,26 @@ jobs:
       - name: build
         run: cmake --build build --target cvc5-bin
 
+      # The regressions of the commands this fork adds, under the testers that
+      # also check proofs and models.
+      - name: regress (basis commands)
+        shell: bash
+        run: |
+          status=0
+          for t in test/regress/cli/regress0/quantifiers/get-egraph-equalities*.smt2 \
+                   test/regress/cli/regress0/quantifiers/save-restore-instantiations*.smt2 \
+                   test/regress/cli/regress0/printer/get-assertion-sources*.smt2; do
+            for tester in base proof model; do
+              if ! python3 test/regress/cli/run_regression.py --tester "$tester" \
+                  "$PWD/build/bin/cvc5" "$t" > regress.log 2>&1; then
+                echo "FAILED: $t ($tester)"
+                cat regress.log
+                status=1
+              fi
+            done
+          done
+          exit $status
+
       - name: package
         shell: bash
         run: |

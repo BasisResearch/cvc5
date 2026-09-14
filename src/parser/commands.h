@@ -1081,16 +1081,18 @@ class CVC5_EXPORT GetAssertionSourcesCommand : public Cmd
 
 /**
  * (get-egraph-equalities [:limit <numeral>] [:include-used]
- * [:focus (<term>*)]), see Solver::getEgraphEqualities. The reply is one
- * form, (egraph-equalities (summary ...) (equality <lhs> <rhs> ...)*), with
- * the summary and each equality on a line of its own.
+ * [:focus (<term>*)] [:max-term-size <numeral>]), see
+ * Solver::getEgraphEqualities. The reply is one form,
+ * (egraph-equalities (summary ...) (equality <lhs> <rhs> ...)*), with the
+ * summary and each equality on a line of its own.
  */
 class CVC5_EXPORT GetEgraphEqualitiesCommand : public Cmd
 {
  public:
   GetEgraphEqualitiesCommand(const std::vector<cvc5::Term>& focus,
                              uint32_t limit,
-                             bool includeUsed);
+                             bool includeUsed,
+                             uint32_t maxTermSize);
   /** The result */
   const cvc5::EgraphEqualities& getResult() const;
 
@@ -1108,6 +1110,8 @@ class CVC5_EXPORT GetEgraphEqualitiesCommand : public Cmd
   /** Whether to list equalities with a side a quantifier was instantiated with
    */
   bool d_includeUsed;
+  /** The most nodes a listed term may print with */
+  uint32_t d_maxTermSize;
   /** The result */
   cvc5::EgraphEqualities d_result;
 };

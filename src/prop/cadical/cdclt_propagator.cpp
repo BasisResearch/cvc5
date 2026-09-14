@@ -75,6 +75,7 @@ void CadicalPropagator::notify_assignment(const std::vector<int>& lits)
     if (info.assignment == 0)
     {
       info.assignment = lit;
+      info.level = d_decisions.size();
       d_assignments.push_back(slit);
       if (info.is_theory_atom)
       {

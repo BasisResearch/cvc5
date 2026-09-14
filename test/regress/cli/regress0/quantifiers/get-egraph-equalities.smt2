@@ -3,14 +3,14 @@
 ; DISABLE-TESTER: dump
 ; EXPECT: unknown
 ; EXPECT: (egraph-equalities
-; EXPECT: (summary :classes 3 :candidates 4 :focus 0 :focus-found 0 :used-omitted 1)
+; EXPECT: (summary :classes 3 :candidates 4 :focus 0 :focus-found 0 :used-omitted 1 :too-large 0)
 ; EXPECT: (equality a d :level decision :used false :used-by () :focus 0 :because ((= a b) (= b d)))
 ; EXPECT: (equality 7 (g b) :level entailed :used false :used-by () :focus 0 :because ((= 7 (g b))))
 ; EXPECT: (equality c (f a) :level entailed :used false :used-by () :focus 0 :because ((= c (f a))))
 ; EXPECT: (equality c (f b) :level entailed :used false :used-by () :focus 0 :because ((= a b) (= c (f a))))
 ; EXPECT: )
 ; EXPECT: (egraph-equalities
-; EXPECT: (summary :classes 3 :candidates 5 :focus 0 :focus-found 0 :used-omitted 0)
+; EXPECT: (summary :classes 3 :candidates 5 :focus 0 :focus-found 0 :used-omitted 0 :too-large 0)
 ; EXPECT: (equality a b :level entailed :used true :used-by (ax_h) :focus 0 :because ((= a b)))
 ; EXPECT: (equality a d :level decision :used false :used-by () :focus 0 :because ((= a b) (= b d)))
 ; EXPECT: (equality 7 (g b) :level entailed :used false :used-by () :focus 0 :because ((= 7 (g b))))
@@ -18,14 +18,14 @@
 ; EXPECT: (equality c (f b) :level entailed :used false :used-by () :focus 0 :because ((= a b) (= c (f a))))
 ; EXPECT: )
 ; EXPECT: (egraph-equalities
-; EXPECT: (summary :classes 1 :candidates 2 :focus 1 :focus-found 1 :used-omitted 0)
+; EXPECT: (summary :classes 1 :candidates 2 :focus 1 :focus-found 1 :used-omitted 0 :too-large 0)
 ; EXPECT: (equality (f b) c :level entailed :used false :used-by () :focus 1 :because ((= a b) (= c (f a))))
 ; EXPECT: )
 ; EXPECT: unsat
 ; EXPECT: (error "cannot get e-graph equalities unless after a SAT or UNKNOWN response.")
 ; EXPECT: sat
 ; EXPECT: (egraph-equalities
-; EXPECT: (summary :classes 1 :candidates 1 :focus 0 :focus-found 0 :used-omitted 0)
+; EXPECT: (summary :classes 1 :candidates 1 :focus 0 :focus-found 0 :used-omitted 0 :too-large 0)
 ; EXPECT: (equality 2 a :level entailed :used false :used-by () :focus 0 :because ((= a 2)))
 ; EXPECT: )
 ; The e-graph after a check, read back as equalities between terms the input

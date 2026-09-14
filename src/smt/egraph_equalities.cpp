@@ -15,7 +15,8 @@
 
 #include <algorithm>
 
-#include "expr/node_algorithm.h"
+#include "expr/dtype.h"
+#include "expr/dtype_cons.h"
 #include "expr/skolem_manager.h"
 #include "prop/prop_engine.h"
 #include "theory/uf/equality_engine.h"
@@ -38,36 +39,123 @@ struct Member
   /** The original form, printed */
   std::string d_text;
   bool d_focus;
-  /** The number of distinct subterms of the original form */
+  /** The number of nodes of the original form printed without sharing */
   size_t d_size;
 };
 
-/**
- * Whether o, an original form, can be written in the input: it names no
- * skolem, instantiation constant or bound variable.
- */
-bool isPresentable(const Node& o)
+/** What listing needs to know of a term. */
+struct TermInfo
 {
-  static const std::unordered_set<Kind, kind::KindHashFunction> hidden = {
-      Kind::SKOLEM, Kind::DUMMY_SKOLEM, Kind::INST_CONSTANT};
-  return !expr::hasSubtermKinds(hidden, o) && !expr::hasBoundVar(o);
+  /**
+   * The number of nodes it prints with, without sharing, or the size limit
+   * plus one if that is more; 0 while being computed.
+   */
+  size_t d_size = 0;
+  /** Whether it names a skolem, instantiation constant or bound variable */
+  bool d_hidden = false;
+};
+
+/** Whether n is a symbol the input cannot write. */
+bool isHiddenSymbol(TNode n)
+{
+  switch (n.getKind())
+  {
+    case Kind::SKOLEM:
+    case Kind::INST_CONSTANT:
+    case Kind::BOUND_VARIABLE: return true;
+    case Kind::DUMMY_SKOLEM:
+    {
+      // The constructors, selectors, testers and updaters of datatypes are
+      // dummy skolems, but the input writes them by name. Shared selectors
+      // are skolems, and stay hidden.
+      TypeNode tn = n.getType();
+      TypeNode dt;
+      if (tn.isDatatypeConstructor())
+      {
+        dt = tn.getDatatypeConstructorRangeType();
+      }
+      else if (tn.isDatatypeSelector())
+      {
+        dt = tn.getDatatypeSelectorDomainType();
+      }
+      else if (tn.isDatatypeTester())
+      {
+        dt = tn.getDatatypeTesterDomainType();
+      }
+      else if (tn.isDatatypeUpdater())
+      {
+        dt = tn[0];
+      }
+      else
+      {
+        return true;
+      }
+      if (dt.isTuple())
+      {
+        // The constructor, selectors and updaters of a tuple print as tuple,
+        // tuple.select and tuple.update, but a tester prints the
+        // constructor's internal name.
+        return tn.isDatatypeTester();
+      }
+      if (tn.isDatatypeConstructor() || tn.isDatatypeTester())
+      {
+        // Both print the constructor's name, which is internal for the
+        // datatypes cvc5 makes of records.
+        const std::string& name = dt.getDType()[DType::indexOf(n)].getName();
+        return name.rfind("__cvc5", 0) == 0;
+      }
+      return false;
+    }
+    default: return false;
+  }
 }
 
-/** The number of distinct subterms of n. */
-size_t termSize(TNode n)
+/**
+ * The information of n, computed with that of its subterms into infos, which
+ * later calls reuse, so listing visits each node of the e-graph once.
+ */
+TermInfo termInfo(const Node& n,
+                  size_t maxSize,
+                  std::unordered_map<Node, TermInfo>& infos)
 {
-  std::unordered_set<TNode> visited;
   std::vector<TNode> visit{n};
   while (!visit.empty())
   {
     TNode cur = visit.back();
-    visit.pop_back();
-    if (visited.insert(cur).second)
+    auto [it, fresh] = infos.try_emplace(cur);
+    if (fresh)
     {
+      // The subterms first, the operator of a parameterized kind included.
+      if (cur.getMetaKind() == kind::metakind::PARAMETERIZED)
+      {
+        visit.push_back(cur.getOperator());
+      }
       visit.insert(visit.end(), cur.begin(), cur.end());
+      continue;
+    }
+    visit.pop_back();
+    TermInfo& info = it->second;
+    if (info.d_size > 0)
+    {
+      continue;
+    }
+    info.d_size = 1;
+    info.d_hidden = isHiddenSymbol(cur);
+    auto add = [&](TNode c) {
+      const TermInfo& ci = infos.at(c);
+      info.d_size = std::min(info.d_size + ci.d_size, maxSize + 1);
+      info.d_hidden = info.d_hidden || ci.d_hidden;
+    };
+    if (cur.getMetaKind() == kind::metakind::PARAMETERIZED)
+    {
+      add(cur.getOperator());
+    }
+    for (TNode c : cur)
+    {
+      add(c);
     }
   }
-  return visited.size();
+  return infos.at(n);
 }
 
 /** Focus terms first, then smaller terms, then by printed form. */
@@ -150,8 +238,10 @@ void mineEgraphEqualities(
     const std::unordered_map<Node, std::set<std::string>>& instTerms,
     size_t limit,
     bool includeUsed,
+    size_t maxTermSize,
     MinedEqualities& out)
 {
+  std::unordered_map<Node, TermInfo> infos;
   // Members are kept per class, so candidates can point into them.
   std::vector<std::vector<Member>> classes;
   for (eq::EqClassesIterator it(&master); !it.isFinished(); ++it)
@@ -169,13 +259,19 @@ void mineEgraphEqualities(
     {
       Node n = *cit;
       Node o = SkolemManager::getOriginalForm(n);
-      if (!isPresentable(o) || !seen.insert(o).second)
+      TermInfo info = termInfo(o, maxTermSize, infos);
+      if (info.d_hidden || !seen.insert(o).second)
       {
+        continue;
+      }
+      if (info.d_size > maxTermSize)
+      {
+        out.d_tooLarge++;
         continue;
       }
       bool isFocus =
           focus.find(n) != focus.end() || focus.find(o) != focus.end();
-      members.push_back({n, o, o.toString(), isFocus, termSize(o)});
+      members.push_back({n, o, o.toString(), isFocus, info.d_size});
     }
     if (members.size() < 2)
     {
@@ -241,8 +337,8 @@ void mineEgraphEqualities(
       int32_t level = 0;
       bool known = true;
       std::unordered_set<Node> lits;
-      // Literals already explained further, each once, and the explanations,
-      // which the TNodes in visit point into.
+      // Literals without a level, each handled once, and the explanations
+      // found for them, which the TNodes in visit point into.
       std::unordered_set<Node> expanded;
       std::vector<Node> kept;
       std::vector<TNode> visit(reasons.begin(), reasons.end());
@@ -260,8 +356,13 @@ void mineEgraphEqualities(
           continue;
         }
         int32_t l = pe.getDecisionLevel(r);
-        if (l < 0 && expanded.insert(r).second)
+        if (l < 0)
         {
+          if (!expanded.insert(r).second)
+          {
+            // Explained further, or listed, when first reached.
+            continue;
+          }
           // A fact another theory propagated to the owner: follow the
           // propagation back to what the SAT solver asserted.
           Node further = explainFact(r, owner);
@@ -286,6 +387,12 @@ void mineEgraphEqualities(
       for (const Node& lit : lits)
       {
         Node o = SkolemManager::getOriginalForm(lit);
+        TermInfo info = termInfo(o, maxTermSize, infos);
+        if (info.d_hidden || info.d_size > maxTermSize)
+        {
+          e.d_becauseHidden++;
+          continue;
+        }
         because.emplace_back(o.toString(), o);
       }
       std::sort(because.begin(),

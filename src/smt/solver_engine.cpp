@@ -2521,13 +2521,14 @@ std::vector<std::string> SolverEngine::getAssertionSourcesOf(const Node& n)
 void SolverEngine::getEgraphEqualities(const std::vector<Node>& focus,
                                        size_t limit,
                                        bool includeUsed,
+                                       size_t maxTermSize,
                                        smt::MinedEqualities& out)
 {
   // see if another solver engine was responsible for the last status
   SolverEngine* ssolver = d_state->getStatusSolver();
   if (ssolver != nullptr)
   {
-    ssolver->getEgraphEqualities(focus, limit, includeUsed, out);
+    ssolver->getEgraphEqualities(focus, limit, includeUsed, maxTermSize, out);
     return;
   }
   Trace("smt") << "SMT getEgraphEqualities()\n";
@@ -2582,14 +2583,22 @@ void SolverEngine::getEgraphEqualities(const std::vector<Node>& focus,
   std::map<Node, std::vector<std::vector<Node>>> insts;
   qe->getInstantiationTermVectors(insts);
   // Each term a quantifier was instantiated with, in both forms, mapped to
-  // the :qid of each such quantifier.
+  // the :qid of each such quantifier. A quantifier without a :qid is `?` if
+  // it comes from the input, and `@internal` if the solver introduced it, as
+  // the reductions of the strings theory do: its original form names a
+  // skolem.
   std::unordered_map<Node, std::set<std::string>> instTerms;
+  static const std::unordered_set<Kind, kind::KindHashFunction> internalKinds = {
+      Kind::SKOLEM, Kind::INST_CONSTANT};
   for (const std::pair<const Node, std::vector<std::vector<Node>>>& q : insts)
   {
     std::string name = quantIdName(q.first);
     if (name.empty())
     {
-      name = "?";
+      name = expr::hasSubtermKinds(internalKinds,
+                                   SkolemManager::getOriginalForm(q.first))
+                 ? "@internal"
+                 : "?";
     }
     for (const std::vector<Node>& vec : q.second)
     {
@@ -2609,6 +2618,7 @@ void SolverEngine::getEgraphEqualities(const std::vector<Node>& focus,
                             instTerms,
                             limit,
                             includeUsed,
+                            maxTermSize,
                             out);
 }
 

@@ -8035,9 +8035,21 @@ std::vector<std::string> Solver::getAssertionSourcesOf(const Term& term) const
   CVC5_API_TRY_CATCH_END;
 }
 
+std::ostream& operator<<(std::ostream& out, EgraphLevel level)
+{
+  switch (level)
+  {
+    case EgraphLevel::ENTAILED: return out << "entailed";
+    case EgraphLevel::DECISION: return out << "decision";
+    case EgraphLevel::UNKNOWN: return out << "unknown";
+  }
+  return out;
+}
+
 EgraphEqualities Solver::getEgraphEqualities(const std::vector<Term>& focus,
                                              uint32_t limit,
-                                             bool includeUsed) const
+                                             bool includeUsed,
+                                             uint32_t maxTermSize) const
 {
   CVC5_API_TRY_CATCH_BEGIN;
   CVC5_API_SOLVER_CHECK_TERMS(focus);
@@ -8049,23 +8061,31 @@ EgraphEqualities Solver::getEgraphEqualities(const std::vector<Term>& focus,
   //////// all checks before this line
   internal::smt::MinedEqualities mined;
   d_slv->getEgraphEqualities(
-      Term::termVectorToNodes(focus), limit, includeUsed, mined);
+      Term::termVectorToNodes(focus), limit, includeUsed, maxTermSize, mined);
   EgraphEqualities res;
   res.d_classes = mined.d_classes;
   res.d_candidates = mined.d_candidates;
   res.d_focusFound = mined.d_focusFound;
   res.d_usedOmitted = mined.d_usedOmitted;
+  res.d_tooLarge = mined.d_tooLarge;
   for (const internal::smt::MinedEquality& e : mined.d_equalities)
   {
     EgraphEquality r;
     r.d_lhs = Term(d_tm.d_nm, e.d_lhs);
     r.d_rhs = Term(d_tm.d_nm, e.d_rhs);
     r.d_because = Term::nodeVectorToTerms(d_tm.d_nm, e.d_because);
+    r.d_becauseHidden = e.d_becauseHidden;
     switch (e.d_level)
     {
-      case internal::smt::EgraphLevel::ENTAILED: r.d_level = "entailed"; break;
-      case internal::smt::EgraphLevel::DECISION: r.d_level = "decision"; break;
-      case internal::smt::EgraphLevel::UNKNOWN: r.d_level = "unknown"; break;
+      case internal::smt::EgraphLevel::ENTAILED:
+        r.d_level = EgraphLevel::ENTAILED;
+        break;
+      case internal::smt::EgraphLevel::DECISION:
+        r.d_level = EgraphLevel::DECISION;
+        break;
+      case internal::smt::EgraphLevel::UNKNOWN:
+        r.d_level = EgraphLevel::UNKNOWN;
+        break;
     }
     r.d_used = e.d_used;
     r.d_usedBy = e.d_usedBy;

@@ -4600,6 +4600,35 @@ class CVC5_EXPORT TermManager
 /* -------------------------------------------------------------------------- */
 
 /**
+ * How the explanation of an EgraphEquality depends on the SAT search.
+ *
+ * @warning This enum is experimental and may change in future versions.
+ */
+enum class EgraphLevel
+{
+  /**
+   * Every literal of the explanation holds at decision level 0, so the
+   * equality follows from what the current context asserts.
+   */
+  ENTAILED,
+  /** Some literal of the explanation was assigned under a SAT decision. */
+  DECISION,
+  /**
+   * No single theory explains the equality, or a literal of the explanation
+   * has no decision level and none was assigned under a decision.
+   */
+  UNKNOWN,
+};
+
+/**
+ * Print an EgraphLevel as ``entailed``, ``decision`` or ``unknown``.
+ * @param out The output stream.
+ * @param level The level.
+ * @return The output stream.
+ */
+CVC5_EXPORT std::ostream& operator<<(std::ostream& out, EgraphLevel level);
+
+/**
  * One equality the e-graph holds after a check, see
  * Solver::getEgraphEqualities().
  *
@@ -4613,21 +4642,25 @@ struct CVC5_EXPORT EgraphEquality
   Term d_rhs;
   /**
    * The literals the equality follows from, as explained by a theory whose
-   * equality engine holds both terms equal. Empty when no single theory does.
+   * equality engine holds both terms equal, except those d_becauseHidden
+   * counts. Empty when no single theory holds the terms equal.
    */
   std::vector<Term> d_because;
   /**
-   * ``entailed`` when every literal of the explanation holds at decision
-   * level 0, so the equality follows from what the current context asserts;
-   * ``decision`` when one of them was assigned under a SAT decision;
-   * ``unknown`` when the explanation is empty or a literal has no level.
+   * The literals of the explanation left out of d_because, because they
+   * name a symbol the input cannot write, such as a skolem, or are larger
+   * than the size limit. When it is not 0, d_because alone does not imply
+   * the equality.
    */
-  std::string d_level;
+  size_t d_becauseHidden = 0;
+  /** How the explanation depends on the SAT search. */
+  EgraphLevel d_level = EgraphLevel::UNKNOWN;
   /** Whether some quantifier was instantiated with either term. */
   bool d_used = false;
   /**
-   * The ``:qid`` names of those quantifiers, sorted; ``?`` for one without a
-   * name.
+   * The ``:qid`` names of those quantifiers, sorted; ``?`` for a quantifier
+   * of the input without a name, ``@internal`` for one the solver
+   * introduced, such as a reduction of the strings theory.
    */
   std::vector<std::string> d_usedBy;
   /** How many of the two terms are focus terms, 0 to 2. */
@@ -4651,6 +4684,8 @@ struct CVC5_EXPORT EgraphEqualities
   size_t d_focusFound = 0;
   /** The equalities left out because a side was instantiated with. */
   size_t d_usedOmitted = 0;
+  /** The terms left out because they are larger than the size limit. */
+  size_t d_tooLarge = 0;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -6163,15 +6198,21 @@ class CVC5_EXPORT Solver
   /**
    * Get the equalities the e-graph holds after the last check, between terms
    * that can be written in the input: no skolem, instantiation constant or
-   * bound variable in their original form. The e-graph is the equality
-   * engine quantifier instantiation matches against. Boolean classes are
-   * skipped, and a class of n such terms is listed as the n - 1 equalities
-   * between its first term and the others, focus terms first.
+   * bound variable in their original form. Datatype constructors, selectors,
+   * testers and updaters are written by name, so terms applying them are
+   * listed. The e-graph is the equality engine quantifier instantiation
+   * matches against. Boolean classes are skipped, and a class of n such
+   * terms is listed as the n - 1 equalities between its first term and the
+   * others, focus terms first. A term that, printed without sharing, has
+   * more than maxTermSize nodes is left out, and counted in ``d_tooLarge``.
    *
    * After an ``unknown`` answer caused by a resource limit the SAT search has
    * backtracked to decision level 0, so what is listed is entailed by the
    * current context. After ``sat`` the full assignment is still in place, and
-   * an equality may depend on decisions; ``d_level`` says which.
+   * an equality may depend on decisions; ``d_level`` says which. Levels come
+   * from the SAT solver. With CaDiCaL, which cvc5 uses without incremental
+   * solving, a literal implied under an assumption or inside a push has no
+   * level, and an equality that depends on one reads ``UNKNOWN``.
    *
    * SMT-LIB:
    *
@@ -6179,11 +6220,11 @@ class CVC5_EXPORT Solver
    * .. code:: smtlib
    *
    *     (get-egraph-equalities [:limit <numeral>] [:include-used]
-   *                            [:focus (<term>*)])
+   *                            [:focus (<term>*)] [:max-term-size <numeral>])
    * \endverbatim
    *
-   * The limit defaults to 20. Requires the quantifiers theory, whose equality
-   * engine is the master one.
+   * The limit defaults to 20 and the size limit to 1000. Requires the
+   * quantifiers theory, whose equality engine is the master one.
    *
    * @warning This function is experimental and may change in future versions.
    *
@@ -6192,11 +6233,14 @@ class CVC5_EXPORT Solver
    * @param limit The most equalities to return.
    * @param includeUsed Whether to return equalities with a side some
    *                    quantifier was instantiated with.
+   * @param maxTermSize The most nodes a returned term or literal may print
+   *                    with, without sharing.
    * @return The equalities, most relevant first, and what was counted.
    */
   EgraphEqualities getEgraphEqualities(const std::vector<Term>& focus,
                                        uint32_t limit,
-                                       bool includeUsed) const;
+                                       bool includeUsed,
+                                       uint32_t maxTermSize) const;
 
   /**
    * Save the instantiations of the last check under a key, in a store that

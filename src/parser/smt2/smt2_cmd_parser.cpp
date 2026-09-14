@@ -610,11 +610,12 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
     }
     break;
     // (get-egraph-equalities [:limit <numeral>] [:include-used]
-    //                        [:focus (<term>*)])
+    //                        [:focus (<term>*)] [:max-term-size <numeral>])
     case Token::GET_EGRAPH_EQUALITIES_TOK:
     {
       d_state.checkThatLogicIsSet();
       uint32_t limit = 20;
+      uint32_t maxTermSize = 1000;
       bool includeUsed = false;
       std::vector<Term> focus;
       // peek at most once between consumptions
@@ -639,12 +640,17 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
           }
           d_lex.eatToken(Token::RPAREN_TOK);
         }
+        else if (key == ":max-term-size")
+        {
+          maxTermSize = d_tparser.parseIntegerNumeral();
+        }
         else
         {
           d_lex.parseError("Unknown get-egraph-equalities option " + key);
         }
       }
-      cmd.reset(new GetEgraphEqualitiesCommand(focus, limit, includeUsed));
+      cmd.reset(new GetEgraphEqualitiesCommand(
+          focus, limit, includeUsed, maxTermSize));
     }
     break;
     // (get-assertion-sources [:tags-only] [<term>])

@@ -815,6 +815,7 @@ class CVC5_EXPORT SolverEngine
   void getEgraphEqualities(const std::vector<Node>& focus,
                            size_t limit,
                            bool includeUsed,
+                           size_t maxTermSize,
                            smt::MinedEqualities& out);
 
   /**

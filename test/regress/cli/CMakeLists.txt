@@ -1786,6 +1786,8 @@ set(regress_0_tests
   regress0/quantifiers/ex6.smt2
   regress0/quantifiers/floor.smt2
   regress0/quantifiers/get-egraph-equalities.smt2
+  regress0/quantifiers/get-egraph-equalities-internal.smt2
+  regress0/quantifiers/get-egraph-equalities-terms.smt2
   regress0/quantifiers/global_negate.smt2
   regress0/quantifiers/horn-ground-pre-post.smt2
   regress0/quantifiers/is-even-pred.smt2

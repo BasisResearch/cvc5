@@ -47,7 +47,10 @@ enum class EgraphLevel
   ENTAILED,
   /** Some literal of the explanation was assigned under a decision. */
   DECISION,
-  /** No theory explains it, or one of its literals has no level. */
+  /**
+   * No theory explains it, or one of its literals has no level and none was
+   * assigned under a decision.
+   */
   UNKNOWN,
 };
 
@@ -57,12 +60,24 @@ struct MinedEquality
   /** The two terms, in original form. */
   Node d_lhs;
   Node d_rhs;
-  /** The literals the equality follows from, in original form. */
+  /**
+   * The literals the equality follows from, in original form, except those
+   * counted by d_becauseHidden.
+   */
   std::vector<Node> d_because;
+  /**
+   * The literals of the explanation left out of d_because: they name a
+   * skolem, instantiation constant or bound variable, or print larger than
+   * the size limit.
+   */
+  size_t d_becauseHidden = 0;
   EgraphLevel d_level = EgraphLevel::UNKNOWN;
   /** Whether some quantifier was instantiated with either term. */
   bool d_used = false;
-  /** The names of those quantifiers, sorted; `?` for one without a name. */
+  /**
+   * The names of those quantifiers, sorted; `?` for one of the input without
+   * a name, `@internal` for one the solver introduced.
+   */
   std::vector<std::string> d_usedBy;
   /** How many of the two terms are focus terms, 0 to 2. */
   uint32_t d_focus = 0;
@@ -84,13 +99,18 @@ struct MinedEqualities
   size_t d_focusFound = 0;
   /** Equalities left out because a quantifier was instantiated with a side. */
   size_t d_usedOmitted = 0;
+  /** Terms left out because they print larger than the size limit. */
+  size_t d_tooLarge = 0;
 };
 
 /**
  * List the equalities that hold in master, the equality engine that
  * quantifier instantiation matches against, between terms that can be
  * written in the input: terms whose original form names no skolem,
- * instantiation constant or bound variable. Boolean classes are skipped.
+ * instantiation constant or bound variable. The constructors, selectors,
+ * testers and updaters of datatypes are written by name, so they count as
+ * writable. Boolean classes are skipped, and so are terms that, printed
+ * without sharing, have more than maxTermSize nodes.
  *
  * Each class is listed as the equalities between its first term and each
  * other term, so a class of n terms yields n - 1 equalities. Terms are
@@ -120,6 +140,7 @@ struct MinedEqualities
  * quantifiers.
  * @param limit The most equalities to list.
  * @param includeUsed Whether to list equalities with a side in instTerms.
+ * @param maxTermSize The most nodes a listed term or literal may print with.
  * @param out What was found.
  */
 void mineEgraphEqualities(
@@ -133,6 +154,7 @@ void mineEgraphEqualities(
     const std::unordered_map<Node, std::set<std::string>>& instTerms,
     size_t limit,
     bool includeUsed,
+    size_t maxTermSize,
     MinedEqualities& out);
 
 }  // namespace smt
