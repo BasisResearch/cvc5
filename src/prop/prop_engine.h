@@ -195,6 +195,14 @@ class PropEngine : protected EnvObj
   bool isFixed(TNode lit) const;
 
   /**
+   * The decision level lit's SAT variable is assigned at on the current
+   * trail. Unlike isFixed, this ignores the user context, so level 0 inside
+   * a push means implied by what is asserted there. Returns -1 if lit has no
+   * SAT literal, is unassigned, or the SAT solver does not report levels.
+   */
+  int32_t getDecisionLevel(TNode lit) const;
+
+  /**
    * Checks the current context for satisfiability.
    *
    */

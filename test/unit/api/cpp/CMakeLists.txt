@@ -11,6 +11,7 @@
 ##
 cvc5_add_unit_test_black(api_command_black api/cpp)
 cvc5_add_unit_test_black(api_datatype_black api/cpp)
+cvc5_add_unit_test_black(api_egraph_equalities_black api/cpp)
 cvc5_add_unit_test_black(api_grammar_black api/cpp)
 cvc5_add_unit_test_black(api_input_parser_black api/cpp)
 cvc5_add_unit_test_black(api_kind_black api/cpp)

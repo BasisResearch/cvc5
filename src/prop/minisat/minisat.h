@@ -86,6 +86,8 @@ class MinisatSatSolver : public CDCLTSatSolver, protected EnvObj
 
   bool isFixed(SatVariable var) const override;
 
+  int32_t getDecisionLevel(SatVariable var) const override;
+
   /** Return the list of current list of decisions that have been made by the
    * solver at the point when this function is called.
    */

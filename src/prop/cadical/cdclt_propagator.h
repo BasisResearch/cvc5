@@ -197,6 +197,24 @@ class CadicalPropagator : public CaDiCaL::ExternalPropagator,
   }
 
   /**
+   * The decision level var was assigned at: 0 if it is fixed, -1 if it is
+   * unassigned or not observed.
+   */
+  int32_t decision_level(const SatVariable var) const
+  {
+    if (var >= d_var_info.size())
+    {
+      return -1;
+    }
+    const VarInfo& info = d_var_info[var];
+    if (info.is_fixed)
+    {
+      return 0;
+    }
+    return info.assignment == 0 ? -1 : static_cast<int32_t>(info.level);
+  }
+
+  /**
    * Configure and record preferred phase of variable.
    * @param lit The literal.
    */
@@ -272,6 +290,7 @@ class CadicalPropagator : public CaDiCaL::ExternalPropagator,
     uint32_t level_intro = 0;     // user level at which variable was created
     uint32_t level_fixed = 0;     // user level at which variable was fixed
     int32_t assignment = 0;       // current variable assignment
+    uint32_t level = 0;           // decision level of the assignment
     bool is_theory_atom = false;  // is variable a theory atom
     bool is_fixed = false;        // has variable fixed assignment
     bool is_active = true;        // is variable active

@@ -1465,6 +1465,22 @@ TrustNode TheoryEngine::getExplanation(TNode node)
   return texplanation;
 }
 
+Node TheoryEngine::explainFact(TNode lit, TheoryId tid)
+{
+  if (!logicInfo().isSharingEnabled())
+  {
+    return Node::null();
+  }
+  PropagationMap::const_iterator it =
+      d_propagationMap.find(NodeTheoryPair(lit, tid));
+  if (it == d_propagationMap.end())
+  {
+    return Node::null();
+  }
+  std::vector<NodeTheoryPair> vec{(*it).second};
+  return getExplanation(vec).getNode();
+}
+
 struct AtomsCollect
 {
   std::vector<TNode> d_atoms;
