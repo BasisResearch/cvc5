@@ -2374,6 +2374,95 @@ void GetAssertionSourcesCommand::toStream(std::ostream& out) const
 }
 
 /* -------------------------------------------------------------------------- */
+/* class GetEgraphEqualitiesCommand */
+/* -------------------------------------------------------------------------- */
+
+GetEgraphEqualitiesCommand::GetEgraphEqualitiesCommand(
+    const std::vector<cvc5::Term>& focus, uint32_t limit, bool includeUsed)
+    : d_focus(focus), d_limit(limit), d_includeUsed(includeUsed)
+{
+}
+
+const cvc5::EgraphEqualities& GetEgraphEqualitiesCommand::getResult() const
+{
+  return d_result;
+}
+
+void GetEgraphEqualitiesCommand::invoke(cvc5::Solver* solver,
+                                        CVC5_UNUSED SymManager* sm)
+{
+  try
+  {
+    d_result = solver->getEgraphEqualities(d_focus, d_limit, d_includeUsed);
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.what());
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+void GetEgraphEqualitiesCommand::printResult(CVC5_UNUSED cvc5::Solver* solver,
+                                             std::ostream& out) const
+{
+  // Terms are printed without let-sharing: a client parses them back, one at
+  // a time, and may show them to a user.
+  internal::options::ioutils::Scope scope(out);
+  internal::options::ioutils::applyDagThresh(out, 0);
+  out << "(egraph-equalities" << std::endl;
+  out << "(summary :classes " << d_result.d_classes << " :candidates "
+      << d_result.d_candidates << " :focus " << d_focus.size()
+      << " :focus-found " << d_result.d_focusFound << " :used-omitted "
+      << d_result.d_usedOmitted << ")" << std::endl;
+  for (const cvc5::EgraphEquality& e : d_result.d_equalities)
+  {
+    // Nodes, not Terms: Term printing ignores the stream's settings.
+    out << "(equality " << termToNode(e.d_lhs) << " " << termToNode(e.d_rhs)
+        << " :level " << e.d_level << " :used " << (e.d_used ? "true" : "false")
+        << " :used-by (";
+    for (size_t i = 0, size = e.d_usedBy.size(); i < size; i++)
+    {
+      out << (i == 0 ? "" : " ") << cvc5::internal::quoteSymbol(e.d_usedBy[i]);
+    }
+    out << ") :focus " << e.d_focus << " :because (";
+    for (size_t i = 0, size = e.d_because.size(); i < size; i++)
+    {
+      out << (i == 0 ? "" : " ") << termToNode(e.d_because[i]);
+    }
+    out << "))" << std::endl;
+  }
+  out << ")" << std::endl;
+}
+
+std::string GetEgraphEqualitiesCommand::getCommandName() const
+{
+  return "get-egraph-equalities";
+}
+
+void GetEgraphEqualitiesCommand::toStream(std::ostream& out) const
+{
+  out << "(get-egraph-equalities :limit " << d_limit;
+  if (d_includeUsed)
+  {
+    out << " :include-used";
+  }
+  if (!d_focus.empty())
+  {
+    out << " :focus (";
+    for (size_t i = 0, size = d_focus.size(); i < size; i++)
+    {
+      out << (i == 0 ? "" : " ") << d_focus[i];
+    }
+    out << ")";
+  }
+  out << ")";
+}
+
+/* -------------------------------------------------------------------------- */
 /* class SaveInstantiationsCommand */
 /* -------------------------------------------------------------------------- */
 

@@ -4596,6 +4596,64 @@ class CVC5_EXPORT TermManager
 };
 
 /* -------------------------------------------------------------------------- */
+/* EgraphEqualities                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One equality the e-graph holds after a check, see
+ * Solver::getEgraphEqualities().
+ *
+ * @warning This struct is experimental and may change in future versions.
+ */
+struct CVC5_EXPORT EgraphEquality
+{
+  /** The first term of its class. */
+  Term d_lhs;
+  /** Another term of the same class. */
+  Term d_rhs;
+  /**
+   * The literals the equality follows from, as explained by a theory whose
+   * equality engine holds both terms equal. Empty when no single theory does.
+   */
+  std::vector<Term> d_because;
+  /**
+   * ``entailed`` when every literal of the explanation holds at decision
+   * level 0, so the equality follows from what the current context asserts;
+   * ``decision`` when one of them was assigned under a SAT decision;
+   * ``unknown`` when the explanation is empty or a literal has no level.
+   */
+  std::string d_level;
+  /** Whether some quantifier was instantiated with either term. */
+  bool d_used = false;
+  /**
+   * The ``:qid`` names of those quantifiers, sorted; ``?`` for one without a
+   * name.
+   */
+  std::vector<std::string> d_usedBy;
+  /** How many of the two terms are focus terms, 0 to 2. */
+  uint32_t d_focus = 0;
+};
+
+/**
+ * What Solver::getEgraphEqualities() found.
+ *
+ * @warning This struct is experimental and may change in future versions.
+ */
+struct CVC5_EXPORT EgraphEqualities
+{
+  /** The equalities, most relevant first. */
+  std::vector<EgraphEquality> d_equalities;
+  /** The classes listed: non-Boolean, with two or more listable terms. */
+  size_t d_classes = 0;
+  /** The equalities there were before the limit. */
+  size_t d_candidates = 0;
+  /** The focus terms the e-graph holds. */
+  size_t d_focusFound = 0;
+  /** The equalities left out because a side was instantiated with. */
+  size_t d_usedOmitted = 0;
+};
+
+/* -------------------------------------------------------------------------- */
 /* Solver                                                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -6101,6 +6159,44 @@ class CVC5_EXPORT Solver
    * @return Its tags; an untagged input is ``?``.
    */
   std::vector<std::string> getAssertionSourcesOf(const Term& term) const;
+
+  /**
+   * Get the equalities the e-graph holds after the last check, between terms
+   * that can be written in the input: no skolem, instantiation constant or
+   * bound variable in their original form. The e-graph is the equality
+   * engine quantifier instantiation matches against. Boolean classes are
+   * skipped, and a class of n such terms is listed as the n - 1 equalities
+   * between its first term and the others, focus terms first.
+   *
+   * After an ``unknown`` answer caused by a resource limit the SAT search has
+   * backtracked to decision level 0, so what is listed is entailed by the
+   * current context. After ``sat`` the full assignment is still in place, and
+   * an equality may depend on decisions; ``d_level`` says which.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (get-egraph-equalities [:limit <numeral>] [:include-used]
+   *                            [:focus (<term>*)])
+   * \endverbatim
+   *
+   * The limit defaults to 20. Requires the quantifiers theory, whose equality
+   * engine is the master one.
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param focus The terms whose classes to list, or empty for all classes.
+   *              A focus term the e-graph does not hold lists nothing.
+   * @param limit The most equalities to return.
+   * @param includeUsed Whether to return equalities with a side some
+   *                    quantifier was instantiated with.
+   * @return The equalities, most relevant first, and what was counted.
+   */
+  EgraphEqualities getEgraphEqualities(const std::vector<Term>& focus,
+                                       uint32_t limit,
+                                       bool includeUsed) const;
 
   /**
    * Save the instantiations of the last check under a key, in a store that

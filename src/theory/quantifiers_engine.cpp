@@ -132,6 +132,8 @@ QuantifiersRegistry& QuantifiersEngine::getQuantifiersRegistry()
   return d_qreg;
 }
 
+QuantifiersState& QuantifiersEngine::getState() { return d_qstate; }
+
 QModelBuilder* QuantifiersEngine::getModelBuilder() const
 {
   return d_builder.get();

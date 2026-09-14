@@ -47,6 +47,7 @@
 #include "smt/assertions.h"
 #include "smt/check_models.h"
 #include "smt/context_manager.h"
+#include "smt/egraph_equalities.h"
 #include "smt/env.h"
 #include "smt/expand_definitions.h"
 #include "smt/find_synth_solver.h"
@@ -73,6 +74,7 @@
 #include "theory/quantifiers/instantiation_list.h"
 #include "theory/quantifiers/oracle_engine.h"
 #include "theory/quantifiers/quantifiers_attributes.h"
+#include "theory/quantifiers/quantifiers_state.h"
 #include "theory/quantifiers/query_generator.h"
 #include "theory/quantifiers/rewrite_verifier.h"
 #include "theory/quantifiers/sygus/sygus_enumerator.h"
@@ -81,6 +83,7 @@
 #include "theory/rewriter.h"
 #include "theory/smt_engine_subsolver.h"
 #include "theory/theory_engine.h"
+#include "theory/uf/equality_engine.h"
 #include "util/random.h"
 #include "util/rational.h"
 #include "util/resource_manager.h"
@@ -2513,6 +2516,100 @@ std::vector<std::string> SolverEngine::getAssertionSourcesOf(const Node& n)
   std::vector<std::string> tags;
   d_smtSolver->getSourceTags(inputs, tags);
   return tags;
+}
+
+void SolverEngine::getEgraphEqualities(const std::vector<Node>& focus,
+                                       size_t limit,
+                                       bool includeUsed,
+                                       smt::MinedEqualities& out)
+{
+  // see if another solver engine was responsible for the last status
+  SolverEngine* ssolver = d_state->getStatusSolver();
+  if (ssolver != nullptr)
+  {
+    ssolver->getEgraphEqualities(focus, limit, includeUsed, out);
+    return;
+  }
+  Trace("smt") << "SMT getEgraphEqualities()\n";
+  finishInit();
+  QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine();
+  TheoryEngine* te = d_smtSolver->getTheoryEngine();
+  const theory::eq::EqualityEngine* master =
+      qe == nullptr ? nullptr : qe->getState().getEqualityEngine();
+  if (master == nullptr || te == nullptr)
+  {
+    throw RecoverableModalException(
+        "Cannot get e-graph equalities without the quantifiers theory, whose "
+        "equality engine is the master one.");
+  }
+  // In the distributed mode the master engine records merges without
+  // reasons, so the theories' own engines explain them. In the central mode
+  // every theory shares the master engine, which then has the reasons.
+  bool central =
+      d_env->getOptions().theory.eeMode == options::EqEngineMode::CENTRAL;
+  std::vector<std::pair<theory::TheoryId, const theory::eq::EqualityEngine*>>
+      explainers;
+  std::unordered_set<const theory::eq::EqualityEngine*> seen;
+  for (theory::TheoryId tid = theory::THEORY_FIRST; tid < theory::THEORY_LAST;
+       ++tid)
+  {
+    theory::Theory* t = te->theoryOf(tid);
+    const theory::eq::EqualityEngine* ee =
+        t == nullptr ? nullptr : t->getEqualityEngine();
+    if (ee != nullptr && (ee != master || central) && seen.insert(ee).second)
+    {
+      explainers.emplace_back(tid, ee);
+    }
+  }
+  std::function<Node(TNode, theory::TheoryId)> explainFact =
+      [te](TNode lit, theory::TheoryId tid) {
+        return te->explainFact(lit, tid);
+      };
+  std::unordered_set<Node> focusTerms;
+  std::unordered_map<Node, Node> cache;
+  ExpandDefs expDef(*d_env.get());
+  for (const Node& f : focus)
+  {
+    Node n = d_smtSolver->getPreprocessor()->applySubstitutions(f);
+    n = expDef.expandDefinitions(n, cache);
+    n = d_env->getRewriter()->rewrite(n);
+    if (master->hasTerm(n))
+    {
+      focusTerms.insert(n);
+    }
+  }
+  out.d_focusFound = focusTerms.size();
+  std::map<Node, std::vector<std::vector<Node>>> insts;
+  qe->getInstantiationTermVectors(insts);
+  // Each term a quantifier was instantiated with, in both forms, mapped to
+  // the :qid of each such quantifier.
+  std::unordered_map<Node, std::set<std::string>> instTerms;
+  for (const std::pair<const Node, std::vector<std::vector<Node>>>& q : insts)
+  {
+    std::string name = quantIdName(q.first);
+    if (name.empty())
+    {
+      name = "?";
+    }
+    for (const std::vector<Node>& vec : q.second)
+    {
+      for (const Node& t : vec)
+      {
+        instTerms[t].insert(name);
+        instTerms[SkolemManager::getOriginalForm(t)].insert(name);
+      }
+    }
+  }
+  smt::mineEgraphEqualities(*master,
+                            explainers,
+                            explainFact,
+                            *d_smtSolver->getPropEngine(),
+                            !focus.empty(),
+                            focusTerms,
+                            instTerms,
+                            limit,
+                            includeUsed,
+                            out);
 }
 
 void SolverEngine::getDifficultyMap(std::map<Node, Node>& dmap)

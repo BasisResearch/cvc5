@@ -68,6 +68,8 @@ class QuantifiersEngine : protected EnvObj
   ~QuantifiersEngine();
   /** The quantifiers registry */
   quantifiers::QuantifiersRegistry& getQuantifiersRegistry();
+  /** The quantifiers state, whose equality engine is the master one */
+  quantifiers::QuantifiersState& getState();
   //---------------------- utilities
   /** get the model builder */
   quantifiers::QModelBuilder* getModelBuilder() const;

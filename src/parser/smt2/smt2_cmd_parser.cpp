@@ -78,6 +78,7 @@ Smt2CmdParser::Smt2CmdParser(Smt2Lexer& lex,
     d_table["get-abduct-next"] = Token::GET_ABDUCT_NEXT_TOK;
     d_table["get-abduct"] = Token::GET_ABDUCT_TOK;
     d_table["get-assertion-sources"] = Token::GET_ASSERTION_SOURCES_TOK;
+    d_table["get-egraph-equalities"] = Token::GET_EGRAPH_EQUALITIES_TOK;
     d_table["save-instantiations"] = Token::SAVE_INSTANTIATIONS_TOK;
     d_table["restore-instantiations"] = Token::RESTORE_INSTANTIATIONS_TOK;
     d_table["export-instantiations"] = Token::EXPORT_INSTANTIATIONS_TOK;
@@ -606,6 +607,44 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
     {
       d_state.checkThatLogicIsSet();
       cmd.reset(new GetAssignmentCommand());
+    }
+    break;
+    // (get-egraph-equalities [:limit <numeral>] [:include-used]
+    //                        [:focus (<term>*)])
+    case Token::GET_EGRAPH_EQUALITIES_TOK:
+    {
+      d_state.checkThatLogicIsSet();
+      uint32_t limit = 20;
+      bool includeUsed = false;
+      std::vector<Term> focus;
+      // peek at most once between consumptions
+      while (d_lex.peekToken() == Token::KEYWORD)
+      {
+        d_lex.eatToken(Token::KEYWORD);
+        std::string key = d_lex.tokenStr();
+        if (key == ":limit")
+        {
+          limit = d_tparser.parseIntegerNumeral();
+        }
+        else if (key == ":include-used")
+        {
+          includeUsed = true;
+        }
+        else if (key == ":focus")
+        {
+          d_lex.eatToken(Token::LPAREN_TOK);
+          while (d_lex.peekToken() != Token::RPAREN_TOK)
+          {
+            focus.push_back(d_tparser.parseTerm());
+          }
+          d_lex.eatToken(Token::RPAREN_TOK);
+        }
+        else
+        {
+          d_lex.parseError("Unknown get-egraph-equalities option " + key);
+        }
+      }
+      cmd.reset(new GetEgraphEqualitiesCommand(focus, limit, includeUsed));
     }
     break;
     // (get-assertion-sources [:tags-only] [<term>])

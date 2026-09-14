@@ -1079,6 +1079,39 @@ class CVC5_EXPORT GetAssertionSourcesCommand : public Cmd
   std::vector<std::string> d_tags;
 };
 
+/**
+ * (get-egraph-equalities [:limit <numeral>] [:include-used]
+ * [:focus (<term>*)]), see Solver::getEgraphEqualities. The reply is one
+ * form, (egraph-equalities (summary ...) (equality <lhs> <rhs> ...)*), with
+ * the summary and each equality on a line of its own.
+ */
+class CVC5_EXPORT GetEgraphEqualitiesCommand : public Cmd
+{
+ public:
+  GetEgraphEqualitiesCommand(const std::vector<cvc5::Term>& focus,
+                             uint32_t limit,
+                             bool includeUsed);
+  /** The result */
+  const cvc5::EgraphEqualities& getResult() const;
+
+  void invoke(cvc5::Solver* solver, parser::SymManager* sm) override;
+  void printResult(cvc5::Solver* solver, std::ostream& out) const override;
+
+  std::string getCommandName() const override;
+  void toStream(std::ostream& out) const override;
+
+ protected:
+  /** The terms whose classes to list, all classes if empty */
+  std::vector<cvc5::Term> d_focus;
+  /** The most equalities to list */
+  uint32_t d_limit;
+  /** Whether to list equalities with a side a quantifier was instantiated with
+   */
+  bool d_includeUsed;
+  /** The result */
+  cvc5::EgraphEqualities d_result;
+};
+
 /** (save-instantiations <symbol>), see Solver::saveInstantiations */
 class CVC5_EXPORT SaveInstantiationsCommand : public Cmd
 {
