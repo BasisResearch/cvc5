@@ -3,6 +3,7 @@
 ; instantiation. The limit is a global source: it names no culprit.
 ; EXPECT: unknown
 ; EXPECT: (:incomplete-id QUANTIFIERS_MAX_INST_ROUNDS)
+; EXPECT: (:incomplete-ids (QUANTIFIERS_MAX_INST_ROUNDS))
 ; EXPECT: (:incomplete-culprits ())
 (set-logic UFLIA)
 (declare-fun f (Int) Int)
@@ -10,4 +11,5 @@
 (assert (> (f 0) 5))
 (check-sat)
 (get-info :incomplete-id)
+(get-info :incomplete-ids)
 (get-info :incomplete-culprits)

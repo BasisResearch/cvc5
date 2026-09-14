@@ -10,6 +10,7 @@
 ; EXPECT: unknown
 ; EXPECT: (:reason-unknown resourceout)
 ; EXPECT: (:incomplete-id NONE)
+; EXPECT: (:incomplete-ids ())
 ; EXPECT: (:incomplete-culprits ())
 (set-logic ALL)
 (declare-fun x () Int)
@@ -35,4 +36,5 @@
 (check-sat)
 (get-info :reason-unknown)
 (get-info :incomplete-id)
+(get-info :incomplete-ids)
 (get-info :incomplete-culprits)

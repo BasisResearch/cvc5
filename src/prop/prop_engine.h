@@ -359,14 +359,15 @@ class PropEngine : protected EnvObj
   modes::LearnedLitType getLiteralType(const Node& lit) const;
 
   /**
-   * The incomplete id behind the last checkSat that answered
-   * unknown(INCOMPLETE), or NONE otherwise. It is copied out of the
-   * SAT-context-dependent theory engine state when checkSat returns, so it
-   * stays valid until the next checkSat.
+   * The incomplete ids behind the last checkSat that answered
+   * unknown(INCOMPLETE), and empty otherwise: every id the model was set
+   * unsound with (see TheoryEngine::getModelUnsoundIds), or the refutation
+   * unsound id. They are copied out of the SAT-context-dependent theory engine
+   * state when checkSat returns, so they stay valid until the next checkSat.
    */
-  theory::IncompleteId getLastIncompleteId() const
+  const std::vector<theory::IncompleteId>& getLastIncompleteIds() const
   {
-    return d_lastIncompleteId;
+    return d_lastIncompleteIds;
   }
 
  private:
@@ -455,8 +456,8 @@ class PropEngine : protected EnvObj
   /** Whether we were just interrupted (or not) */
   bool d_interrupted;
 
-  /** The incomplete id of the last checkSat, see getLastIncompleteId */
-  theory::IncompleteId d_lastIncompleteId = theory::IncompleteId::NONE;
+  /** The incomplete ids of the last checkSat, see getLastIncompleteIds */
+  std::vector<theory::IncompleteId> d_lastIncompleteIds;
 
   /**
    * Stores assumptions added via assertInternal() if assumption-based unsat

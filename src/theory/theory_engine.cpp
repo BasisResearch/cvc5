@@ -12,6 +12,7 @@
 
 #include "theory/theory_engine.h"
 
+#include <algorithm>
 #include <sstream>
 
 #include "base/map_util.h"
@@ -229,6 +230,7 @@ TheoryEngine::TheoryEngine(Env& env)
       d_modelUnsound(context(), false),
       d_modelUnsoundTheory(context(), THEORY_BUILTIN),
       d_modelUnsoundId(context(), IncompleteId::UNKNOWN),
+      d_modelUnsoundIds(context()),
       d_refutationUnsound(userContext(), false),
       d_refutationUnsoundTheory(userContext(), THEORY_BUILTIN),
       d_refutationUnsoundId(userContext(), IncompleteId::UNKNOWN),
@@ -1364,6 +1366,22 @@ theory::IncompleteId TheoryEngine::getModelUnsoundId() const
 {
   return d_modelUnsoundId.get();
 }
+std::vector<theory::IncompleteId> TheoryEngine::getModelUnsoundIds() const
+{
+  // Keep the last occurrence of each id, so that they are ordered by when each
+  // was last set and the last one is getModelUnsoundId().
+  std::vector<theory::IncompleteId> ids;
+  for (size_t i = d_modelUnsoundIds.size(); i > 0; i--)
+  {
+    theory::IncompleteId id = d_modelUnsoundIds[i - 1];
+    if (std::find(ids.begin(), ids.end(), id) == ids.end())
+    {
+      ids.push_back(id);
+    }
+  }
+  std::reverse(ids.begin(), ids.end());
+  return ids;
+}
 theory::IncompleteId TheoryEngine::getRefutationUnsoundId() const
 {
   return d_refutationUnsoundId.get();
@@ -1833,6 +1851,7 @@ void TheoryEngine::setModelUnsound(theory::TheoryId theory,
   d_modelUnsound = true;
   d_modelUnsoundTheory = theory;
   d_modelUnsoundId = id;
+  d_modelUnsoundIds.push_back(id);
 }
 
 void TheoryEngine::setRefutationUnsound(theory::TheoryId theory,

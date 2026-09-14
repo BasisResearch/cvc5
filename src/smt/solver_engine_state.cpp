@@ -63,13 +63,16 @@ void SolverEngineState::notifyCheckSat()
   d_smtMode = SmtMode::ASSERT;
 }
 
-void SolverEngineState::notifyCheckSatResult(const Result& r,
-                                             SolverEngine* solver)
+void SolverEngineState::notifyCheckSatResult(
+    const Result& r,
+    SolverEngine* solver,
+    const std::vector<theory::IncompleteId>& incompleteIds)
 {
   // Note that a query has been made
   d_queryMade = true;
-  // Remember the status
+  // Remember the status, and why it is incomplete
   d_status = r;
+  d_incompleteIds = incompleteIds;
   // Check against expected status, if it is set
   if (d_expectedStatus.getStatus() != Result::NONE)
   {
