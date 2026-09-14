@@ -42,10 +42,14 @@ enum class EgraphLevel
 {
   /**
    * Every literal of the explanation holds at decision level 0, so the
-   * equality follows from what the current user context asserts.
+   * equality follows from the current assertions, the assumptions of
+   * check-sat-assuming among them.
    */
   ENTAILED,
-  /** Some literal of the explanation was assigned under a decision. */
+  /**
+   * Some literal of the explanation was assigned under a decision. Another
+   * explanation may not need one.
+   */
   DECISION,
   /**
    * No theory explains it, or one of its literals has no level and none was
@@ -121,7 +125,7 @@ struct MinedEqualities
  * The master engine records merges without reasons, so each equality is
  * explained by the first engine in explainers that holds both of its terms
  * equal. The level of the explanation's literals says whether the equality
- * is entailed by the current user context or depends on SAT decisions. An
+ * follows from the current assertions or depends on SAT decisions. An
  * equality no single engine holds is listed with an empty explanation and
  * level UNKNOWN. A literal of an explanation that the SAT solver does not
  * have, such as an equality between shared terms that another theory

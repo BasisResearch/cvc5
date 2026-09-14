@@ -4608,10 +4608,16 @@ enum class EgraphLevel
 {
   /**
    * Every literal of the explanation holds at decision level 0, so the
-   * equality follows from what the current context asserts.
+   * equality follows from the current assertions, the assumptions of
+   * ``check-sat-assuming`` among them.
    */
   ENTAILED,
-  /** Some literal of the explanation was assigned under a SAT decision. */
+  /**
+   * Some literal of the explanation was assigned under a SAT decision. The
+   * equality may still follow from the assertions by another explanation,
+   * as when ``--ee-mode=central`` explains an equality between shared terms
+   * through an equality between them that the SAT solver decided.
+   */
   DECISION,
   /**
    * No single theory explains the equality, or a literal of the explanation
@@ -6206,13 +6212,15 @@ class CVC5_EXPORT Solver
    * others, focus terms first. A term that, printed without sharing, has
    * more than maxTermSize nodes is left out, and counted in ``d_tooLarge``.
    *
-   * After an ``unknown`` answer caused by a resource limit the SAT search has
-   * backtracked to decision level 0, so what is listed is entailed by the
-   * current context. After ``sat`` the full assignment is still in place, and
-   * an equality may depend on decisions; ``d_level`` says which. Levels come
-   * from the SAT solver. With CaDiCaL, which cvc5 uses without incremental
-   * solving, a literal implied under an assumption or inside a push has no
-   * level, and an equality that depends on one reads ``UNKNOWN``.
+   * Levels come from the SAT solver's trail as the check left it. After
+   * ``sat`` the full assignment is still in place, and an equality may
+   * depend on decisions. After ``unknown`` the trail can hold decisions too:
+   * a resource limit reached during a full check, as while instantiating
+   * quantifiers, ends the search without backtracking. ``d_level`` says
+   * which equalities depend on decisions. With CaDiCaL, which cvc5 uses
+   * without incremental solving, a literal implied under a SAT solver
+   * assumption or inside a push has no level, and an equality that depends
+   * on one reads ``UNKNOWN``.
    *
    * SMT-LIB:
    *
