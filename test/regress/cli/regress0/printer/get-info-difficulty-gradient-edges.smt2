@@ -5,11 +5,11 @@
 ; EXPECT: (:difficulty-gradient (:result none :difficulty false :core false :rows () :untagged (:asserted 0 :difficulty 0) :unmatched-difficulty 0))
 ; EXPECT: unsat
 ; EXPECT: (:difficulty-gradient (:result unsat :difficulty true :core true :rows ((:tags (t1 |t 2|) :difficulty 1 :in-core true) (:tags (q) :difficulty 1 :in-core true)) :untagged (:asserted 2 :difficulty 0 :in-core 1) :unmatched-difficulty 0))
-; EXPECT: (:difficulty-gradient (:result unsat :difficulty true :core true :rows ((:tags (t1 |t 2|) :difficulty 1 :in-core true) (:tags (q) :difficulty 1 :in-core true)) :untagged (:asserted 2 :difficulty 0 :in-core 1) :unmatched-difficulty 0))
+; EXPECT: (:difficulty-gradient (:result none :difficulty false :core false :rows () :untagged (:asserted 0 :difficulty 0) :unmatched-difficulty 0))
 ; Before any check there is nothing to report. The same formula asserted
 ; under two tags is one row, its tags merged and quoted where needed. The
 ; check-sat-assuming assumption p is an untagged input assertion, and the
-; core holds it. An assertion made after the check is not reported, since
+; core holds it. An assertion made after the check ends the report, since
 ; the check never saw it.
 (set-logic ALL)
 (declare-const p Bool)

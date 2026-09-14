@@ -1009,7 +1009,7 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
                << endl;
   // notify our state of the check-sat result
   d_state->notifyCheckSatResult(r);
-  d_checkedAssertions = d_smtSolver->getAssertions().getAssertionList().size();
+  recordCheckedAssertions();
 
   // Check that SAT results generate a model correctly.
   if (d_env->getOptions().smt.checkModels)
@@ -1092,7 +1092,7 @@ std::pair<Result, std::vector<Node>> SolverEngine::getTimeoutCore(
   SolverEngine* solver = d_tcm->getSubSolver();
   Assert(solver != nullptr);
   d_state->notifyCheckSatResult(ret.first, solver);
-  d_checkedAssertions = d_smtSolver->getAssertions().getAssertionList().size();
+  recordCheckedAssertions();
   endCall();
   return std::pair<Result, std::vector<Node>>(ret.first, core);
 }
@@ -2815,6 +2815,11 @@ void SolverEngine::getDifficultyMap(std::map<Node, Node>& dmap)
   }
   // the prop engine has the proof of false
   Assert(d_pfManager);
+  getDifficultyMapInternal(dmap);
+}
+
+void SolverEngine::getDifficultyMapInternal(std::map<Node, Node>& dmap) const
+{
   // get difficulty map from theory engine first
   TheoryEngine* te = d_smtSolver->getTheoryEngine();
   // do not include lemmas
@@ -2823,14 +2828,27 @@ void SolverEngine::getDifficultyMap(std::map<Node, Node>& dmap)
   d_pfManager->translateDifficultyMap(dmap, d_smtSolver->getAssertions());
 }
 
+void SolverEngine::recordCheckedAssertions()
+{
+  d_checkedAssertions = d_smtSolver->getAssertions().getAssertionList().size();
+  d_checkedLevel = d_env->getUserContext()->getLevel();
+}
+
 std::string SolverEngine::getDifficultyGradient() const
 {
   Trace("smt") << "SMT getDifficultyGradient()\n";
   SmtMode mode = d_state->getMode();
-  // Before the first check there is no theory engine to ask.
+  // Before the first check there is no theory engine to ask. The reply
+  // covers the last check only while its assertion list is unchanged. An
+  // assertion since grows the list. In incremental mode, the next command
+  // after a check-sat-assuming pops its assumptions, and with them the
+  // difficulty and the refutation; that lowers the user context level.
   bool checked = d_smtSolver != nullptr && d_state->isFullyInited()
                  && (mode == SmtMode::SAT || mode == SmtMode::SAT_UNKNOWN
-                     || mode == SmtMode::UNSAT);
+                     || mode == SmtMode::UNSAT)
+                 && d_smtSolver->getAssertions().getAssertionList().size()
+                        == d_checkedAssertions
+                 && d_env->getUserContext()->getLevel() == d_checkedLevel;
   // Difficulty and the unsat core belong to the engine that answered. After
   // get-timeout-core that is a subsolver, whose state this engine cannot see.
   bool answered = d_state->getStatusSolver() == nullptr;
@@ -2846,8 +2864,7 @@ std::string SolverEngine::getDifficultyGradient() const
   std::map<Node, Node> dmap;
   if (difficulty)
   {
-    d_smtSolver->getTheoryEngine()->getDifficultyMap(dmap, false);
-    d_pfManager->translateDifficultyMap(dmap, d_smtSolver->getAssertions());
+    getDifficultyMapInternal(dmap);
   }
   std::unordered_set<Node> inCore;
   if (core)
@@ -2871,12 +2888,9 @@ std::string SolverEngine::getDifficultyGradient() const
   {
     const Assertions& as = d_smtSolver->getAssertions();
     const context::CDList<Node>& al = as.getAssertionList();
-    // Only what the check saw: an assertion made since has no difficulty
-    // and no place in the core. The bound is the list's length at the check.
-    size_t nchecked = std::min(d_checkedAssertions, al.size());
     // A formula asserted twice is one input assertion, its tags merged.
     std::unordered_set<Node> seen;
-    for (size_t i = 0; i < nchecked; i++)
+    for (size_t i = 0, nasserts = al.size(); i < nasserts; i++)
     {
       const Node& a = al[i];
       if (!seen.insert(a).second)
