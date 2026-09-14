@@ -4692,6 +4692,11 @@ struct CVC5_EXPORT EgraphEqualities
   size_t d_usedOmitted = 0;
   /** The terms left out because they are larger than the size limit. */
   size_t d_tooLarge = 0;
+  /**
+   * The equalities left out because the rewriter closes them on its own,
+   * such as ``x = 0 + x``.
+   */
+  size_t d_trivial = 0;
 };
 
 /* -------------------------------------------------------------------------- */

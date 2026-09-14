@@ -2425,7 +2425,7 @@ void GetEgraphEqualitiesCommand::printResult(CVC5_UNUSED cvc5::Solver* solver,
       << d_result.d_candidates << " :focus " << d_focus.size()
       << " :focus-found " << d_result.d_focusFound << " :used-omitted "
       << d_result.d_usedOmitted << " :too-large " << d_result.d_tooLarge
-      << ")" << std::endl;
+      << " :trivial-omitted " << d_result.d_trivial << ")" << std::endl;
   for (const cvc5::EgraphEquality& e : d_result.d_equalities)
   {
     // Nodes, not Terms: Term printing ignores the stream's settings.

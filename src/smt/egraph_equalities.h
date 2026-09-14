@@ -105,6 +105,11 @@ struct MinedEqualities
   size_t d_usedOmitted = 0;
   /** Terms left out because they print larger than the size limit. */
   size_t d_tooLarge = 0;
+  /**
+   * Equalities left out because the rewriter closes them on its own, such as
+   * x = 0 + x between a term and the form another theory holds it in.
+   */
+  size_t d_trivial = 0;
 };
 
 /**
@@ -136,6 +141,10 @@ struct MinedEqualities
  * @param explainers The theories' own equality engines, with their theories.
  * @param explainFact Explains a literal a theory holds by propagation, or
  * returns null.
+ * @param rewrite The rewriter. An equality whose two sides rewrite to the
+ * same term, or whose arithmetic sides differ by zero, holds by rewriting
+ * alone and is left out, counted in d_trivial.
+ * @param nm The node manager, for that difference.
  * @param pe The propositional engine, for the level of each literal.
  * @param focusGiven Whether to list only classes holding a focus term.
  * @param focus The focus terms, as the e-graph holds them.
@@ -152,6 +161,8 @@ void mineEgraphEqualities(
     const std::vector<std::pair<theory::TheoryId,
                                 const theory::eq::EqualityEngine*>>& explainers,
     const std::function<Node(TNode, theory::TheoryId)>& explainFact,
+    const std::function<Node(TNode)>& rewrite,
+    NodeManager* nm,
     const prop::PropEngine& pe,
     bool focusGiven,
     const std::unordered_set<Node>& focus,

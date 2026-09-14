@@ -2887,9 +2887,14 @@ void SolverEngine::getEgraphEqualities(const std::vector<Node>& focus,
       }
     }
   }
+  std::function<Node(TNode)> rewrite = [this](TNode n) {
+    return d_env->getRewriter()->rewrite(n);
+  };
   smt::mineEgraphEqualities(*master,
                             explainers,
                             explainFact,
+                            rewrite,
+                            d_env->getNodeManager(),
                             *d_smtSolver->getPropEngine(),
                             !focus.empty(),
                             focusTerms,

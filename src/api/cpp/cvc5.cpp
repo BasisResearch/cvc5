@@ -8068,6 +8068,7 @@ EgraphEqualities Solver::getEgraphEqualities(const std::vector<Term>& focus,
   res.d_focusFound = mined.d_focusFound;
   res.d_usedOmitted = mined.d_usedOmitted;
   res.d_tooLarge = mined.d_tooLarge;
+  res.d_trivial = mined.d_trivial;
   for (const internal::smt::MinedEquality& e : mined.d_equalities)
   {
     EgraphEquality r;

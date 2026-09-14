@@ -19,6 +19,7 @@
 #include "expr/dtype_cons.h"
 #include "expr/skolem_manager.h"
 #include "prop/prop_engine.h"
+#include "util/rational.h"
 #include "theory/uf/equality_engine.h"
 #include "theory/uf/equality_engine_iterator.h"
 
@@ -232,6 +233,8 @@ void mineEgraphEqualities(
     const std::vector<std::pair<TheoryId, const eq::EqualityEngine*>>&
         explainers,
     const std::function<Node(TNode, TheoryId)>& explainFact,
+    const std::function<Node(TNode)>& rewrite,
+    NodeManager* nm,
     const prop::PropEngine& pe,
     bool focusGiven,
     const std::unordered_set<Node>& focus,
@@ -296,11 +299,33 @@ void mineEgraphEqualities(
       }
     }
   };
+  // An equality the rewriter closes on its own, and, in arithmetic, one
+  // whose sides differ by zero: the same sum written two ways, as a term and
+  // the form another theory holds it in. Neither says anything about what
+  // the search established.
+  auto trivial = [&rewrite, nm](TNode a, TNode b) {
+    if (rewrite(a) == rewrite(b))
+    {
+      return true;
+    }
+    TypeNode type = a.getType();
+    if (!type.isInteger() && !type.isReal())
+    {
+      return false;
+    }
+    Node difference = rewrite(nm->mkNode(Kind::SUB, a, b));
+    return difference.isConst() && difference.getConst<Rational>().sgn() == 0;
+  };
   std::vector<Candidate> candidates;
   for (const std::vector<Member>& members : classes)
   {
     for (size_t i = 1, size = members.size(); i < size; i++)
     {
+      if (trivial(members[0].d_orig, members[i].d_orig))
+      {
+        out.d_trivial++;
+        continue;
+      }
       std::set<std::string> names;
       usedBy(members[0], names);
       usedBy(members[i], names);
