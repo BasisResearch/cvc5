@@ -73,11 +73,14 @@ class MatchingLoops : protected EnvObj
    *             :instantiations <n> :rounds <n> :first-round <n>
    *             :last-round <n> :chain <n> :self-fed <n>
    *             :depth-per-rung <decimal> :depth-per-round <decimal>
-   *             :fanout-per-round <decimal>
-   *             :via (<qid>*) :trigger (<term>*) :context (<term>?)
+   *             :fanout-per-round <decimal> :fanout-per-step <decimal>
+   *             :via (<qid>*) :trigger (<term>*) :context (<term>*)
    *             :shape (<term>*)
    *             :step (<term>*) :ladder ((<term>*)*) :ladder-length <n>
    *             :per-round (<n>*))*))
+   *
+   * A formula that never fed itself and was mostly instantiated on terms a
+   * looping formula introduced rides that loop and is not listed.
    *
    * maxInstRounds is whether the instantiation round limit stopped the
    * check-sat that returned unknown; only then is a loop high confidence.
@@ -117,6 +120,11 @@ class MatchingLoops : protected EnvObj
            std::map<std::vector<Node>, Node>& holes,
            size_t firstHole) const;
   Node lgg(const std::vector<Node>& ts, size_t firstHole = 0) const;
+  /** lgg, with the generalization of each column already seen in cache */
+  Node lggRec(const std::vector<Node>& ts,
+              std::map<std::vector<Node>, Node>& holes,
+              std::map<std::vector<Node>, Node>& cache,
+              size_t firstHole) const;
 
   QuantifiersState& d_qstate;
   QuantifiersRegistry& d_qreg;

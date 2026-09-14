@@ -15,8 +15,10 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <unordered_set>
+#include <utility>
 
 #include "expr/node_algorithm.h"
 #include "expr/node_builder.h"
@@ -62,6 +64,17 @@ constexpr size_t kMaxPerRound = 100;
  * the subterms below some depth elided.
  */
 constexpr size_t kMaxTermChars = 1000;
+/** treeSize's depth for a term printed without elision */
+constexpr size_t kNoElide = std::numeric_limits<size_t>::max();
+/**
+ * How many contexts a stable loop may grow by: a loop that instantiates each
+ * rung's subterms (l x) and (r x) grows by (l _0) or by (r _0).
+ */
+constexpr size_t kMaxContexts = 4;
+/** How many per-round count ratios the fan-out averages */
+constexpr size_t kFanoutSteps = 5;
+/** The most rounds between two rounds whose counts the fan-out compares */
+constexpr uint64_t kMaxRoundGap = 3;
 
 bool isConnective(Kind k)
 {
@@ -90,7 +103,10 @@ std::vector<std::vector<Node>> triggersOf(const Node& q)
  * n with every application at depth `depth` replaced by a variable named
  * `...` of its type.
  */
-Node elide(NodeManager* nm, const Node& n, size_t depth, std::map<TypeNode, Node>& dots)
+Node elide(NodeManager* nm,
+           const Node& n,
+           size_t depth,
+           std::map<TypeNode, Node>& dots)
 {
   if (n.getNumChildren() == 0 || n.isClosure())
   {
@@ -119,22 +135,62 @@ Node elide(NodeManager* nm, const Node& n, size_t depth, std::map<TypeNode, Node
 }
 
 /**
+ * The number of nodes of n as a tree once elided at `depth` (kNoElide for
+ * none), capped at kMaxTermChars + 1. Each node prints at least one
+ * character, so this bounds the flat printing's length from below, and it is
+ * counted over n as a DAG, whose tree can be exponentially larger.
+ */
+size_t treeSize(const Node& n,
+                size_t depth,
+                std::map<std::pair<Node, size_t>, size_t>& cache)
+{
+  if (n.getNumChildren() == 0 || n.isClosure() || depth == 0)
+  {
+    return 1;
+  }
+  std::pair<Node, size_t> key(n, depth);
+  auto it = cache.find(key);
+  if (it != cache.end())
+  {
+    return it->second;
+  }
+  size_t cdepth = depth == kNoElide ? kNoElide : depth - 1;
+  size_t size = 1;
+  for (const Node& c : n)
+  {
+    size = std::min(size + treeSize(c, cdepth, cache), kMaxTermChars + 1);
+  }
+  cache.emplace(key, size);
+  return size;
+}
+
+/**
  * n printed flat, or, when that is longer than kMaxTermChars, with its
- * subterms below the deepest depth that fits elided as `...`.
+ * subterms below the deepest depth that fits elided as `...`. A printing
+ * whose tree is already too large is skipped without being made.
  */
 std::string printCapped(NodeManager* nm, const Node& n)
 {
-  std::stringstream ss;
-  options::ioutils::applyDagThresh(ss, 0);
-  ss << n;
-  if (ss.str().size() <= kMaxTermChars)
+  std::map<std::pair<Node, size_t>, size_t> sizes;
+  if (treeSize(n, kNoElide, sizes) <= kMaxTermChars)
   {
-    return ss.str();
+    std::stringstream ss;
+    options::ioutils::applyDagThresh(ss, 0);
+    ss << n;
+    if (ss.str().size() <= kMaxTermChars)
+    {
+      return ss.str();
+    }
   }
   std::map<TypeNode, Node> dots;
   std::string best;
   for (size_t depth : {12, 8, 6, 4, 3, 2, 1})
   {
+    // the shallowest printing is made regardless, as the last resort
+    if (depth > 1 && treeSize(n, depth, sizes) > kMaxTermChars)
+    {
+      continue;
+    }
     std::stringstream es;
     options::ioutils::applyDagThresh(es, 0);
     es << elide(nm, n, depth, dots);
@@ -348,9 +404,10 @@ void MatchingLoops::record(Node q,
   }
 }
 
-Node MatchingLoops::lgg(const std::vector<Node>& ts,
-                        std::map<std::vector<Node>, Node>& holes,
-                        size_t firstHole) const
+Node MatchingLoops::lggRec(const std::vector<Node>& ts,
+                           std::map<std::vector<Node>, Node>& holes,
+                           std::map<std::vector<Node>, Node>& cache,
+                           size_t firstHole) const
 {
   Assert(!ts.empty());
   const Node& a = ts[0];
@@ -359,6 +416,13 @@ Node MatchingLoops::lgg(const std::vector<Node>& ts,
   if (same)
   {
     return a;
+  }
+  // Rungs share subterms, so the same column recurs exponentially often in
+  // their trees.
+  auto cit = cache.find(ts);
+  if (cit != cache.end())
+  {
+    return cit->second;
   }
   bool shared = a.getNumChildren() > 0 && !a.isClosure()
                 && std::all_of(ts.begin(), ts.end(), [&a](const Node& t) {
@@ -391,9 +455,19 @@ Node MatchingLoops::lgg(const std::vector<Node>& ts,
     {
       col.push_back(t[i]);
     }
-    nb << lgg(col, holes, firstHole);
+    nb << lggRec(col, holes, cache, firstHole);
   }
-  return nb.constructNode();
+  Node res = nb.constructNode();
+  cache.emplace(ts, res);
+  return res;
+}
+
+Node MatchingLoops::lgg(const std::vector<Node>& ts,
+                        std::map<std::vector<Node>, Node>& holes,
+                        size_t firstHole) const
+{
+  std::map<std::vector<Node>, Node> cache;
+  return lggRec(ts, holes, cache, firstHole);
 }
 
 Node MatchingLoops::lgg(const std::vector<Node>& ts, size_t firstHole) const
@@ -435,6 +509,10 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
   std::vector<size_t> len(d_insts.size(), 1);
   std::vector<int64_t> prev(d_insts.size(), -1);
   std::vector<std::vector<size_t>> via(d_insts.size());
+  // per formula: how many of its instantiations were self-fed, and whether
+  // any ends a chain long enough to be a loop
+  std::vector<size_t> selfFed(d_quants.size(), 0);
+  std::vector<bool> looping(d_quants.size(), false);
   for (size_t qi = 0, nq = d_quants.size(); qi < nq; qi++)
   {
     const std::vector<size_t>& insts = byQuant[qi];
@@ -442,7 +520,6 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
     {
       continue;
     }
-    size_t selfFed = 0;
     for (size_t i : insts)
     {
       // breadth-first over parents, stopping at instantiations of qi; each
@@ -483,7 +560,41 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
       }
       if (prev[i] >= 0)
       {
-        ++selfFed;
+        ++selfFed[qi];
+      }
+      if (len[i] >= kMinChain)
+      {
+        looping[qi] = true;
+      }
+    }
+  }
+  for (size_t qi = 0, nq = d_quants.size(); qi < nq; qi++)
+  {
+    const std::vector<size_t>& insts = byQuant[qi];
+    if (insts.size() < kMinChain)
+    {
+      continue;
+    }
+    // A formula that never fed itself, instantiated mostly on terms that
+    // another, looping formula introduced, rides that loop: its depth climbs
+    // with the loop's, but it is not a loop of its own.
+    if (selfFed[qi] == 0)
+    {
+      size_t riding = 0;
+      for (size_t i : insts)
+      {
+        const std::vector<size_t>& ps = d_insts[i].d_parents;
+        if (std::any_of(ps.begin(), ps.end(), [&](size_t p) {
+              size_t pq = d_insts[p].d_quant;
+              return pq != qi && looping[pq];
+            }))
+        {
+          riding++;
+        }
+      }
+      if (riding * 2 > insts.size())
+      {
+        continue;
       }
     }
     // the per-round counts of qi's instantiations
@@ -565,14 +676,18 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
     // differ, the later subterm contains the earlier one, and the contexts
     // wrapped around it generalize to one context that is more than a
     // variable: g(_0) for f(a), f(g(a)), f(g(g(a))); cons(_1, _0) when each
-    // rung conses a different head onto the last.
+    // rung conses a different head onto the last. A loop that climbs more
+    // than one subterm of its rungs grows by one of a few such contexts:
+    // l(_0) or r(_0) when each instance introduces f(l(x)) and f(r(x)), and
+    // the chain takes either. The contexts are grouped into classes that
+    // each generalize to more than a variable, at most kMaxContexts of them.
     std::vector<Node> rungs;
     for (size_t c : chain)
     {
       rungs.push_back(d_insts[c].d_rung);
     }
     bool stable = false;
-    Node context;
+    std::vector<Node> contextClasses;
     if (L >= kMinStableChain)
     {
       std::map<TypeNode, Node> recursion;
@@ -603,42 +718,83 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
           }
         }
       }
-      if (!contexts.empty())
+      // each context joins the first class it generalizes with
+      std::vector<std::vector<Node>> classes;
+      for (const Node& c : contexts)
       {
-        context = lgg(contexts, 1);
-        stable = contexts.size() * 4 >= pairs * 3
-                 && context.getKind() != Kind::BOUND_VARIABLE;
-      }
-    }
-    // fan-out: the geometric mean growth of the per-round count over the
-    // last rounds where qi was instantiated in consecutive rounds
-    double fanout = 1.0;
-    {
-      std::vector<double> ratios;
-      for (uint64_t r = lastRound; r > 1 && ratios.size() < 5; r--)
-      {
-        if (perRound[r] == 0 || perRound[r - 1] == 0)
+        bool placed = false;
+        for (std::vector<Node>& cls : classes)
         {
-          if (!ratios.empty())
+          std::vector<Node> ext = cls;
+          ext.push_back(c);
+          if (lgg(ext, 1).getKind() != Kind::BOUND_VARIABLE)
           {
+            cls.push_back(c);
+            placed = true;
             break;
           }
-          continue;
         }
-        ratios.push_back(static_cast<double>(perRound[r]) / perRound[r - 1]);
-      }
-      if (ratios.size() >= 2)
-      {
-        double logSum = 0;
-        for (double x : ratios)
+        if (!placed)
         {
-          logSum += std::log(x);
+          classes.push_back({c});
         }
-        fanout = std::exp(logSum / ratios.size());
+      }
+      if (!classes.empty() && classes.size() <= kMaxContexts)
+      {
+        for (const std::vector<Node>& cls : classes)
+        {
+          contextClasses.push_back(lgg(cls, 1));
+        }
+        stable = contexts.size() * 4 >= pairs * 3;
+      }
+    }
+    // fan-out: the geometric mean growth of qi's per-round count between the
+    // last rounds it was instantiated in. A loop whose rungs alternate with
+    // rounds of other formulas is instantiated only every other round, so
+    // the rounds compared are qi's own, at most kMaxRoundGap apart. The
+    // growth per step between them grades the loop; fanout gives it per
+    // round.
+    double fanout = 1.0;
+    double fanoutPerStep = 1.0;
+    uint64_t lastCount = 0;
+    {
+      // qi's rounds, the last first
+      std::vector<uint64_t> active;
+      for (uint64_t r = lastRound; r >= 1 && active.size() <= kFanoutSteps; r--)
+      {
+        if (perRound[r] > 0)
+        {
+          active.push_back(r);
+        }
+      }
+      if (!active.empty())
+      {
+        lastCount = perRound[active[0]];
+      }
+      double logStep = 0;
+      double logRound = 0;
+      size_t steps = 0;
+      for (size_t k = 0; k + 1 < active.size(); k++)
+      {
+        uint64_t gap = active[k] - active[k + 1];
+        if (gap > kMaxRoundGap)
+        {
+          break;
+        }
+        double l = std::log(static_cast<double>(perRound[active[k]])
+                            / perRound[active[k + 1]]);
+        logStep += l;
+        logRound += l / gap;
+        steps++;
+      }
+      if (steps >= 2)
+      {
+        fanoutPerStep = std::exp(logStep / steps);
+        fanout = std::exp(logRound / steps);
       }
     }
     const char* growth = "bounded";
-    if (fanout >= 1.5 && perRound[lastRound] >= 8)
+    if (fanoutPerStep >= 1.5 && lastCount >= 8)
     {
       growth = "exponential-fanout";
     }
@@ -678,10 +834,10 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
        << (confirmed ? "confirmed" : "unconfirmed") << " :stable "
        << (stable ? "true" : "false") << " :instantiations " << insts.size()
        << " :rounds " << roundsUsed << " :first-round " << r0 << " :last-round "
-       << rn << " :chain " << L << " :self-fed " << selfFed
+       << rn << " :chain " << L << " :self-fed " << selfFed[qi]
        << " :depth-per-rung " << decimal(depthPerRung) << " :depth-per-round "
        << decimal(depthPerRound) << " :fanout-per-round " << decimal(fanout)
-       << " :via (";
+       << " :fanout-per-step " << decimal(fanoutPerStep) << " :via (";
     std::vector<size_t> passed;
     for (size_t c : chain)
     {
@@ -716,9 +872,10 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
       }
     }
     ss << ") :context (";
-    if (!context.isNull())
+    for (size_t k = 0; k < contextClasses.size(); k++)
     {
-      ss << printCapped(nodeManager(), context);
+      ss << (k == 0 ? "" : " ")
+         << printCapped(nodeManager(), contextClasses[k]);
     }
     ss << ") :shape ";
     printList(nodeManager(), ss, lgg(rungs));
