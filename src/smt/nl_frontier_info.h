@@ -33,12 +33,15 @@ class Assertions;
  * The (get-info :nl-frontier) reply for the last check-sat: the nonlinear
  * extension's frontier record (see theory/arith/nl/nl_frontier.h), each atom
  * written as the input spelled it, and, per atom, its hosts: the terms that
- * apply one function to exactly the atom's factors (flattening nested
- * applications of that function), found in the tagged input assertions
- * (with their :assert-id tags) and in the instantiations of each quantified
- * formula (with its :qid). A host is where the atom entered the problem: a
- * product the input wrote through an uninterpreted wrapper, say, reaches
- * arithmetic through the wrapper's defining axiom. Read-only.
+ * apply the atom's operation, or an uninterpreted function the input
+ * defines as it, to exactly the atom's operands (flattening nested
+ * products), found in the tagged input assertions (with their :assert-id
+ * tags) and in the instantiations of each quantified formula (with its :qid
+ * and how many of its instantiations produced a host). A host is where the
+ * atom entered the problem: a product the input wrote through an
+ * uninterpreted wrapper such as Verus's Mul, whose defining axiom
+ * (= (Mul x y) (* x y)) brings it to arithmetic, say. Read-only, and builds
+ * no terms, so asking does not change later checks.
  *
  * te, qe and as are null before the first check. result is the answer of the
  * last check-sat (none, sat, unsat or unknown), reason its unknown

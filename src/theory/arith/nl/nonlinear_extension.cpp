@@ -722,32 +722,31 @@ void tightenBound(NlFrontierBound& b,
                   bool isLower,
                   const TypeNode& type)
 {
-  if (type.isInteger() && !v.isIntegral())
+  if (type.isInteger())
   {
-    // an integer between: round towards the term
-    v = isLower ? Rational(v.ceiling()) : Rational(v.floor());
+    // the integer bound: x > 2.5, x > 2 and x >= 2.5 all read x >= 3
+    if (isLower)
+    {
+      v = strict && v.isIntegral() ? v + 1 : Rational(v.ceiling());
+    }
+    else
+    {
+      v = strict && v.isIntegral() ? v - 1 : Rational(v.floor());
+    }
     strict = false;
   }
-  // A bound implied by the assertions beats one that holds only in the
-  // branch explored, however tight: it is what a hint can rely on.
-  if (b.d_set && b.d_fixed && !fixed)
+  if (b.d_set)
   {
-    return;
-  }
-  if (b.d_set && b.d_fixed == fixed)
-  {
-    int cmp = v.cmp(b.d_value);
-    if (!isLower)
+    // A bound implied by the assertions beats one that holds only in the
+    // branch explored, however tight: it is what a hint can rely on.
+    if (b.d_fixed && !fixed)
     {
-      cmp = -cmp;
+      return;
     }
-    if (cmp < 0 || (cmp == 0 && (b.d_strict || !strict)))
+    int cmp = isLower ? v.cmp(b.d_value) : b.d_value.cmp(v);
+    if (b.d_fixed == fixed && (cmp < 0 || (cmp == 0 && (b.d_strict || !strict))))
     {
-      // no tighter; an equal bound from a fixed literal is as good as fixed
-      if (cmp == 0 && b.d_strict == strict && fixed)
-      {
-        b.d_fixed = true;
-      }
+      // no tighter
       return;
     }
   }
