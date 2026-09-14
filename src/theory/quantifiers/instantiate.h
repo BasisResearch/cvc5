@@ -333,8 +333,9 @@ class Instantiate : public QuantifiersUtil
    * database already held before the lemma introduced none. The depth is 0
    * without parents, otherwise one more than the deepest parent; the term
    * depth is that of the deepest instantiating term. The round counts the
-   * instantiation rounds of the check-sat from 1. Instantiations past
-   * --inst-graph-max are counted in dropped.
+   * quantifiers engine's resets in this check-sat from 1, including rounds
+   * that instantiate nothing. Instantiations past --inst-graph-max are
+   * counted in dropped.
    */
   void printInstantiationGraph(std::ostream& out) const;
   //--------------------------------------end instantiation graph
@@ -393,7 +394,7 @@ class Instantiate : public QuantifiersUtil
     size_t d_quant;
     /** The strategy that made it */
     InferenceId d_id;
-    /** The instantiation round of the check-sat, from 1 */
+    /** The quantifiers engine's reset count in the check-sat, from 1 */
     uint64_t d_round;
     /** 0 without parents, otherwise one more than the deepest parent */
     uint64_t d_depth;
