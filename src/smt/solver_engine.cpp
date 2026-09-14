@@ -2823,12 +2823,10 @@ std::string SolverEngine::getNlFrontier() const
     std::stringstream ss;
     ss << status.getUnknownExplanation();
     reason = ss.str();
-    std::transform(reason.begin(),
-                   reason.end(),
-                   reason.begin(),
-                   [](unsigned char c) {
-                     return static_cast<char>(std::tolower(c));
-                   });
+    std::transform(
+        reason.begin(), reason.end(), reason.begin(), [](unsigned char c) {
+          return static_cast<char>(std::tolower(c));
+        });
   }
   if (!checked)
   {
