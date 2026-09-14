@@ -40,6 +40,7 @@ class QuantifiersState;
 class QuantifiersInferenceManager;
 class QuantifiersRegistry;
 class FirstOrderModel;
+class MatchingLoops;
 
 /** Instantiation rewriter
  *
@@ -112,7 +113,10 @@ class Instantiate : public QuantifiersUtil
               QuantifiersRegistry& qr,
               TermRegistry& tr);
   ~Instantiate();
-  /** presolve, which clears the pressure of the previous check-sat */
+  /**
+   * presolve, forgets the instantiations recorded for the last check and
+   * clears the pressure of the previous check-sat
+   */
   void presolve() override;
   /** reset */
   bool reset(Theory::Effort e) override;
@@ -355,6 +359,13 @@ class Instantiate : public QuantifiersUtil
                 std::map<Node, std::vector<std::vector<Node>>>& out) const;
   //--------------------------------------end saved instantiations
 
+  /**
+   * Print the matching loops among the instantiations of the last check-sat
+   * (see MatchingLoops::print). Requires --matching-loops. maxInstRounds is
+   * whether the instantiation round limit stopped that check-sat.
+   */
+  void printMatchingLoops(std::ostream& out, bool maxInstRounds) const;
+
   /** Are proofs enabled for this object? */
   bool isProofEnabled() const;
 
@@ -474,6 +485,8 @@ class Instantiate : public QuantifiersUtil
   uint64_t d_pressureRounds = 0;
   /** The replay record for q under key's current vectors, null if none. */
   Node replayRecord(const std::string& key, const Node& q) const;
+  /** The instantiations of this check-sat, if --matching-loops */
+  std::unique_ptr<MatchingLoops> d_matchingLoops;
 };
 
 }  // namespace quantifiers
