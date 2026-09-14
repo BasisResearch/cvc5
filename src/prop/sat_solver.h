@@ -153,6 +153,12 @@ class CDCLTSatSolver : public SatSolver
   virtual bool isFixed(SatVariable var) const = 0;
 
   /**
+   * The decision level var is assigned at on the current trail, or -1 when it
+   * is unassigned or this solver does not report levels.
+   */
+  virtual int32_t getDecisionLevel(SatVariable) const { return -1; }
+
+  /**
    * Return the current list of decisions made by the SAT solver.
    */
   virtual std::vector<SatLiteral> getDecisions() const = 0;

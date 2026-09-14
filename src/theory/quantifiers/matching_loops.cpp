@@ -205,6 +205,12 @@ std::string printCapped(NodeManager* nm, const Node& n)
 
 void printList(NodeManager* nm, std::ostream& out, const Node& sexpr)
 {
+  // the generalization of rungs from triggers of different sizes is a hole
+  if (sexpr.getKind() != Kind::SEXPR)
+  {
+    out << "(" << printCapped(nm, sexpr) << ")";
+    return;
+  }
   out << "(";
   for (size_t i = 0, n = sexpr.getNumChildren(); i < n; i++)
   {
@@ -243,7 +249,7 @@ void MatchingLoops::notifyEndRound() { ++d_round; }
 
 Node MatchingLoops::ground(TNode s,
                            TermDb* tdb,
-                           std::unordered_map<TNode, Node>& cache)
+                           std::unordered_map<Node, Node>& cache)
 {
   auto it = cache.find(s);
   if (it != cache.end())
@@ -302,6 +308,7 @@ int64_t MatchingLoops::ownerOf(TNode t) const
 
 void MatchingLoops::record(Node q,
                            const std::vector<Node>& terms,
+                           Node trigger,
                            Node lem,
                            TermDb* tdb)
 {
@@ -328,20 +335,36 @@ void MatchingLoops::record(Node q,
                             static_cast<uint64_t>(TermUtil::getTermDepth(t)));
   }
   std::vector<Node> vars(q[0].begin(), q[0].end());
-  std::vector<std::vector<Node>> pats = triggersOf(q);
+  // The triggers the match may have been made with: the one that matched if
+  // known, else each of q's patterns.
+  std::vector<std::vector<Node>> pats;
+  if (!trigger.isNull() && trigger.getKind() == Kind::SEXPR)
+  {
+    pats.emplace_back(trigger.begin(), trigger.end());
+  }
+  else
+  {
+    pats = triggersOf(q);
+  }
   NodeManager* nm = nodeManager();
   // The terms the match could have been made against: the bindings, and the
   // ground term congruent to each application in each trigger's instance.
   std::vector<Node> blame(terms.begin(), terms.end());
-  std::unordered_map<TNode, Node> cache;
+  std::unordered_map<Node, Node> cache;
+  // The rung is the instance of the first trigger whose terms all have a
+  // congruent ground term, as the one that matched does; the first trigger's
+  // if none has.
+  bool rungMatched = false;
   for (size_t p = 0, np = pats.size(); p < np; p++)
   {
     std::vector<Node> inst_terms;
+    bool matched = true;
     for (const Node& pt : pats[p])
     {
       Node ti =
           pt.substitute(vars.begin(), vars.end(), terms.begin(), terms.end());
       inst_terms.push_back(ti);
+      matched = matched && !ground(ti, tdb, cache).isNull();
       std::unordered_set<TNode> visited;
       std::vector<TNode> visit{ti};
       while (!visit.empty())
@@ -360,9 +383,11 @@ void MatchingLoops::record(Node q,
         visit.insert(visit.end(), cur.begin(), cur.end());
       }
     }
-    if (p == 0)
+    if (inst.d_rung.isNull() || (matched && !rungMatched))
     {
       inst.d_rung = nm->mkNode(Kind::SEXPR, inst_terms);
+      inst.d_trigger = nm->mkNode(Kind::SEXPR, pats[p]);
+      rungMatched = matched;
     }
   }
   if (inst.d_rung.isNull())
@@ -862,14 +887,12 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
         ss << "_";
       }
     }
+    // the trigger of the last rung
     ss << ") :trigger (";
-    std::vector<std::vector<Node>> pats = triggersOf(d_quants[qi]);
-    if (!pats.empty())
+    const Node& trig = d_insts[chain.back()].d_trigger;
+    for (size_t k = 0, n = trig.getNumChildren(); k < n; k++)
     {
-      for (size_t k = 0; k < pats[0].size(); k++)
-      {
-        ss << (k == 0 ? "" : " ") << pats[0][k];
-      }
+      ss << (k == 0 ? "" : " ") << trig[k];
     }
     ss << ") :context (";
     for (size_t k = 0; k < contextClasses.size(); k++)

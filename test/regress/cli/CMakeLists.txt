@@ -1744,6 +1744,10 @@ set(regress_0_tests
   regress0/quantifiers/bug269.smt2
   regress0/quantifiers/bug290.smt2
   regress0/quantifiers/bug291.smt2
+  regress0/quantifiers/incomplete-id-culprits.smt2
+  regress0/quantifiers/incomplete-id-max-rounds.smt2
+  regress0/quantifiers/incomplete-id-reset.smt2
+  regress0/quantifiers/incomplete-ids-multi.smt2
   regress0/quantifiers/bug749-rounding.smt2
   regress0/quantifiers/cbqi-lia-dt-simp.smt2
   regress0/quantifiers/cegqi-needs-justify.smt2
@@ -1788,6 +1792,10 @@ set(regress_0_tests
   regress0/quantifiers/ex3.smt2
   regress0/quantifiers/ex6.smt2
   regress0/quantifiers/floor.smt2
+  regress0/quantifiers/get-egraph-equalities.smt2
+  regress0/quantifiers/get-egraph-equalities-assuming.smt2
+  regress0/quantifiers/get-egraph-equalities-internal.smt2
+  regress0/quantifiers/get-egraph-equalities-terms.smt2
   regress0/quantifiers/global_negate.smt2
   regress0/quantifiers/horn-ground-pre-post.smt2
   regress0/quantifiers/inst-pressure-proof.smt2
@@ -1838,11 +1846,13 @@ set(regress_0_tests
   regress0/quantifiers/macros-real-arg.smt2
   regress0/quantifiers/matching-lia-1arg.smt2
   regress0/quantifiers/matching-loops-alternating.smt2
+  regress0/quantifiers/matching-loops-before-check.smt2
   regress0/quantifiers/matching-loops-branching.smt2
   regress0/quantifiers/matching-loops-cons.smt2
   regress0/quantifiers/matching-loops-cons-deep.smt2
   regress0/quantifiers/matching-loops-incremental.smt2
   regress0/quantifiers/matching-loops-linear.smt2
+  regress0/quantifiers/matching-loops-multi-pattern.smt2
   regress0/quantifiers/matching-loops-none.smt2
   regress0/quantifiers/matching-loops-rider.smt2
   regress0/quantifiers/mbqi-simple.smt2
@@ -2176,6 +2186,7 @@ set(regress_0_tests
   regress0/smtlib/issue4866.smt2
   regress0/smtlib/issue7374.smt2
   regress0/smtlib/issue12663.smt2
+  regress0/smtlib/incomplete-id-none.smt2
   regress0/smtlib/reason-unknown.smt2
   regress0/smtlib/reset-assertions-global.smt2
   regress0/smtlib/reset-assertions1.smt2

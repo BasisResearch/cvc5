@@ -412,6 +412,30 @@ bool PropEngine::isFixed(TNode lit) const
   return false;
 }
 
+int32_t PropEngine::getDecisionLevel(TNode lit) const
+{
+  // A theory can hold a literal the SAT solver has in another orientation
+  // or unrewritten, as when one theory propagates an equality to another.
+  std::vector<Node> forms{lit};
+  bool polarity = lit.getKind() != Kind::NOT;
+  TNode atom = polarity ? lit : lit[0];
+  if (atom.getKind() == Kind::EQUAL)
+  {
+    Node swapped = atom[1].eqNode(atom[0]);
+    forms.push_back(polarity ? swapped : swapped.notNode());
+  }
+  forms.push_back(rewrite(lit));
+  for (const Node& form : forms)
+  {
+    if (isSatLiteral(form))
+    {
+      return d_satSolver->getDecisionLevel(
+          d_cnfStream->getLiteral(form).getSatVariable());
+    }
+  }
+  return -1;
+}
+
 void PropEngine::printSatisfyingAssignment()
 {
   const CnfStream::NodeToLiteralMap& transCache =
@@ -457,6 +481,7 @@ Result PropEngine::checkSat()
   // Mark that we are in the checkSat
   ScopedBool scopedBool(d_inCheckSat);
   d_inCheckSat = true;
+  d_lastIncompleteIds.clear();
 
   if (options().base.preprocessOnly)
   {
@@ -532,6 +557,9 @@ Result PropEngine::checkSat()
   {
     if (d_theoryProxy->isModelUnsound())
     {
+      // Copy the ids now: they live in the SAT context, which is popped before
+      // the next command that begins a call.
+      d_lastIncompleteIds = d_theoryProxy->getModelUnsoundIds();
       outputIncompleteReason(UnknownExplanation::INCOMPLETE,
                              d_theoryProxy->getModelUnsoundId());
       return Result(Result::UNKNOWN, UnknownExplanation::INCOMPLETE);
@@ -539,8 +567,9 @@ Result PropEngine::checkSat()
   }
   else if (d_theoryProxy->isRefutationUnsound())
   {
-    outputIncompleteReason(UnknownExplanation::INCOMPLETE,
-                           d_theoryProxy->getRefutationUnsoundId());
+    theory::IncompleteId id = d_theoryProxy->getRefutationUnsoundId();
+    d_lastIncompleteIds = {id};
+    outputIncompleteReason(UnknownExplanation::INCOMPLETE, id);
     return Result(Result::UNKNOWN, UnknownExplanation::INCOMPLETE);
   }
 

@@ -195,6 +195,14 @@ class PropEngine : protected EnvObj
   bool isFixed(TNode lit) const;
 
   /**
+   * The decision level lit's SAT variable is assigned at on the current
+   * trail. Unlike isFixed, this ignores the user context, so level 0 inside
+   * a push means implied by what is asserted there. Returns -1 if lit has no
+   * SAT literal, is unassigned, or the SAT solver does not report levels.
+   */
+  int32_t getDecisionLevel(TNode lit) const;
+
+  /**
    * Checks the current context for satisfiability.
    *
    */
@@ -358,6 +366,18 @@ class PropEngine : protected EnvObj
   /** Get the literal type through the ZLL utilities */
   modes::LearnedLitType getLiteralType(const Node& lit) const;
 
+  /**
+   * The incomplete ids behind the last checkSat that answered
+   * unknown(INCOMPLETE), and empty otherwise: every id the model was set
+   * unsound with (see TheoryEngine::getModelUnsoundIds), or the refutation
+   * unsound id. They are copied out of the SAT-context-dependent theory engine
+   * state when checkSat returns, so they stay valid until the next checkSat.
+   */
+  const std::vector<theory::IncompleteId>& getLastIncompleteIds() const
+  {
+    return d_lastIncompleteIds;
+  }
+
  private:
   /** Dump out the satisfying assignment (after SAT result) */
   void printSatisfyingAssignment();
@@ -443,6 +463,9 @@ class PropEngine : protected EnvObj
 
   /** Whether we were just interrupted (or not) */
   bool d_interrupted;
+
+  /** The incomplete ids of the last checkSat, see getLastIncompleteIds */
+  std::vector<theory::IncompleteId> d_lastIncompleteIds;
 
   /**
    * Stores assumptions added via assertInternal() if assumption-based unsat

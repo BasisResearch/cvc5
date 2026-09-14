@@ -456,6 +456,15 @@ theory::IncompleteId TheoryProxy::getModelUnsoundId() const
   return d_theoryEngine->getModelUnsoundId();
 }
 
+std::vector<theory::IncompleteId> TheoryProxy::getModelUnsoundIds() const
+{
+  if (d_stopSearch.get())
+  {
+    return {theory::IncompleteId::STOP_SEARCH};
+  }
+  return d_theoryEngine->getModelUnsoundIds();
+}
+
 theory::IncompleteId TheoryProxy::getRefutationUnsoundId() const
 {
   return d_theoryEngine->getRefutationUnsoundId();

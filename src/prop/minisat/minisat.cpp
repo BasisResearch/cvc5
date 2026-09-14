@@ -294,6 +294,15 @@ bool MinisatSatSolver::isFixed(SatVariable var) const
          && d_minisat->level(var) == 0;
 }
 
+int32_t MinisatSatSolver::getDecisionLevel(SatVariable var) const
+{
+  if (toSatLiteralValue(d_minisat->value(var)) == SAT_VALUE_UNKNOWN)
+  {
+    return -1;
+  }
+  return d_minisat->level(var);
+}
+
 std::vector<SatLiteral> MinisatSatSolver::getDecisions() const
 {
   std::vector<SatLiteral> decisions;
