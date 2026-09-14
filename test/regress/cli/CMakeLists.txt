@@ -1509,6 +1509,7 @@ set(regress_0_tests
   regress0/printer/assert-sources-subst.smt2
   regress0/printer/get-assertion-sources-tags-only.smt2
   regress0/printer/get-assertion-sources.smt2
+  regress0/printer/get-info-nl-frontier.smt2
   regress0/printer/inst-sources-output.smt2
   regress0/printer/learned-lit-output.smt2
   regress0/printer/let_shadowing.smt2

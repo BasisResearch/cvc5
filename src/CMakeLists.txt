@@ -354,6 +354,8 @@ libcvc5_add_sources(
   smt/print_benchmark.h
   smt/process_assertions.cpp
   smt/process_assertions.h
+  smt/nl_frontier_info.cpp
+  smt/nl_frontier_info.h
   smt/proof_manager.cpp
   smt/proof_manager.h
   smt/proof_final_callback.cpp
@@ -530,6 +532,7 @@ libcvc5_add_sources(
   theory/arith/nl/icp/intersection.h
   theory/arith/nl/iand_utils.cpp
   theory/arith/nl/iand_utils.h
+  theory/arith/nl/nl_frontier.h
   theory/arith/nl/nl_lemma_utils.cpp
   theory/arith/nl/nl_lemma_utils.h
   theory/arith/nl/nl_model.cpp

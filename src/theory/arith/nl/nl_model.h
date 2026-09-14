@@ -89,6 +89,17 @@ class NlModel : protected EnvObj
   Node computeConcreteModelValue(TNode n);
   Node computeAbstractModelValue(TNode n);
   Node computeModelValue(TNode n, bool isConcrete);
+  /**
+   * The value computeModelValue(n, isConcrete) returned since the last
+   * reset, or null if it was not asked. Computes (and rewrites) nothing.
+   */
+  Node getCachedModelValue(TNode n, bool isConcrete) const
+  {
+    const auto& cache =
+        isConcrete ? d_concreteModelCache : d_abstractModelCache;
+    auto it = cache.find(n);
+    return it == cache.end() ? Node() : it->second;
+  }
 
   /**
    * Compare arithmetic terms i and j based an ordering.

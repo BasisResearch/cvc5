@@ -788,6 +788,14 @@ class CVC5_EXPORT SolverEngine
    */
   void getDifficultyMap(std::map<Node, Node>& dmap);
   /**
+   * The (get-info :nl-frontier) reply for the last check-sat: which nonlinear
+   * terms the nonlinear extension could not reconcile with the linear model,
+   * with their values, the bounds asserted on them and their arguments, and
+   * where each entered the problem (see smt/nl_frontier_info.h). Read-only:
+   * the extension records this during every check, without changing it.
+   */
+  std::string getNlFrontier() const;
+  /**
    * Get, for every preprocessed assertion currently asserted, the :assert-id
    * tags of the input assertions it was derived from (an untagged input is
    * `?`). Requires preprocessing proofs; throws ModalException otherwise.

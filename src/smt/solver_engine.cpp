@@ -56,6 +56,7 @@
 #include "smt/model.h"
 #include "smt/model_blocker.h"
 #include "smt/model_core_builder.h"
+#include "smt/nl_frontier_info.h"
 #include "smt/preprocessor.h"
 #include "smt/proof_manager.h"
 #include "smt/quant_elim_solver.h"
@@ -383,7 +384,8 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
   if (key == "all-statistics" || key == "error-behavior" || key == "filename"
       || key == "name" || key == "version" || key == "authors"
       || key == "status" || key == "time" || key == "reason-unknown"
-      || key == "assertion-stack-levels" || key == "all-options")
+      || key == "assertion-stack-levels" || key == "all-options"
+      || key == "nl-frontier")
   {
     return true;
   }
@@ -450,6 +452,10 @@ std::string SolverEngine::getInfo(const std::string& key) const
           "Can't get-info :reason-unknown when the "
           "last result wasn't unknown!");
     }
+  }
+  if (key == "nl-frontier")
+  {
+    return getNlFrontier();
   }
   if (key == "assertion-stack-levels")
   {
@@ -2513,6 +2519,45 @@ std::vector<std::string> SolverEngine::getAssertionSourcesOf(const Node& n)
   std::vector<std::string> tags;
   d_smtSolver->getSourceTags(inputs, tags);
   return tags;
+}
+
+std::string SolverEngine::getNlFrontier() const
+{
+  Trace("smt") << "SMT getNlFrontier()\n";
+  SmtMode mode = d_state->getMode();
+  // Before the first check there is no theory engine to ask.
+  bool checked = d_smtSolver != nullptr && d_state->isFullyInited()
+                 && (mode == SmtMode::SAT || mode == SmtMode::SAT_UNKNOWN
+                     || mode == SmtMode::UNSAT);
+  std::string result = !checked                 ? "none"
+                       : mode == SmtMode::UNSAT ? "unsat"
+                       : mode == SmtMode::SAT   ? "sat"
+                                                : "unknown";
+  std::string reason = "none";
+  Result status = d_state->getStatus();
+  if (checked && !status.isNull() && status.isUnknown())
+  {
+    std::stringstream ss;
+    ss << status.getUnknownExplanation();
+    reason = ss.str();
+    transform(reason.begin(), reason.end(), reason.begin(), ::tolower);
+  }
+  if (!checked)
+  {
+    // The extension exists once the solver is initialised; after a pop its
+    // record is empty.
+    bool inited = d_smtSolver != nullptr && d_state->isFullyInited();
+    return getNlFrontierInfo(inited ? d_smtSolver->getTheoryEngine() : nullptr,
+                             nullptr,
+                             nullptr,
+                             result,
+                             reason);
+  }
+  return getNlFrontierInfo(d_smtSolver->getTheoryEngine(),
+                           d_smtSolver->getQuantifiersEngine(),
+                           &d_smtSolver->getAssertions(),
+                           result,
+                           reason);
 }
 
 void SolverEngine::getDifficultyMap(std::map<Node, Node>& dmap)
