@@ -323,6 +323,8 @@ libcvc5_add_sources(
   smt/context_manager.h
   smt/difficulty_post_processor.cpp
   smt/difficulty_post_processor.h
+  smt/egraph_equalities.cpp
+  smt/egraph_equalities.h
   smt/env.cpp
   smt/env.h
   smt/env_obj.cpp

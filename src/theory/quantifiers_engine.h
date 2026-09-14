@@ -68,6 +68,8 @@ class QuantifiersEngine : protected EnvObj
   ~QuantifiersEngine();
   /** The quantifiers registry */
   quantifiers::QuantifiersRegistry& getQuantifiersRegistry();
+  /** The quantifiers state, whose equality engine is the master one */
+  quantifiers::QuantifiersState& getState();
   //---------------------- utilities
   /** get the model builder */
   quantifiers::QModelBuilder* getModelBuilder() const;
@@ -107,6 +109,18 @@ class QuantifiersEngine : protected EnvObj
    * is false. Sets name to the result of the above method.
    */
   bool getNameForQuant(Node q, Node& name, bool req = true) const;
+  /**
+   * The asserted quantified formulas that no module claimed to have fully
+   * processed in the most recent check that set the model unsound, together
+   * with the id it was set with. Cleared at presolve. The list is empty when
+   * incompleteness came from a global source (a utility, a module's
+   * checkComplete, a conflict or the instantiation round limit).
+   */
+  const std::vector<Node>& getIncompleteCulprits() const
+  {
+    return d_incompleteCulprits;
+  }
+  IncompleteId getIncompleteCulpritsId() const { return d_incompleteCulpritsId; }
   /**
    * Print the matching loops among the instantiations of the last check-sat
    * (see quantifiers::MatchingLoops::print). Requires --matching-loops.
@@ -246,6 +260,11 @@ class QuantifiersEngine : protected EnvObj
   BoolMap d_quants_red;
   /** Number of rounds we have instantiated */
   uint32_t d_numInstRoundsLemma;
+  /** Quantified formulas found not fully processed in the current check */
+  std::vector<Node> d_roundCulprits;
+  /** See getIncompleteCulprits */
+  std::vector<Node> d_incompleteCulprits;
+  IncompleteId d_incompleteCulpritsId = IncompleteId::NONE;
 }; /* class QuantifiersEngine */
 
 }  // namespace theory

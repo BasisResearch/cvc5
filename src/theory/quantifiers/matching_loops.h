@@ -91,10 +91,16 @@ class MatchingLoops : protected EnvObj
     /** The depth of its deepest instantiating term */
     uint64_t d_depth;
     /**
-     * Its first trigger instantiated with its terms, as an SEXPR with one
-     * child per trigger term; the terms themselves if q has no trigger.
+     * Its trigger instantiated with its terms, as an SEXPR with one child per
+     * trigger term; the terms themselves if q has no trigger.
      */
     Node d_rung;
+    /**
+     * That trigger over the variables of q, as an SEXPR of its terms: the one
+     * that matched, else the first of q's patterns whose instance the term
+     * database held, else q's first pattern; null if q has none.
+     */
+    Node d_trigger;
     /** Earlier instantiations that introduced a term it matched, exact first */
     std::vector<size_t> d_parents;
   };

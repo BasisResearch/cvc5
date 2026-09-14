@@ -438,7 +438,8 @@ bool Instantiate::addInstantiationInternal(
   }
   if (d_graphOn)
   {
-    recordGraphNode(q, terms, id, lem);
+    // e-matching passes the trigger that matched as pfArg
+    recordGraphNode(q, terms, id, pfArg, lem);
   }
   Trace("inst-add-debug") << " --> Success." << std::endl;
   ++(d_statistics.d_instantiations);
@@ -474,6 +475,7 @@ void Instantiate::setMatchedTerms(std::vector<Node>&& outer,
 void Instantiate::recordGraphNode(Node q,
                                   const std::vector<Node>& terms,
                                   InferenceId id,
+                                  Node trigger,
                                   Node lem)
 {
   ++d_graphTotal;
@@ -531,9 +533,10 @@ void Instantiate::recordGraphNode(Node q,
   }
   std::sort(gn.d_parents.begin(), gn.d_parents.end());
   // Attributed parents: owners reached through the nested matched terms, the
-  // bindings, the ground terms congruent to the applications of each trigger
+  // bindings, the ground terms congruent to the applications of the trigger
   // instance at the pattern's own positions, and failing an exact owner
-  // through the representative.
+  // through the representative. The trigger is the one that matched if
+  // known, else each of q's patterns.
   // They are kept apart from the exact parents: a nested term's owner is
   // often an ancestor of the outer one's, and the representative is
   // whichever term the e-graph chose.
@@ -542,8 +545,22 @@ void Instantiate::recordGraphNode(Node q,
       attributed.end(), d_matchedInner.begin(), d_matchedInner.end());
   attributed.insert(attributed.end(), terms.begin(), terms.end());
   std::vector<Node> vars(q[0].begin(), q[0].end());
-  std::vector<std::vector<Node>> pats = MatchingLoops::triggersOf(q);
-  std::unordered_map<TNode, Node> cache;
+  std::vector<std::vector<Node>> pats;
+  if (!trigger.isNull() && trigger.getKind() == Kind::SEXPR)
+  {
+    pats.emplace_back(trigger.begin(), trigger.end());
+  }
+  else
+  {
+    pats = MatchingLoops::triggersOf(q);
+  }
+  // Keyed by Node: each pattern's instance is freed before the next is
+  // looked up, so a TNode key would dangle.
+  std::unordered_map<Node, Node> cache;
+  // The rung is the instance of the first trigger whose terms all have a
+  // congruent ground term, as the one that matched does; the first
+  // trigger's if none has.
+  bool rungMatched = false;
   bool keepRung = d_matchingLoops != nullptr;
   std::vector<Node> origTerms;
   if (keepRung)
@@ -557,10 +574,12 @@ void Instantiate::recordGraphNode(Node q,
   for (size_t p = 0, np = pats.size(); p < np; p++)
   {
     std::vector<Node> instTerms;
+    bool matched = true;
     for (const Node& pt : pats[p])
     {
       Node ti =
           pt.substitute(vars.begin(), vars.end(), terms.begin(), terms.end());
+      matched = matched && !groundTerm(ti, cache).isNull();
       if (keepRung)
       {
         // the rung as written, so a purified ite still shows its growth
@@ -594,9 +613,11 @@ void Instantiate::recordGraphNode(Node q,
         }
       }
     }
-    if (p == 0 && keepRung)
+    if (keepRung && (gn.d_rung.isNull() || (matched && !rungMatched)))
     {
       gn.d_rung = nm->mkNode(Kind::SEXPR, instTerms);
+      gn.d_trigger = nm->mkNode(Kind::SEXPR, pats[p]);
+      rungMatched = matched;
     }
   }
   for (const Node& t : attributed)
@@ -681,7 +702,7 @@ uint64_t Instantiate::graphRecordCap() const
 }
 
 Node Instantiate::groundTerm(TNode s,
-                             std::unordered_map<TNode, Node>& cache) const
+                             std::unordered_map<Node, Node>& cache) const
 {
   auto it = cache.find(s);
   if (it != cache.end())

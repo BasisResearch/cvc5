@@ -4596,6 +4596,105 @@ class CVC5_EXPORT TermManager
 };
 
 /* -------------------------------------------------------------------------- */
+/* EgraphEqualities                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How the explanation of an EgraphEquality depends on the SAT search.
+ *
+ * @warning This enum is experimental and may change in future versions.
+ */
+enum class EgraphLevel
+{
+  /**
+   * Every literal of the explanation holds at decision level 0, so the
+   * equality follows from the current assertions, the assumptions of
+   * ``check-sat-assuming`` among them.
+   */
+  ENTAILED,
+  /**
+   * Some literal of the explanation was assigned under a SAT decision. The
+   * equality may still follow from the assertions by another explanation,
+   * as when ``--ee-mode=central`` explains an equality between shared terms
+   * through an equality between them that the SAT solver decided.
+   */
+  DECISION,
+  /**
+   * No single theory explains the equality, or a literal of the explanation
+   * has no decision level and none was assigned under a decision.
+   */
+  UNKNOWN,
+};
+
+/**
+ * Print an EgraphLevel as ``entailed``, ``decision`` or ``unknown``.
+ * @param out The output stream.
+ * @param level The level.
+ * @return The output stream.
+ */
+CVC5_EXPORT std::ostream& operator<<(std::ostream& out, EgraphLevel level);
+
+/**
+ * One equality the e-graph holds after a check, see
+ * Solver::getEgraphEqualities().
+ *
+ * @warning This struct is experimental and may change in future versions.
+ */
+struct CVC5_EXPORT EgraphEquality
+{
+  /** The first term of its class. */
+  Term d_lhs;
+  /** Another term of the same class. */
+  Term d_rhs;
+  /**
+   * The literals the equality follows from, as explained by a theory whose
+   * equality engine holds both terms equal, except those d_becauseHidden
+   * counts. Empty when no single theory holds the terms equal.
+   */
+  std::vector<Term> d_because;
+  /**
+   * The literals of the explanation left out of d_because, because they
+   * name a symbol the input cannot write, such as a skolem, or are larger
+   * than the size limit. When it is not 0, d_because alone does not imply
+   * the equality.
+   */
+  size_t d_becauseHidden = 0;
+  /** How the explanation depends on the SAT search. */
+  EgraphLevel d_level = EgraphLevel::UNKNOWN;
+  /** Whether some quantifier was instantiated with either term. */
+  bool d_used = false;
+  /**
+   * The ``:qid`` names of those quantifiers, sorted; ``?`` for a quantifier
+   * of the input without a name, ``@internal`` for one the solver
+   * introduced, such as a reduction of the strings theory.
+   */
+  std::vector<std::string> d_usedBy;
+  /** How many of the two terms are focus terms, 0 to 2. */
+  uint32_t d_focus = 0;
+};
+
+/**
+ * What Solver::getEgraphEqualities() found.
+ *
+ * @warning This struct is experimental and may change in future versions.
+ */
+struct CVC5_EXPORT EgraphEqualities
+{
+  /** The equalities, most relevant first. */
+  std::vector<EgraphEquality> d_equalities;
+  /** The classes listed: non-Boolean, with two or more listable terms. */
+  size_t d_classes = 0;
+  /** The equalities there were before the limit. */
+  size_t d_candidates = 0;
+  /** The focus terms the e-graph holds. */
+  size_t d_focusFound = 0;
+  /** The equalities left out because a side was instantiated with. */
+  size_t d_usedOmitted = 0;
+  /** The terms left out because they are larger than the size limit. */
+  size_t d_tooLarge = 0;
+};
+
+/* -------------------------------------------------------------------------- */
 /* Solver                                                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -6101,6 +6200,55 @@ class CVC5_EXPORT Solver
    * @return Its tags; an untagged input is ``?``.
    */
   std::vector<std::string> getAssertionSourcesOf(const Term& term) const;
+
+  /**
+   * Get the equalities the e-graph holds after the last check, between terms
+   * that can be written in the input: no skolem, instantiation constant or
+   * bound variable in their original form. Datatype constructors, selectors,
+   * testers and updaters are written by name, so terms applying them are
+   * listed. The e-graph is the equality engine quantifier instantiation
+   * matches against. Boolean classes are skipped, and a class of n such
+   * terms is listed as the n - 1 equalities between its first term and the
+   * others, focus terms first. A term that, printed without sharing, has
+   * more than maxTermSize nodes is left out, and counted in ``d_tooLarge``.
+   *
+   * Levels come from the SAT solver's trail as the check left it. After
+   * ``sat`` the full assignment is still in place, and an equality may
+   * depend on decisions. After ``unknown`` the trail can hold decisions too:
+   * a resource limit reached during a full check, as while instantiating
+   * quantifiers, ends the search without backtracking. ``d_level`` says
+   * which equalities depend on decisions. With CaDiCaL, which cvc5 uses
+   * without incremental solving, a literal implied under a SAT solver
+   * assumption or inside a push has no level, and an equality that depends
+   * on one reads ``UNKNOWN``.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (get-egraph-equalities [:limit <numeral>] [:include-used]
+   *                            [:focus (<term>*)] [:max-term-size <numeral>])
+   * \endverbatim
+   *
+   * The limit defaults to 20 and the size limit to 1000. Requires the
+   * quantifiers theory, whose equality engine is the master one.
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param focus The terms whose classes to list, or empty for all classes.
+   *              A focus term the e-graph does not hold lists nothing.
+   * @param limit The most equalities to return.
+   * @param includeUsed Whether to return equalities with a side some
+   *                    quantifier was instantiated with.
+   * @param maxTermSize The most nodes a returned term or literal may print
+   *                    with, without sharing.
+   * @return The equalities, most relevant first, and what was counted.
+   */
+  EgraphEqualities getEgraphEqualities(const std::vector<Term>& focus,
+                                       uint32_t limit,
+                                       bool includeUsed,
+                                       uint32_t maxTermSize) const;
 
   /**
    * Save the instantiations of the last check under a key, in a store that

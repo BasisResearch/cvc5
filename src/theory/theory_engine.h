@@ -20,6 +20,7 @@
 
 #include "base/check.h"
 #include "context/cdhashmap.h"
+#include "context/cdlist.h"
 #include "expr/node.h"
 #include "options/theory_options.h"
 #include "proof/trust_node.h"
@@ -342,6 +343,14 @@ class TheoryEngine : protected EnvObj
   TrustNode getExplanation(TNode node);
 
   /**
+   * Explain a literal that theory tid holds as a fact because another theory
+   * propagated it there: follow the recorded propagations back to what the
+   * SAT solver asserted. Returns null if no propagation of lit to tid is
+   * recorded, or sharing is off.
+   */
+  Node explainFact(TNode lit, theory::TheoryId tid);
+
+  /**
    * Get the pointer to the model object used by this theory engine.
    */
   theory::TheoryModel* getModel();
@@ -428,6 +437,12 @@ class TheoryEngine : protected EnvObj
 
   /** Get incomplete id, valid when isModelUnsound is true. */
   theory::IncompleteId getModelUnsoundId() const;
+  /**
+   * Get every id the model was set unsound with in the current SAT context,
+   * once each, ordered by when each was last set, so that the last one is
+   * getModelUnsoundId(). Valid when isModelUnsound is true.
+   */
+  std::vector<theory::IncompleteId> getModelUnsoundIds() const;
   /** Get unsound id, valid when isRefutationUnsound is true. */
   theory::IncompleteId getRefutationUnsoundId() const;
 
@@ -605,6 +620,8 @@ class TheoryEngine : protected EnvObj
   /** The theory and identifier that (most recently) set model unsound */
   context::CDO<theory::TheoryId> d_modelUnsoundTheory;
   context::CDO<theory::IncompleteId> d_modelUnsoundId;
+  /** Every id the model was set unsound with, see getModelUnsoundIds */
+  context::CDList<theory::IncompleteId> d_modelUnsoundIds;
   /**
    * True if a theory has notified us of refutation unsoundness (at this user
    * context level or below).

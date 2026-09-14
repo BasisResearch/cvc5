@@ -182,6 +182,12 @@ std::string printCapped(NodeManager* nm, const Node& n)
 
 void printList(NodeManager* nm, std::ostream& out, const Node& sexpr)
 {
+  // the generalization of rungs from triggers of different sizes is a hole
+  if (sexpr.getKind() != Kind::SEXPR)
+  {
+    out << "(" << printCapped(nm, sexpr) << ")";
+    return;
+  }
   out << "(";
   for (size_t i = 0, n = sexpr.getNumChildren(); i < n; i++)
   {
@@ -316,6 +322,7 @@ void MatchingLoops::print(std::ostream& out,
     rec.d_round = gn.d_lemmaRound;
     rec.d_depth = gn.d_termDepth;
     rec.d_rung = gn.d_rung;
+    rec.d_trigger = gn.d_trigger;
     rec.d_parents = gn.d_parents;
     rec.d_parents.insert(
         rec.d_parents.end(), gn.d_eqParents.begin(), gn.d_eqParents.end());
@@ -704,14 +711,12 @@ void MatchingLoops::print(std::ostream& out,
         ss << "_";
       }
     }
+    // the trigger of the last rung
     ss << ") :trigger (";
-    std::vector<std::vector<Node>> pats = triggersOf(quants[qi]);
-    if (!pats.empty())
+    const Node& trig = recs[chain.back()].d_trigger;
+    for (size_t k = 0, n = trig.getNumChildren(); k < n; k++)
     {
-      for (size_t k = 0; k < pats[0].size(); k++)
-      {
-        ss << (k == 0 ? "" : " ") << pats[0][k];
-      }
+      ss << (k == 0 ? "" : " ") << trig[k];
     }
     ss << ") :context (";
     for (size_t k = 0; k < contextClasses.size(); k++)

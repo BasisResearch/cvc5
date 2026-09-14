@@ -370,6 +370,26 @@ bool CadicalSolver::isFixed(SatVariable var) const
   return d_solver->fixed(toCadicalVar(var));
 }
 
+int32_t CadicalSolver::getDecisionLevel(SatVariable var) const
+{
+  if (!d_propagator)
+  {
+    return -1;
+  }
+  int32_t level = d_propagator->decision_level(var);
+  // Assumptions, the activation literals of user levels among them, open the
+  // first levels of the search without being decisions of it. A literal they
+  // imply is not fixed, and its level does not say whether a decision was
+  // needed.
+  if (level > 0
+      && (!d_assumptions.empty()
+          || !d_propagator->activation_literals().empty()))
+  {
+    return -1;
+  }
+  return level;
+}
+
 std::vector<SatLiteral> CadicalSolver::getDecisions() const
 {
   std::vector<SatLiteral> decisions;

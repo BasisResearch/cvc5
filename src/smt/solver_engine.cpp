@@ -47,6 +47,7 @@
 #include "smt/assertions.h"
 #include "smt/check_models.h"
 #include "smt/context_manager.h"
+#include "smt/egraph_equalities.h"
 #include "smt/env.h"
 #include "smt/expand_definitions.h"
 #include "smt/find_synth_solver.h"
@@ -74,6 +75,7 @@
 #include "theory/quantifiers/instantiation_list.h"
 #include "theory/quantifiers/oracle_engine.h"
 #include "theory/quantifiers/quantifiers_attributes.h"
+#include "theory/quantifiers/quantifiers_state.h"
 #include "theory/quantifiers/query_generator.h"
 #include "theory/quantifiers/rewrite_verifier.h"
 #include "theory/quantifiers/sygus/sygus_enumerator.h"
@@ -82,6 +84,7 @@
 #include "theory/rewriter.h"
 #include "theory/smt_engine_subsolver.h"
 #include "theory/theory_engine.h"
+#include "theory/uf/equality_engine.h"
 #include "util/random.h"
 #include "util/rational.h"
 #include "util/resource_manager.h"
@@ -381,7 +384,17 @@ void SolverEngine::setInfo(const std::string& key, const std::string& value)
 }
 
 namespace {
-std::string quantIdName(const Node& q);
+/** The :qid of quantified formula q as a string, or empty if it has none. */
+std::string quantIdName(const Node& q)
+{
+  theory::quantifiers::QAttributes qa;
+  theory::quantifiers::QuantAttributes::computeQuantAttributes(q, qa);
+  if (qa.d_name.isNull() || !qa.d_name.hasName())
+  {
+    return "";
+  }
+  return qa.d_name.getName();
+}
 
 /**
  * The (get-info :inst-pressure) reply for the last check-sat: its
@@ -512,8 +525,10 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
   if (key == "all-statistics" || key == "error-behavior" || key == "filename"
       || key == "name" || key == "version" || key == "authors"
       || key == "status" || key == "time" || key == "reason-unknown"
-      || key == "inst-pressure" || key == "matching-loops"
-      || key == "assertion-stack-levels" || key == "all-options")
+      || key == "incomplete-id" || key == "incomplete-ids"
+      || key == "incomplete-culprits" || key == "inst-pressure"
+      || key == "matching-loops" || key == "assertion-stack-levels"
+      || key == "all-options")
   {
     return true;
   }
@@ -581,6 +596,43 @@ std::string SolverEngine::getInfo(const std::string& key) const
           "last result wasn't unknown!");
     }
   }
+  if (key == "incomplete-id")
+  {
+    return theory::toString(getIncompleteId());
+  }
+  if (key == "incomplete-ids")
+  {
+    std::stringstream ss;
+    ss << "(";
+    bool first = true;
+    for (theory::IncompleteId id : getIncompleteIds())
+    {
+      ss << (first ? "" : " ") << theory::toString(id);
+      first = false;
+    }
+    ss << ")";
+    return ss.str();
+  }
+  if (key == "incomplete-culprits")
+  {
+    // The :qid of each culprit, once each, in the order they were found.
+    // Culprits without a :qid are left out, so () with QUANTIFIERS among
+    // :incomplete-ids means they were all unnamed or the source was global.
+    // getIncompleteCulprits returns every culprit, named or not.
+    std::stringstream ss;
+    ss << "(";
+    std::unordered_set<std::string> seen;
+    for (const Node& q : getIncompleteCulprits())
+    {
+      std::string name = quantIdName(q);
+      if (!name.empty() && seen.insert(name).second)
+      {
+        ss << (seen.size() > 1 ? " " : "") << quoteSymbol(name);
+      }
+    }
+    ss << ")";
+    return ss.str();
+  }
   if (key == "inst-pressure")
   {
     // Before the first check there is no theory engine, and no pressure.
@@ -613,7 +665,11 @@ std::string SolverEngine::getInfo(const std::string& key) const
     Result status = d_state->getStatus();
     bool unknown = !status.isNull() && status.isUnknown();
     std::stringstream ss;
-    QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine();
+    // before the first check-sat there may be no theory engine yet, and
+    // nothing has been recorded
+    QuantifiersEngine* qe = d_state->isFullyInited()
+                                ? d_smtSolver->getQuantifiersEngine()
+                                : nullptr;
     if (qe == nullptr)
     {
       ss << "(:rounds 0 :instantiations 0 :dropped 0 :max-inst-rounds false "
@@ -999,8 +1055,16 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
 
   Trace("smt") << "SolverEngine::checkSat(" << assumptions << ") => " << r
                << endl;
-  // notify our state of the check-sat result
-  d_state->notifyCheckSatResult(r);
+  // notify our state of the check-sat result, and of the ids behind an
+  // incomplete one: they are copied now since reset-assertions replaces the
+  // prop engine but keeps the result
+  std::vector<theory::IncompleteId> incompleteIds;
+  if (r.isUnknown()
+      && r.getUnknownExplanation() == UnknownExplanation::INCOMPLETE)
+  {
+    incompleteIds = d_smtSolver->getPropEngine()->getLastIncompleteIds();
+  }
+  d_state->notifyCheckSatResult(r, nullptr, incompleteIds);
 
   // Check that SAT results generate a model correctly.
   if (d_env->getOptions().smt.checkModels)
@@ -2640,19 +2704,56 @@ std::vector<Node> SolverEngine::getAssertions()
   return getAssertionsInternal();
 }
 
-namespace {
-/** The :qid of quantified formula q as a string, or empty if it has none. */
-std::string quantIdName(const Node& q)
+std::vector<theory::IncompleteId> SolverEngine::getIncompleteIds() const
 {
-  theory::quantifiers::QAttributes qa;
-  theory::quantifiers::QuantAttributes::computeQuantAttributes(q, qa);
-  if (qa.d_name.isNull() || !qa.d_name.hasName())
+  Result status = d_state->getStatus();
+  if (status.isNull() || !status.isUnknown()
+      || status.getUnknownExplanation() != UnknownExplanation::INCOMPLETE)
   {
-    return "";
+    return {};
   }
-  return qa.d_name.getName();
+  // The result of get-timeout-core comes from the timeout core manager's
+  // subsolver, which knows why it gave up.
+  SolverEngine* solver = d_state->getStatusSolver();
+  std::vector<theory::IncompleteId> ids = solver != nullptr && solver != this
+                                              ? solver->getIncompleteIds()
+                                              : d_state->getIncompleteIds();
+  if (ids.empty())
+  {
+    // an incomplete answer whose source recorded no id
+    ids.push_back(theory::IncompleteId::UNKNOWN);
+  }
+  return ids;
 }
-}  // namespace
+
+theory::IncompleteId SolverEngine::getIncompleteId() const
+{
+  std::vector<theory::IncompleteId> ids = getIncompleteIds();
+  return ids.empty() ? theory::IncompleteId::NONE : ids.back();
+}
+
+std::vector<Node> SolverEngine::getIncompleteCulprits() const
+{
+  std::vector<theory::IncompleteId> ids = getIncompleteIds();
+  if (ids.empty())
+  {
+    return {};
+  }
+  SolverEngine* solver = d_state->getStatusSolver();
+  if (solver != nullptr && solver != this)
+  {
+    return solver->getIncompleteCulprits();
+  }
+  QuantifiersEngine* qe =
+      d_smtSolver == nullptr ? nullptr : d_smtSolver->getQuantifiersEngine();
+  if (qe == nullptr
+      || std::find(ids.begin(), ids.end(), qe->getIncompleteCulpritsId())
+             == ids.end())
+  {
+    return {};
+  }
+  return qe->getIncompleteCulprits();
+}
 
 void SolverEngine::getAssertionSources(
     std::vector<std::pair<Node, std::vector<std::string>>>& srcs)
@@ -2717,6 +2818,110 @@ std::vector<std::string> SolverEngine::getAssertionSourcesOf(const Node& n)
   std::vector<std::string> tags;
   d_smtSolver->getSourceTags(inputs, tags);
   return tags;
+}
+
+void SolverEngine::getEgraphEqualities(const std::vector<Node>& focus,
+                                       size_t limit,
+                                       bool includeUsed,
+                                       size_t maxTermSize,
+                                       smt::MinedEqualities& out)
+{
+  // see if another solver engine was responsible for the last status
+  SolverEngine* ssolver = d_state->getStatusSolver();
+  if (ssolver != nullptr)
+  {
+    ssolver->getEgraphEqualities(focus, limit, includeUsed, maxTermSize, out);
+    return;
+  }
+  Trace("smt") << "SMT getEgraphEqualities()\n";
+  finishInit();
+  QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine();
+  TheoryEngine* te = d_smtSolver->getTheoryEngine();
+  const theory::eq::EqualityEngine* master =
+      qe == nullptr ? nullptr : qe->getState().getEqualityEngine();
+  if (master == nullptr || te == nullptr)
+  {
+    throw RecoverableModalException(
+        "Cannot get e-graph equalities without the quantifiers theory, whose "
+        "equality engine is the master one.");
+  }
+  // In the distributed mode the master engine records merges without
+  // reasons, so the theories' own engines explain them. In the central mode
+  // every theory shares the master engine, which then has the reasons.
+  bool central =
+      d_env->getOptions().theory.eeMode == options::EqEngineMode::CENTRAL;
+  std::vector<std::pair<theory::TheoryId, const theory::eq::EqualityEngine*>>
+      explainers;
+  std::unordered_set<const theory::eq::EqualityEngine*> seen;
+  for (theory::TheoryId tid = theory::THEORY_FIRST; tid < theory::THEORY_LAST;
+       ++tid)
+  {
+    theory::Theory* t = te->theoryOf(tid);
+    const theory::eq::EqualityEngine* ee =
+        t == nullptr ? nullptr : t->getEqualityEngine();
+    if (ee != nullptr && (ee != master || central) && seen.insert(ee).second)
+    {
+      explainers.emplace_back(tid, ee);
+    }
+  }
+  std::function<Node(TNode, theory::TheoryId)> explainFact =
+      [te](TNode lit, theory::TheoryId tid) {
+        return te->explainFact(lit, tid);
+      };
+  std::unordered_set<Node> focusTerms;
+  std::unordered_map<Node, Node> cache;
+  ExpandDefs expDef(*d_env.get());
+  for (const Node& f : focus)
+  {
+    Node n = d_smtSolver->getPreprocessor()->applySubstitutions(f);
+    n = expDef.expandDefinitions(n, cache);
+    n = d_env->getRewriter()->rewrite(n);
+    if (master->hasTerm(n))
+    {
+      focusTerms.insert(n);
+    }
+  }
+  out.d_focusFound = focusTerms.size();
+  std::map<Node, std::vector<std::vector<Node>>> insts;
+  qe->getInstantiationTermVectors(insts);
+  // Each term a quantifier was instantiated with, in both forms, mapped to
+  // the :qid of each such quantifier. A quantifier without a :qid is `?` if
+  // it comes from the input, and `@internal` if the solver introduced it, as
+  // the reductions of the strings theory do: its original form names a
+  // skolem.
+  std::unordered_map<Node, std::set<std::string>> instTerms;
+  static const std::unordered_set<Kind, kind::KindHashFunction> internalKinds = {
+      Kind::SKOLEM, Kind::INST_CONSTANT};
+  for (const std::pair<const Node, std::vector<std::vector<Node>>>& q : insts)
+  {
+    std::string name = quantIdName(q.first);
+    if (name.empty())
+    {
+      name = expr::hasSubtermKinds(internalKinds,
+                                   SkolemManager::getOriginalForm(q.first))
+                 ? "@internal"
+                 : "?";
+    }
+    for (const std::vector<Node>& vec : q.second)
+    {
+      for (const Node& t : vec)
+      {
+        instTerms[t].insert(name);
+        instTerms[SkolemManager::getOriginalForm(t)].insert(name);
+      }
+    }
+  }
+  smt::mineEgraphEqualities(*master,
+                            explainers,
+                            explainFact,
+                            *d_smtSolver->getPropEngine(),
+                            !focus.empty(),
+                            focusTerms,
+                            instTerms,
+                            limit,
+                            includeUsed,
+                            maxTermSize,
+                            out);
 }
 
 void SolverEngine::getDifficultyMap(std::map<Node, Node>& dmap)

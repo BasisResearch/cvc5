@@ -132,6 +132,8 @@ QuantifiersRegistry& QuantifiersEngine::getQuantifiersRegistry()
   return d_qreg;
 }
 
+QuantifiersState& QuantifiersEngine::getState() { return d_qstate; }
+
 QModelBuilder* QuantifiersEngine::getModelBuilder() const
 {
   return d_builder.get();
@@ -159,6 +161,8 @@ void QuantifiersEngine::presolve()
 {
   Trace("quant-engine-proc") << "QuantifiersEngine : presolve " << std::endl;
   d_numInstRoundsLemma = 0;
+  d_incompleteCulprits.clear();
+  d_incompleteCulpritsId = IncompleteId::NONE;
   d_qim.clearPending();
   for (QuantifiersUtil*& u : d_util)
   {
@@ -197,6 +201,7 @@ void QuantifiersEngine::ppNotifyAssertions(const std::vector<Node>& assertions)
 void QuantifiersEngine::check(Theory::Effort e)
 {
   IncompleteId setModelUnsoundId = IncompleteId::NONE;
+  d_roundCulprits.clear();
   checkInternal(e, setModelUnsoundId);
   // SAT case
   if (e == Theory::EFFORT_LAST_CALL && !d_qstate.getValuation().needCheck())
@@ -219,6 +224,8 @@ void QuantifiersEngine::check(Theory::Effort e)
       {
         Trace("quant-engine") << "Set incomplete flag." << std::endl;
         d_qim.setModelUnsound(setModelUnsoundId);
+        d_incompleteCulprits = d_roundCulprits;
+        d_incompleteCulpritsId = setModelUnsoundId;
       }
       // output debug stats
       d_qim.getInstantiate()->debugPrintModel();
@@ -607,7 +614,9 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
                         << "Set incomplete because " << q
                         << " was not fully processed." << std::endl;
                     setModelUnsoundId = IncompleteId::QUANTIFIERS;
-                    break;
+                    // Keep going, so that every such formula is recorded as a
+                    // culprit. The id does not depend on how many there are.
+                    d_roundCulprits.push_back(q);
                   }
                   else
                   {

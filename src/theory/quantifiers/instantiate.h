@@ -394,10 +394,17 @@ class Instantiate : public QuantifiersUtil
     /** With --matching-loops: the rounds that sent lemmas so far, from 1 */
     uint64_t d_lemmaRound = 0;
     /**
-     * With --matching-loops: the first trigger instantiated with the terms in
+     * With --matching-loops: d_trigger instantiated with the terms in
      * original form, as an SEXPR, or those terms if q has no trigger.
      */
     Node d_rung;
+    /**
+     * With --matching-loops: the trigger over the variables of q, as an SEXPR
+     * of its terms: the one that matched, else the first of q's patterns
+     * whose instance the term database held, else q's first pattern; null if
+     * q has none.
+     */
+    Node d_trigger;
   };
   /**
    * Print the instantiation graph of the last check-sat (see --inst-graph):
@@ -492,16 +499,22 @@ class Instantiate : public QuantifiersUtil
    */
   uint64_t graphRecordCap() const;
   /** The ground term congruent to s that the term database holds, if any */
-  Node groundTerm(TNode s, std::unordered_map<TNode, Node>& cache) const;
+  Node groundTerm(TNode s, std::unordered_map<Node, Node>& cache) const;
   /**
    * The instantiation that introduced t, or else its representative, compared
    * in original form; -1 if none.
    */
   int64_t graphOwnerOf(TNode t) const;
-  /** Add the instantiation lem of q for terms to the instantiation graph. */
+  /**
+   * Add the instantiation lem of q for terms to the instantiation graph.
+   * trigger is the trigger that matched, as an SEXPR of its terms over the
+   * variables of q, which e-matching passes as pfArg; otherwise null or not
+   * an SEXPR.
+   */
   void recordGraphNode(Node q,
                        const std::vector<Node>& terms,
                        InferenceId id,
+                       Node trigger,
                        Node lem);
 
   /** Reference to the quantifiers state */
