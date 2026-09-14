@@ -136,6 +136,23 @@ size_t combine(size_t h, size_t v)
   return h ^ (v + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2));
 }
 
+/** A fold that gives the same result whatever order the values arrive in. */
+size_t combineUnordered(size_t h, size_t v)
+{
+  return h + v * 0x9e3779b97f4a7c15ULL;
+}
+
+/**
+ * Whether the rewriter is free to reorder the children of a term of kind k.
+ * Two spellings of such a term, (+ b 1) as the input wrote it and (+ 1 b) as
+ * the solver holds it, are the same term, so they must compare and hash the
+ * same or a host is missed.
+ */
+bool commutativeChildren(Kind k)
+{
+  return k == Kind::ADD || k == Kind::MULT || k == Kind::NONLINEAR_MULT;
+}
+
 /**
  * Terms as the input spelled them, read off the solver's terms without
  * building any: skolems read as the terms they purify, bound variables as
@@ -185,7 +202,10 @@ class SourceView
   /** The kind the input wrote, for a term t returned by top. */
   Kind kind(TNode t) const
   {
-    return partialKind(isGuardedDivision(t) ? t[2].getKind() : t.getKind());
+    Kind k = partialKind(isGuardedDivision(t) ? t[2].getKind() : t.getKind());
+    // arithmetic rebuilds a product the input wrote as MULT, and the two
+    // spellings must compare the same or a host is missed
+    return k == Kind::NONLINEAR_MULT ? Kind::MULT : k;
   }
   bool isLeaf(TNode t) const
   {
@@ -220,6 +240,24 @@ class SourceView
         || (hasOperator(x) && x.getOperator() != y.getOperator()))
     {
       return false;
+    }
+    if (commutativeChildren(kind(x)))
+    {
+      std::vector<bool> used(n, false);
+      for (size_t i = 0; i < n; i++)
+      {
+        size_t j = 0;
+        while (j < n && (used[j] || !equal(child(x, i), child(y, j))))
+        {
+          j++;
+        }
+        if (j == n)
+        {
+          return false;
+        }
+        used[j] = true;
+      }
+      return true;
     }
     for (size_t i = 0; i < n; i++)
     {
@@ -257,9 +295,21 @@ class SourceView
       {
         h = combine(h, std::hash<TNode>()(x.getOperator()));
       }
-      for (size_t i = 0; i < nc; i++)
+      if (commutativeChildren(kind(x)))
       {
-        h = combine(h, hash(child(x, i)));
+        size_t acc = 0;
+        for (size_t i = 0; i < nc; i++)
+        {
+          acc = combineUnordered(acc, hash(child(x, i)));
+        }
+        h = combine(h, acc);
+      }
+      else
+      {
+        for (size_t i = 0; i < nc; i++)
+        {
+          h = combine(h, hash(child(x, i)));
+        }
       }
     }
     if (ground)
@@ -658,6 +708,71 @@ struct AtomHosts
   std::vector<Host> d_instance;
 };
 
+/** The atom itself, as the argument index of a host target. */
+constexpr size_t kAtomTerm = static_cast<size_t>(-1);
+
+/**
+ * A term the reply reports hosts for: an atom, or one of its arguments. An
+ * argument carries the provenance when the atom around it is one the
+ * rewriter built rather than one the input wrote, as in
+ * (* b (div a (+ 1 b))), where distributing operator elimination's
+ * (* (+ 1 b) q) left a product no input term applies.
+ */
+struct HostTarget
+{
+  /** Its atom, as an index into the reported order. */
+  size_t d_pos = 0;
+  /** Which term of that atom: kAtomTerm, or an index into its arguments. */
+  size_t d_arg = kAtomTerm;
+};
+
+/**
+ * The keys a term keyed by k is hosted by. An integer division also reads a
+ * modulus the input wrote: operator elimination rewrites (mod n d) as
+ * n - d * (div n d), so the division arithmetic sees can be where a modulus
+ * entered the problem, as Verus's EucMod does.
+ */
+std::vector<AtomKey> hostKeys(AtomKey k)
+{
+  std::vector<AtomKey> ks;
+  if (k.d_op == Kind::INTS_DIVISION)
+  {
+    AtomKey m = k;
+    m.d_op = Kind::INTS_MODULUS;
+    ks.push_back(std::move(m));
+  }
+  ks.push_back(std::move(k));
+  return ks;
+}
+
+/** The hosts of one term, as the reply lists them. */
+void printHosts(std::ostream& os, const AtomHosts* hs)
+{
+  os << " :hosts (";
+  bool first = true;
+  if (hs != nullptr)
+  {
+    for (const Host& h : hs->d_input)
+    {
+      os << (first ? "" : " ") << "(:in input :term " << h.d_term << " :tags (";
+      for (size_t i = 0, n = h.d_tags.size(); i < n; i++)
+      {
+        os << (i > 0 ? " " : "") << quoteSymbol(h.d_tags[i]);
+      }
+      os << "))";
+      first = false;
+    }
+    for (const Host& h : hs->d_instance)
+    {
+      os << (first ? "" : " ") << "(:in instance :term " << h.d_term << " :qid "
+         << (h.d_qid.empty() ? "none" : quoteSymbol(h.d_qid)) << " :count "
+         << h.d_count << ")";
+      first = false;
+    }
+  }
+  os << ")";
+}
+
 /** A model value: a rational as -5 or 1/2, or none when it was not one. */
 void printValue(std::ostream& os, bool has, const Rational& v)
 {
@@ -772,36 +887,65 @@ std::string getNlFrontierInfo(TheoryEngine* te,
   }
   HostMatcher hm(sv, findWrappers(input));
 
-  // Each atom's key: the operation computing it and its operands; for
-  // operator elimination's (* d q), the dividend and divisor of the division
-  // q purifies.
-  std::vector<AtomKey> keys(order.size());
+  // Every term hosts are looked for, with its key: the operation computing it
+  // and its operands. An atom, keyed for operator elimination's (* d q) by
+  // the dividend and divisor of the division q purifies, and each argument
+  // that applies an operation of its own, since the rewriter can leave an
+  // atom no input term applies around an argument the input did write.
+  std::vector<HostTarget> targets;
+  std::vector<std::vector<AtomKey>> keys;
   std::map<std::pair<Kind, std::vector<size_t>>, std::vector<size_t>> byKey;
+  auto addTarget = [&](size_t pos, size_t arg, AtomKey key) {
+    if (key.d_op == Kind::UNDEFINED_KIND || key.d_args.empty())
+    {
+      return;
+    }
+    std::vector<AtomKey> ks = hostKeys(std::move(key));
+    for (const AtomKey& k : ks)
+    {
+      std::vector<size_t>& bucket = byKey[hm.index(k)];
+      if (bucket.empty() || bucket.back() != targets.size())
+      {
+        bucket.push_back(targets.size());
+      }
+    }
+    targets.push_back(HostTarget{pos, arg});
+    keys.push_back(std::move(ks));
+  };
   for (size_t pos = 0; pos < order.size(); pos++)
   {
-    const Node& x = f.d_atoms[order[pos]].d_atom.d_term;
+    const NlFrontierAtom& a = f.d_atoms[order[pos]];
+    const Node& x = a.d_atom.d_term;
     TNode d = eliminatedDivision(hm, sv, x);
-    keys[pos] = d.isNull() ? hm.key(x, operationOf(x.getKind()))
-                           : hm.key(d, sv.kind(d));
-    if (keys[pos].d_op == Kind::UNDEFINED_KIND || keys[pos].d_args.empty())
+    addTarget(pos,
+              kAtomTerm,
+              d.isNull() ? hm.key(x, operationOf(x.getKind()))
+                         : hm.key(d, sv.kind(d)));
+    for (size_t i = 0, n = a.d_args.size(); i < n; i++)
     {
-      continue;
+      TNode t = sv.top(a.d_args[i].d_term);
+      Kind op = hm.operation(t);
+      if (op != Kind::UNDEFINED_KIND)
+      {
+        addTarget(pos, i, hm.key(t, op));
+      }
     }
-    byKey[hm.index(keys[pos])].push_back(pos);
   }
-  std::vector<AtomHosts> hosts(order.size());
-  // The atoms term t (applying operation op) hosts.
+  std::vector<AtomHosts> hosts(targets.size());
+  // The targets term t (applying operation op) hosts.
   auto hosted = [&](TNode t, Kind op) {
     std::vector<size_t> ret;
     AtomKey k = hm.key(t, op);
     auto it = byKey.find(hm.index(k));
     if (it != byKey.end())
     {
-      for (size_t pos : it->second)
+      for (size_t ti : it->second)
       {
-        if (hm.same(k, keys[pos]))
+        if (std::any_of(keys[ti].begin(),
+                        keys[ti].end(),
+                        [&](const AtomKey& tk) { return hm.same(k, tk); }))
         {
-          ret.push_back(pos);
+          ret.push_back(ti);
         }
       }
     }
@@ -834,9 +978,9 @@ std::string getNlFrontierInfo(TheoryEngine* te,
         {
           continue;
         }
-        for (size_t pos : hosted(cur, op))
+        for (size_t ti : hosted(cur, op))
         {
-          std::vector<Host>& hs = hosts[pos].d_input;
+          std::vector<Host>& hs = hosts[ti].d_input;
           auto h = std::find_if(hs.begin(), hs.end(), [&](const Host& e) {
             return sv.equal(e.d_node, cur);
           });
@@ -941,9 +1085,9 @@ std::string getNlFrontierInfo(TheoryEngine* te,
           {
             qid = quantName(qe, q);
           }
-          for (size_t pos : ps)
+          for (size_t ti : ps)
           {
-            std::vector<Host>& hs = hosts[pos].d_instance;
+            std::vector<Host>& hs = hosts[ti].d_instance;
             auto h = std::find_if(hs.begin(), hs.end(), [&](const Host& e) {
               return e.d_qid == qid;
             });
@@ -968,6 +1112,26 @@ std::string getNlFrontierInfo(TheoryEngine* te,
         }
       }
       sv.unbind();
+    }
+  }
+
+  // the host list to print for each atom and for each of its arguments
+  std::vector<const AtomHosts*> atomHosts(order.size(), nullptr);
+  std::vector<std::vector<const AtomHosts*>> argHosts(order.size());
+  for (size_t pos = 0; pos < order.size(); pos++)
+  {
+    argHosts[pos].assign(f.d_atoms[order[pos]].d_args.size(), nullptr);
+  }
+  for (size_t ti = 0; ti < targets.size(); ti++)
+  {
+    const HostTarget& t = targets[ti];
+    if (t.d_arg == kAtomTerm)
+    {
+      atomHosts[t.d_pos] = &hosts[ti];
+    }
+    else
+    {
+      argHosts[t.d_pos][t.d_arg] = &hosts[ti];
     }
   }
 
@@ -996,28 +1160,12 @@ std::string getNlFrontierInfo(TheoryEngine* te,
       printValue(ss, t.d_hasValue, t.d_value);
       printBound(ss, ":lower", t.d_lower);
       printBound(ss, ":upper", t.d_upper);
+      printHosts(ss, argHosts[pos][i]);
       ss << ")";
     }
-    ss << ") :hosts (";
-    bool first = true;
-    for (const Host& h : hosts[pos].d_input)
-    {
-      ss << (first ? "" : " ") << "(:in input :term " << h.d_term << " :tags (";
-      for (size_t i = 0, n = h.d_tags.size(); i < n; i++)
-      {
-        ss << (i > 0 ? " " : "") << quoteSymbol(h.d_tags[i]);
-      }
-      ss << "))";
-      first = false;
-    }
-    for (const Host& h : hosts[pos].d_instance)
-    {
-      ss << (first ? "" : " ") << "(:in instance :term " << h.d_term << " :qid "
-         << (h.d_qid.empty() ? "none" : quoteSymbol(h.d_qid)) << " :count "
-         << h.d_count << ")";
-      first = false;
-    }
-    ss << "))";
+    ss << ")";
+    printHosts(ss, atomHosts[pos]);
+    ss << ")";
   }
   ss << ") :omitted " << omitted << " :truncated "
      << (truncated ? "true" : "false") << ")";

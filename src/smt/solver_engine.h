@@ -816,8 +816,9 @@ class CVC5_EXPORT SolverEngine
    * The (get-info :nl-frontier) reply for the last check-sat: which nonlinear
    * terms the nonlinear extension could not reconcile with the linear model,
    * with their values, the bounds asserted on them and their arguments, and
-   * where each entered the problem (see smt/nl_frontier_info.h). Read-only:
-   * the extension records this during every check, without changing it.
+   * where each of those terms entered the problem (see
+   * smt/nl_frontier_info.h). Read-only: the extension records this during
+   * every check, without changing it.
    */
   std::string getNlFrontier() const;
   /**

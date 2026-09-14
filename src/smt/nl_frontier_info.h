@@ -32,17 +32,21 @@ class Assertions;
 /**
  * The (get-info :nl-frontier) reply for the last check-sat: the nonlinear
  * extension's frontier record (see theory/arith/nl/nl_frontier.h), each atom
- * written as the input spelled it, and, per atom, its hosts: the terms that
- * apply the atom's operation, or an uninterpreted function a quantifier
- * defines as it, to exactly the atom's operands (flattening nested
- * products, and dropping the constant factors of builtin ones), found in the
- * tagged input assertions (with their :assert-id tags) and in the
- * instantiations of each quantified formula (with its :qid and how many of
- * its instantiations produced a host). A host is where the atom entered the
- * problem: a product the input wrote through an uninterpreted wrapper such
- * as Verus's Mul, whose defining axiom (= (Mul x y) (* x y)) brings it to
- * arithmetic, say. Read-only, and builds no terms, so asking does not change
- * later checks.
+ * written as the input spelled it, and, per atom and per argument of one,
+ * its hosts: the terms that apply that term's operation, or an
+ * uninterpreted function a quantifier defines as it, to exactly its operands
+ * (flattening nested products, and dropping the constant factors of builtin
+ * ones), found in the tagged input assertions (with their :assert-id tags)
+ * and in the instantiations of each quantified formula (with its :qid and
+ * how many of its instantiations produced a host). A host is where the term
+ * entered the problem: a product the input wrote through an uninterpreted
+ * wrapper such as Verus's Mul, whose defining axiom (= (Mul x y) (* x y))
+ * brings it to arithmetic, say. Arguments carry hosts of their own because
+ * the rewriter can leave an atom no input term applies around an argument
+ * the input did write: dividing by a sum distributes
+ * (* (+ 1 b) q) into (+ q (* b q)), whose atom (* b q) is a product nothing
+ * hosts, while its argument still finds the EucDiv the input wrote.
+ * Read-only, and builds no terms, so asking does not change later checks.
  *
  * te, qe and as are null before the first check. result is the answer of the
  * last check-sat (sat, unsat or unknown), or none when there is none to
