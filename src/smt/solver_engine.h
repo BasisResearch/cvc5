@@ -81,6 +81,7 @@ class TimeoutCoreManager;
 namespace theory {
 class TheoryModel;
 class QuantifiersEngine;
+enum class IncompleteId;
 }  // namespace theory
 
 /* -------------------------------------------------------------------------- */
@@ -179,6 +180,21 @@ class CVC5_EXPORT SolverEngine
 
   /** Query information about the SMT environment.  */
   std::string getInfo(const std::string& key) const;
+
+  /**
+   * Why the last check-sat gave up. This is the solver's own IncompleteId when
+   * the last result was unknown(INCOMPLETE), and NONE for any other result,
+   * including unknown(TIMEOUT) and unknown(RESOURCEOUT). It is recorded when
+   * check-sat returns, so later commands do not change it.
+   */
+  theory::IncompleteId getIncompleteId() const;
+  /**
+   * Candidate quantified formulas behind the last unknown(INCOMPLETE) result:
+   * those that no quantifiers module claimed to have fully processed in the
+   * check that made the model unsound. Empty unless getIncompleteId() is the
+   * id that check set.
+   */
+  std::vector<Node> getIncompleteCulprits() const;
 
   /**
    * Set an aspect of the current SMT execution environment.

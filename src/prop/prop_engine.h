@@ -358,6 +358,17 @@ class PropEngine : protected EnvObj
   /** Get the literal type through the ZLL utilities */
   modes::LearnedLitType getLiteralType(const Node& lit) const;
 
+  /**
+   * The incomplete id behind the last checkSat that answered
+   * unknown(INCOMPLETE), or NONE otherwise. It is copied out of the
+   * SAT-context-dependent theory engine state when checkSat returns, so it
+   * stays valid until the next checkSat.
+   */
+  theory::IncompleteId getLastIncompleteId() const
+  {
+    return d_lastIncompleteId;
+  }
+
  private:
   /** Dump out the satisfying assignment (after SAT result) */
   void printSatisfyingAssignment();
@@ -443,6 +454,9 @@ class PropEngine : protected EnvObj
 
   /** Whether we were just interrupted (or not) */
   bool d_interrupted;
+
+  /** The incomplete id of the last checkSat, see getLastIncompleteId */
+  theory::IncompleteId d_lastIncompleteId = theory::IncompleteId::NONE;
 
   /**
    * Stores assumptions added via assertInternal() if assumption-based unsat

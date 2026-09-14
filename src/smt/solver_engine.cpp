@@ -85,6 +85,7 @@
 #include "util/rational.h"
 #include "util/resource_manager.h"
 #include "util/sexpr.h"
+#include "util/smt2_quote_string.h"
 #include "util/statistics_registry.h"
 #include "util/string.h"
 
@@ -378,11 +379,16 @@ void SolverEngine::setInfo(const std::string& key, const std::string& value)
   }
 }
 
+namespace {
+std::string quantIdName(const Node& q);
+}  // namespace
+
 bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
 {
   if (key == "all-statistics" || key == "error-behavior" || key == "filename"
       || key == "name" || key == "version" || key == "authors"
       || key == "status" || key == "time" || key == "reason-unknown"
+      || key == "incomplete-id" || key == "incomplete-culprits"
       || key == "assertion-stack-levels" || key == "all-options")
   {
     return true;
@@ -450,6 +456,28 @@ std::string SolverEngine::getInfo(const std::string& key) const
           "Can't get-info :reason-unknown when the "
           "last result wasn't unknown!");
     }
+  }
+  if (key == "incomplete-id")
+  {
+    return theory::toString(getIncompleteId());
+  }
+  if (key == "incomplete-culprits")
+  {
+    // The :qid of each culprit, once each, in the order they were found.
+    // Culprits without a :qid are left out.
+    std::stringstream ss;
+    ss << "(";
+    std::unordered_set<std::string> seen;
+    for (const Node& q : getIncompleteCulprits())
+    {
+      std::string name = quantIdName(q);
+      if (!name.empty() && seen.insert(name).second)
+      {
+        ss << (seen.size() > 1 ? " " : "") << quoteSymbol(name);
+      }
+    }
+    ss << ")";
+    return ss.str();
   }
   if (key == "assertion-stack-levels")
   {
@@ -2449,6 +2477,36 @@ std::string quantIdName(const Node& q)
   return qa.d_name.getName();
 }
 }  // namespace
+
+theory::IncompleteId SolverEngine::getIncompleteId() const
+{
+  Result status = d_state->getStatus();
+  if (status.isNull() || !status.isUnknown()
+      || status.getUnknownExplanation() != UnknownExplanation::INCOMPLETE)
+  {
+    return theory::IncompleteId::NONE;
+  }
+  prop::PropEngine* pe =
+      d_smtSolver == nullptr ? nullptr : d_smtSolver->getPropEngine();
+  theory::IncompleteId id =
+      pe == nullptr ? theory::IncompleteId::NONE : pe->getLastIncompleteId();
+  // An incomplete answer that did not come from the SAT search (e.g. a
+  // subsolver) has no id of its own.
+  return id == theory::IncompleteId::NONE ? theory::IncompleteId::UNKNOWN : id;
+}
+
+std::vector<Node> SolverEngine::getIncompleteCulprits() const
+{
+  theory::IncompleteId id = getIncompleteId();
+  QuantifiersEngine* qe =
+      d_smtSolver == nullptr ? nullptr : d_smtSolver->getQuantifiersEngine();
+  if (qe == nullptr || id == theory::IncompleteId::NONE
+      || qe->getIncompleteCulpritsId() != id)
+  {
+    return {};
+  }
+  return qe->getIncompleteCulprits();
+}
 
 void SolverEngine::getAssertionSources(
     std::vector<std::pair<Node, std::vector<std::string>>>& srcs)
