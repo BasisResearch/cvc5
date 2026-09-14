@@ -145,6 +145,7 @@ void InstMatchGeneratorSimple::addInstantiations(InstMatch& m,
     }
     // we do not need the trigger parent for simple triggers (no post-processing
     // required)
+    d_lastMatched = t;
     if (sendInstantiation(terms))
     {
       addedLemmas++;
@@ -207,6 +208,15 @@ int InstMatchGeneratorSimple::getActiveScore()
 InferenceId InstMatchGeneratorSimple::getInferenceId()
 {
   return InferenceId::QUANTIFIERS_INST_E_MATCHING_SIMPLE;
+}
+
+void InstMatchGeneratorSimple::getMatchedTerms(
+    std::vector<Node>& outer, CVC5_UNUSED std::vector<Node>& inner) const
+{
+  if (!d_lastMatched.isNull())
+  {
+    outer.push_back(d_lastMatched);
+  }
 }
 }  // namespace inst
 }  // namespace quantifiers

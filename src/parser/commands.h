@@ -1132,6 +1132,23 @@ class CVC5_EXPORT SaveInstantiationsCommand : public Cmd
   std::string d_key;
 };
 
+/** (get-instantiation-graph), see Solver::getInstantiationGraph */
+class CVC5_EXPORT GetInstantiationGraphCommand : public Cmd
+{
+ public:
+  GetInstantiationGraphCommand();
+
+  void invoke(cvc5::Solver* solver, parser::SymManager* sm) override;
+  void printResult(cvc5::Solver* solver, std::ostream& out) const override;
+
+  std::string getCommandName() const override;
+  void toStream(std::ostream& out) const override;
+
+ protected:
+  /** The graph, as printed */
+  std::string d_result;
+};
+
 /**
  * (restore-instantiations <symbol> [:only]), see
  * Solver::restoreInstantiations

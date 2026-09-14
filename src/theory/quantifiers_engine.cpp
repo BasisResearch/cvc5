@@ -861,6 +861,11 @@ void QuantifiersEngine::getSavedInstantiations(
   d_qim.getInstantiate()->getSaved(key, out);
 }
 
+void QuantifiersEngine::printInstantiationGraph(std::ostream& out)
+{
+  d_qim.getInstantiate()->printInstantiationGraph(out);
+}
+
 void QuantifiersEngine::restoreInstantiations(const std::string& key, bool only)
 {
   d_qim.getInstantiate()->restoreInstantiations(key, only);

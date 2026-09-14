@@ -12,8 +12,12 @@
 
 #include "theory/quantifiers/instantiate.h"
 
+#include <algorithm>
+#include <unordered_set>
+
 #include "base/modal_exception.h"
 #include "expr/node_algorithm.h"
+#include "expr/skolem_manager.h"
 #include "options/base_options.h"
 #include "options/quantifiers_options.h"
 #include "options/smt_options.h"
@@ -68,8 +72,10 @@ Instantiate::Instantiate(Env& env,
   d_useCdInstTrie = options().base.incrementalSolving;
   if (options().quantifiers.matchingLoops)
   {
-    d_matchingLoops = std::make_unique<MatchingLoops>(env, qs, qr);
+    d_matchingLoops = std::make_unique<MatchingLoops>(env, qr);
   }
+  d_graphOn =
+      options().quantifiers.instGraph || options().quantifiers.matchingLoops;
 }
 
 Instantiate::~Instantiate() {}
@@ -77,6 +83,7 @@ Instantiate::~Instantiate() {}
 bool Instantiate::reset(Theory::Effort e)
 {
   Trace("inst-debug") << "Reset, effort " << e << std::endl;
+  ++d_graphRound;
   // clear explicitly recorded instantiations
   d_recordedInst.clear();
   d_instDebugTemp.clear();
@@ -85,10 +92,15 @@ bool Instantiate::reset(Theory::Effort e)
 
 void Instantiate::presolve()
 {
-  if (d_matchingLoops != nullptr)
-  {
-    d_matchingLoops->clear();
-  }
+  d_graph.clear();
+  d_graphQuants.clear();
+  d_graphQuantIndex.clear();
+  d_graphOwner.clear();
+  d_matchedOuter.clear();
+  d_matchedInner.clear();
+  d_graphRound = 0;
+  d_graphTotal = 0;
+  d_lemmaRound = 1;
   d_pressure.clear();
   d_pressureRounds = 0;
 }
@@ -116,6 +128,9 @@ bool Instantiate::addInstantiation(
 {
   // do the instantiation
   bool ret = addInstantiationInternal(q, terms, id, pfArg, doVts);
+  // the matched terms belong to this call only, whatever it decided
+  d_matchedOuter.clear();
+  d_matchedInner.clear();
   // process the instantiation with callbacks via term registry
   d_treg.processInstantiation(q, terms);
   // return whether the instantiation was successful
@@ -421,10 +436,10 @@ bool Instantiate::addInstantiationInternal(
     }
     QuantAttributes::setInstantiationLevelAttr(lem[1], maxInstLevel + 1);
   }
-  if (d_matchingLoops != nullptr)
+  if (d_graphOn)
   {
     // e-matching passes the trigger that matched as pfArg
-    d_matchingLoops->record(q, terms, pfArg, lem, d_treg.getTermDatabase());
+    recordGraphNode(q, terms, id, pfArg, lem);
   }
   Trace("inst-add-debug") << " --> Success." << std::endl;
   ++(d_statistics.d_instantiations);
@@ -448,6 +463,346 @@ bool Instantiate::addInstantiationInternal(
     ++pressure.d_propagate;
   }
   return true;
+}
+
+void Instantiate::setMatchedTerms(std::vector<Node>&& outer,
+                                  std::vector<Node>&& inner)
+{
+  d_matchedOuter = std::move(outer);
+  d_matchedInner = std::move(inner);
+}
+
+void Instantiate::recordGraphNode(Node q,
+                                  const std::vector<Node>& terms,
+                                  InferenceId id,
+                                  Node trigger,
+                                  Node lem)
+{
+  ++d_graphTotal;
+  uint64_t max = graphRecordCap();
+  if (max != 0 && d_graph.size() >= max)
+  {
+    return;
+  }
+  size_t self = d_graph.size();
+  auto qi = d_graphQuantIndex.find(q);
+  if (qi == d_graphQuantIndex.end())
+  {
+    qi = d_graphQuantIndex.emplace(q, d_graphQuants.size()).first;
+    d_graphQuants.push_back(q);
+  }
+  GraphNode gn;
+  gn.d_quant = qi->second;
+  gn.d_id = id;
+  gn.d_round = d_graphRound;
+  gn.d_depth = 0;
+  gn.d_termDepth = 0;
+  // Parents are the earlier instantiations that introduced the terms the
+  // match was made against. The terms each pattern's outermost generator
+  // matched come first. Nested terms count only if none of those has an
+  // owner: on a loop through a nested trigger the nested term's owner is an
+  // earlier rung, and listing it would give every rung all earlier rungs as
+  // parents. The cost: when the nested term equals the outer term's subterm
+  // only through an equality another instantiation introduced, that
+  // instantiation is not listed. Without matched terms, the instantiating
+  // terms stand in. Owners are keyed by original form: the term database
+  // holds terms after preprocessing, which may have replaced part of the
+  // lemma's term by a skolem (e.g. an ite).
+  auto blame = [&](const std::vector<Node>& ts) {
+    for (const Node& t : ts)
+    {
+      auto it = d_graphOwner.find(SkolemManager::getOriginalForm(t));
+      if (it == d_graphOwner.end()
+          || std::find(gn.d_parents.begin(), gn.d_parents.end(), it->second)
+                 != gn.d_parents.end())
+      {
+        continue;
+      }
+      gn.d_parents.push_back(it->second);
+      gn.d_depth = std::max(gn.d_depth, d_graph[it->second].d_depth + 1);
+    }
+  };
+  blame(d_matchedOuter);
+  if (gn.d_parents.empty())
+  {
+    blame(d_matchedInner);
+  }
+  if (d_matchedOuter.empty() && d_matchedInner.empty())
+  {
+    blame(terms);
+  }
+  std::sort(gn.d_parents.begin(), gn.d_parents.end());
+  // Attributed parents: owners reached through the nested matched terms, the
+  // bindings, the ground terms congruent to the applications of the trigger
+  // instance at the pattern's own positions, and failing an exact owner
+  // through the representative. The trigger is the one that matched if
+  // known, else each of q's patterns.
+  // They are kept apart from the exact parents: a nested term's owner is
+  // often an ancestor of the outer one's, and the representative is
+  // whichever term the e-graph chose.
+  std::vector<Node> attributed(d_matchedOuter.begin(), d_matchedOuter.end());
+  attributed.insert(
+      attributed.end(), d_matchedInner.begin(), d_matchedInner.end());
+  attributed.insert(attributed.end(), terms.begin(), terms.end());
+  std::vector<Node> vars(q[0].begin(), q[0].end());
+  std::vector<std::vector<Node>> pats;
+  if (!trigger.isNull() && trigger.getKind() == Kind::SEXPR)
+  {
+    pats.emplace_back(trigger.begin(), trigger.end());
+  }
+  else
+  {
+    pats = MatchingLoops::triggersOf(q);
+  }
+  // Keyed by Node: each pattern's instance is freed before the next is
+  // looked up, so a TNode key would dangle.
+  std::unordered_map<Node, Node> cache;
+  // The rung is the instance of the first trigger whose terms all have a
+  // congruent ground term, as the one that matched does; the first
+  // trigger's if none has.
+  bool rungMatched = false;
+  bool keepRung = d_matchingLoops != nullptr;
+  std::vector<Node> origTerms;
+  if (keepRung)
+  {
+    for (const Node& t : terms)
+    {
+      origTerms.push_back(SkolemManager::getOriginalForm(t));
+    }
+  }
+  NodeManager* nm = nodeManager();
+  for (size_t p = 0, np = pats.size(); p < np; p++)
+  {
+    std::vector<Node> instTerms;
+    bool matched = true;
+    for (const Node& pt : pats[p])
+    {
+      Node ti =
+          pt.substitute(vars.begin(), vars.end(), terms.begin(), terms.end());
+      matched = matched && !groundTerm(ti, cache).isNull();
+      if (keepRung)
+      {
+        // the rung as written, so a purified ite still shows its growth
+        instTerms.push_back(pt.substitute(
+            vars.begin(), vars.end(), origTerms.begin(), origTerms.end()));
+      }
+      // Only the applications of the pattern itself were matched. Below a
+      // variable lies a binding, whose subterms earlier rungs of a loop each
+      // introduced: descending there would attribute every earlier rung to
+      // each instantiation, quadratic in the loop's length. The binding
+      // itself is already in attributed.
+      std::unordered_set<TNode> seen;
+      std::vector<std::pair<TNode, TNode>> todo{{pt, ti}};
+      while (!todo.empty())
+      {
+        auto [pcur, cur] = todo.back();
+        todo.pop_back();
+        if (pcur.getNumChildren() == 0 || !seen.insert(cur).second)
+        {
+          continue;
+        }
+        Node g = groundTerm(cur, cache);
+        if (!g.isNull())
+        {
+          attributed.push_back(g);
+        }
+        Assert(cur.getNumChildren() == pcur.getNumChildren());
+        for (size_t i = 0, n = pcur.getNumChildren(); i < n; i++)
+        {
+          todo.emplace_back(pcur[i], cur[i]);
+        }
+      }
+    }
+    if (keepRung && (gn.d_rung.isNull() || (matched && !rungMatched)))
+    {
+      gn.d_rung = nm->mkNode(Kind::SEXPR, instTerms);
+      gn.d_trigger = nm->mkNode(Kind::SEXPR, pats[p]);
+      rungMatched = matched;
+    }
+  }
+  for (const Node& t : attributed)
+  {
+    int64_t o = graphOwnerOf(t);
+    if (o < 0)
+    {
+      continue;
+    }
+    size_t op = static_cast<size_t>(o);
+    if (std::find(gn.d_parents.begin(), gn.d_parents.end(), op)
+            == gn.d_parents.end()
+        && std::find(gn.d_eqParents.begin(), gn.d_eqParents.end(), op)
+               == gn.d_eqParents.end())
+    {
+      gn.d_eqParents.push_back(op);
+    }
+  }
+  std::sort(gn.d_eqParents.begin(), gn.d_eqParents.end());
+  if (keepRung)
+  {
+    if (gn.d_rung.isNull())
+    {
+      gn.d_rung = nm->mkNode(Kind::SEXPR, origTerms);
+    }
+    gn.d_lemmaRound = d_lemmaRound;
+  }
+  for (const Node& t : terms)
+  {
+    // in original form, so a purified term has the depth it was written with
+    uint64_t depth = static_cast<uint64_t>(
+        TermUtil::getTermDepth(SkolemManager::getOriginalForm(t)));
+    gn.d_termDepth = std::max(gn.d_termDepth, depth);
+  }
+  d_graph.push_back(std::move(gn));
+  // This instantiation introduces each term of its lemma that neither the
+  // term database nor an earlier instantiation had. Nested quantified
+  // formulas, including q itself, are not ground and introduce nothing.
+  TermDb* tdb = d_treg.getTermDatabase();
+  std::unordered_set<TNode> visited;
+  std::vector<TNode> visit{lem};
+  while (!visit.empty())
+  {
+    TNode cur = visit.back();
+    visit.pop_back();
+    if (!visited.insert(cur).second || cur.isClosure())
+    {
+      continue;
+    }
+    Kind k = cur.getKind();
+    if (k != Kind::AND && k != Kind::OR && k != Kind::NOT && k != Kind::IMPLIES
+        && k != Kind::XOR)
+    {
+      Node orig = SkolemManager::getOriginalForm(cur);
+      // The lemma has not been purified yet, so an input term containing an
+      // ite is registered only through its original form.
+      if (!tdb->isRegistered(cur) && !tdb->isRegistered(orig))
+      {
+        // emplace keeps the first instantiation to introduce the term
+        d_graphOwner.emplace(orig, self);
+      }
+    }
+    visit.insert(visit.end(), cur.begin(), cur.end());
+  }
+}
+
+uint64_t Instantiate::graphRecordCap() const
+{
+  uint64_t cap = 0;
+  bool bounded = true;
+  auto consider = [&](bool on, uint64_t c) {
+    if (on)
+    {
+      bounded = bounded && c != 0;
+      cap = std::max(cap, c);
+    }
+  };
+  consider(options().quantifiers.instGraph, options().quantifiers.instGraphMax);
+  consider(options().quantifiers.matchingLoops,
+           options().quantifiers.matchingLoopsMax);
+  return bounded ? cap : 0;
+}
+
+Node Instantiate::groundTerm(TNode s,
+                             std::unordered_map<Node, Node>& cache) const
+{
+  auto it = cache.find(s);
+  if (it != cache.end())
+  {
+    return it->second;
+  }
+  Node res;
+  if (d_qstate.hasTerm(s))
+  {
+    res = s;
+  }
+  else if (s.getNumChildren() > 0 && !s.isClosure())
+  {
+    TermDb* tdb = d_treg.getTermDatabase();
+    Node f = tdb->getMatchOperator(s);
+    if (!f.isNull())
+    {
+      std::vector<TNode> args;
+      bool ok = true;
+      for (const Node& c : s)
+      {
+        Node gc = groundTerm(c, cache);
+        if (gc.isNull())
+        {
+          ok = false;
+          break;
+        }
+        args.push_back(d_qstate.getRepresentative(gc));
+      }
+      if (ok)
+      {
+        res = tdb->getCongruentTerm(f, args);
+      }
+    }
+  }
+  cache[s] = res;
+  return res;
+}
+
+int64_t Instantiate::graphOwnerOf(TNode t) const
+{
+  auto it = d_graphOwner.find(SkolemManager::getOriginalForm(t));
+  if (it == d_graphOwner.end() && d_qstate.hasTerm(t))
+  {
+    it = d_graphOwner.find(
+        SkolemManager::getOriginalForm(d_qstate.getRepresentative(t)));
+  }
+  return it == d_graphOwner.end() ? -1 : static_cast<int64_t>(it->second);
+}
+
+void Instantiate::printInstantiationGraph(std::ostream& out) const
+{
+  uint64_t max = options().quantifiers.instGraphMax;
+  size_t count =
+      max == 0 ? d_graph.size() : std::min<size_t>(d_graph.size(), max);
+  // quantified formulas are indexed in order of first instantiation, so
+  // those of the first count nodes are a prefix too
+  size_t quants = 0;
+  for (size_t i = 0; i < count; i++)
+  {
+    quants = std::max(quants, d_graph[i].d_quant + 1);
+  }
+  out << "(instantiation-graph" << std::endl;
+  for (size_t i = 0; i < quants; i++)
+  {
+    Node name;
+    out << "(quantifier " << i << " ";
+    if (d_qreg.getNameForQuant(d_graphQuants[i], name, true))
+    {
+      out << name;
+    }
+    else
+    {
+      out << "_";
+    }
+    out << ")" << std::endl;
+  }
+  for (size_t i = 0; i < count; i++)
+  {
+    const GraphNode& gn = d_graph[i];
+    out << "(node " << i << " " << gn.d_quant << " " << gn.d_id << " "
+        << gn.d_round << " " << gn.d_depth << " " << gn.d_termDepth << " (";
+    for (size_t j = 0, np = gn.d_parents.size(); j < np; j++)
+    {
+      out << (j == 0 ? "" : " ") << gn.d_parents[j];
+    }
+    out << ")";
+    if (!gn.d_eqParents.empty())
+    {
+      out << " (eq";
+      for (size_t p : gn.d_eqParents)
+      {
+        out << " " << p;
+      }
+      out << ")";
+    }
+    out << ")" << std::endl;
+  }
+  out << "(dropped " << (d_graphTotal - count) << ")" << std::endl;
+  out << ")" << std::endl;
 }
 
 bool Instantiate::isLocalInstId(InferenceId id)
@@ -939,10 +1294,7 @@ bool Instantiate::isProofEnabled() const
 void Instantiate::notifyEndRound()
 {
   ++d_pressureRounds;
-  if (d_matchingLoops != nullptr)
-  {
-    d_matchingLoops->notifyEndRound();
-  }
+  ++d_lemmaRound;
   // debug information
   if (TraceIsOn("inst-per-quant-round"))
   {
@@ -976,7 +1328,11 @@ void Instantiate::printMatchingLoops(std::ostream& out,
     throw ModalException(
         "Cannot get matching loops unless option matching-loops is on.");
   }
-  d_matchingLoops->print(out, maxInstRounds);
+  uint64_t max = options().quantifiers.matchingLoopsMax;
+  size_t count =
+      max == 0 ? d_graph.size() : std::min<size_t>(d_graph.size(), max);
+  d_matchingLoops->print(
+      out, maxInstRounds, d_graph, count, d_graphQuants, d_graphTotal - count);
 }
 
 void Instantiate::debugPrintModel()

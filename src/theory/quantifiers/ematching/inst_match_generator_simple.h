@@ -54,6 +54,9 @@ class InstMatchGeneratorSimple : public IMGenerator
   int getActiveScore() override;
   /** Get the inference id, for statistics. */
   InferenceId getInferenceId() override;
+  /** Add the term the match being sent was made against. */
+  void getMatchedTerms(std::vector<Node>& outer,
+                       std::vector<Node>& inner) const override;
 
  private:
   /** quantified formula for the trigger term */
@@ -82,6 +85,8 @@ class InstMatchGeneratorSimple : public IMGenerator
    * child is not a variable.
    */
   std::map<size_t, int> d_var_num;
+  /** The term the match being sent was made against. */
+  Node d_lastMatched;
   /** add instantiations, helper function.
    *
    * @param m the current match we are building,

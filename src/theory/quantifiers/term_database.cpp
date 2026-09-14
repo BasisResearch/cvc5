@@ -108,6 +108,7 @@ TermDb::TermDb(Env& env, QuantifiersState& qs, QuantifiersRegistry& qr)
       d_qim(nullptr),
       d_qreg(qr),
       d_processed(context()),
+      d_graphSeen(userContext()),
       d_typeMap(context()),
       d_ops(context()),
       d_opMap(context()),
@@ -304,6 +305,19 @@ void TermDb::addTerm(Node n)
   if (d_processed.find(n) != d_processed.end())
   {
     return;
+  }
+  // --matching-loops reads the same record as --inst-graph. This sits below
+  // the check above, so it runs once per term rather than on every call: a
+  // term already in d_processed was recorded when it was first registered,
+  // and getOriginalForm on the hot path perturbed node allocation enough to
+  // make the search itself vary between runs.
+  if (options().quantifiers.instGraph || options().quantifiers.matchingLoops)
+  {
+    // The database holds terms after preprocessing, while instantiation
+    // lemmas still hold, e.g., the ite it purified away. Keep the original
+    // form too, so a lemma repeating an input term does not claim it.
+    d_graphSeen.insert(n);
+    d_graphSeen.insert(SkolemManager::getOriginalForm(n));
   }
   d_processed.insert(n);
   if (!TermUtil::hasInstConstAttr(n))
@@ -571,6 +585,12 @@ bool TermDb::isTermActive(Node n)
 }
 
 void TermDb::setTermInactive(Node n) { d_inactive_map[n] = true; }
+
+bool TermDb::isRegistered(const Node& n) const
+{
+  return d_processed.find(n) != d_processed.end()
+         || d_graphSeen.find(n) != d_graphSeen.end();
+}
 
 bool TermDb::hasTermCurrent(const Node& n, bool useMode) const
 {

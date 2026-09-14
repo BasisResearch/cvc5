@@ -185,7 +185,16 @@ uint64_t Trigger::addInstantiations()
 bool Trigger::sendInstantiation(std::vector<Node>& m)
 {
   InferenceId id = d_mg->getInferenceId();
-  return d_qim.getInstantiate()->addInstantiation(d_quant, m, id, d_trNode);
+  Instantiate* inst = d_qim.getInstantiate();
+  // --matching-loops reads the same record as --inst-graph
+  if (options().quantifiers.instGraph || options().quantifiers.matchingLoops)
+  {
+    std::vector<Node> outer;
+    std::vector<Node> inner;
+    d_mg->getMatchedTerms(outer, inner);
+    inst->setMatchedTerms(std::move(outer), std::move(inner));
+  }
+  return inst->addInstantiation(d_quant, m, id, d_trNode);
 }
 
 int Trigger::getActiveScore() { return d_mg->getActiveScore(); }

@@ -145,6 +145,8 @@ class QuantifiersEngine : protected EnvObj
   void getSavedInstantiations(
       const std::string& key,
       std::map<Node, std::vector<std::vector<Node>>>& out);
+  /** Print the instantiation graph of the last check (--inst-graph). */
+  void printInstantiationGraph(std::ostream& out);
   /** get instantiation term vectors */
   void getInstantiationTermVectors(Node q,
                                    std::vector<std::vector<Node> >& tvecs);

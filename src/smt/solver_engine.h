@@ -751,6 +751,11 @@ class CVC5_EXPORT SolverEngine
    */
   void restoreInstantiations(const std::string& key, bool only);
   /**
+   * Print the instantiation graph of the last check (see
+   * Instantiate::printInstantiationGraph). Requires --inst-graph.
+   */
+  void printInstantiationGraph(std::ostream& out);
+  /**
    * What key holds, in a form another process can parse: each quantified
    * formula and its term vectors in original form, purification skolems
    * replaced by the terms they purify. A skolemization skolem is named by a

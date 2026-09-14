@@ -565,6 +565,22 @@ name   = "Quantifiers"
   help       = "maximum inst level of terms used to instantiate quantified formulas with (-1 == no limit, default)"
 
 [[option]]
+  name       = "instGraph"
+  category   = "expert"
+  long       = "inst-graph"
+  type       = "bool"
+  default    = "false"
+  help       = "record, for each instantiation, the earlier instantiations that introduced the terms it matched, for (get-instantiation-graph)"
+
+[[option]]
+  name       = "instGraphMax"
+  category   = "expert"
+  long       = "inst-graph-max=N"
+  type       = "uint64_t"
+  default    = "1000000"
+  help       = "stop recording the instantiation graph of a check-sat after N instantiations (0 == no limit)"
+
+[[option]]
   name       = "matchingLoops"
   category   = "expert"
   long       = "matching-loops"

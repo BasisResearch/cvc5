@@ -2514,6 +2514,46 @@ void SaveInstantiationsCommand::toStream(std::ostream& out) const
 }
 
 /* -------------------------------------------------------------------------- */
+/* class GetInstantiationGraphCommand */
+/* -------------------------------------------------------------------------- */
+
+GetInstantiationGraphCommand::GetInstantiationGraphCommand() {}
+
+void GetInstantiationGraphCommand::invoke(cvc5::Solver* solver,
+                                          CVC5_UNUSED SymManager* sm)
+{
+  try
+  {
+    d_result = solver->getInstantiationGraph();
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.what());
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+void GetInstantiationGraphCommand::printResult(CVC5_UNUSED cvc5::Solver* solver,
+                                               std::ostream& out) const
+{
+  out << d_result;
+}
+
+std::string GetInstantiationGraphCommand::getCommandName() const
+{
+  return "get-instantiation-graph";
+}
+
+void GetInstantiationGraphCommand::toStream(std::ostream& out) const
+{
+  out << "(get-instantiation-graph)";
+}
+
+/* -------------------------------------------------------------------------- */
 /* class RestoreInstantiationsCommand */
 /* -------------------------------------------------------------------------- */
 

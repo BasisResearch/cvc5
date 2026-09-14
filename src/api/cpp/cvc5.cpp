@@ -8789,6 +8789,19 @@ std::string Solver::getInstantiations() const
   CVC5_API_TRY_CATCH_END;
 }
 
+std::string Solver::getInstantiationGraph() const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  // No mode check: the graph is kept until the next check-sat, so it can be
+  // read after a pop, which returns the solver to assert mode.
+  //////// all checks before this line
+  std::stringstream ss;
+  d_slv->printInstantiationGraph(ss);
+  return ss.str();
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
 void Solver::push(uint32_t nscopes) const
 {
   CVC5_API_TRY_CATCH_BEGIN;

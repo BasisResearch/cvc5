@@ -1756,6 +1756,18 @@ set(regress_0_tests
   regress0/quantifiers/cegqi-needs-justify.smt2
   regress0/quantifiers/cegqi-nl-simp.cvc.smt2
   regress0/quantifiers/cegqi-nl-sq.smt2
+  regress0/quantifiers/inst-graph-init.smt2
+  regress0/quantifiers/inst-graph-ite-input.smt2
+  regress0/quantifiers/inst-graph-max.smt2
+  regress0/quantifiers/inst-graph-nested.smt2
+  regress0/quantifiers/inst-graph.smt2
+  regress0/quantifiers/inst-graph-ite.smt2
+  regress0/quantifiers/matching-loops-branching-graph-cap.smt2
+  regress0/quantifiers/matching-loops-eq-hop-graph.smt2
+  regress0/quantifiers/matching-loops-eq-hop.smt2
+  regress0/quantifiers/matching-loops-ite.smt2
+  regress0/quantifiers/matching-loops-multi-pattern-graph.smt2
+  regress0/quantifiers/matching-loops-multi-trigger.smt2
   regress0/quantifiers/nl-sqrt2-q.smt2
   regress0/quantifiers/cegqi-par-dt-simple.smt2
   regress0/quantifiers/clock-10.smt2

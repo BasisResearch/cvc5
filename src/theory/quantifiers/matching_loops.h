@@ -22,55 +22,36 @@
 
 #include "expr/node.h"
 #include "smt/env_obj.h"
+#include "theory/quantifiers/instantiate.h"
 
 namespace cvc5::internal {
 namespace theory {
 namespace quantifiers {
 
-class QuantifiersState;
 class QuantifiersRegistry;
-class TermDb;
 
 /**
- * Records the instantiations of one check-sat (--matching-loops) and finds
- * the quantified formulas among them that feed themselves: an instantiation
- * whose trigger matched a term an earlier instantiation of the same formula
- * introduced, repeatedly, on terms of the same shape and rising depth.
+ * Finds, among the instantiations of one check-sat, the quantified formulas
+ * that feed themselves: an instantiation whose trigger matched a term an
+ * earlier instantiation of the same formula introduced, repeatedly, on terms
+ * of the same shape and rising depth.
  *
- * Recording keeps, per instantiation, its formula, its round, the depth of
- * its deepest instantiating term, the instance of its first trigger, and its
- * parents: the earlier instantiations whose lemmas first introduced a ground
- * term it matched. A trigger's instance is matched modulo congruence: each of
- * its subterms is looked up as the ground term the term database holds with
- * the same match operator and equal arguments, which is the term e-matching
- * found. The bindings themselves are looked up too, as themselves and as
- * their representatives.
- *
- * Nothing here instantiates or asserts anything, and the analysis reads only
- * what was recorded, so it can run after the check-sat returned.
+ * It keeps nothing of its own. It reads the instantiation graph Instantiate
+ * records (--inst-graph or --matching-loops): per instantiation its formula,
+ * the round that sent it, the depth of its deepest instantiating term, the
+ * instance of its first trigger, and its parents, exact and attributed (see
+ * Instantiate::GraphNode). Nothing here instantiates or asserts anything, so
+ * it can run after the check-sat returned.
  */
 class MatchingLoops : protected EnvObj
 {
  public:
-  MatchingLoops(Env& env, QuantifiersState& qs, QuantifiersRegistry& qr);
-  /** Forget the previous check-sat. */
-  void clear();
+  MatchingLoops(Env& env, QuantifiersRegistry& qr);
+  /** The instantiation patterns of q, each as its list of trigger terms */
+  static std::vector<std::vector<Node>> triggersOf(const Node& q);
   /**
-   * Record that q was instantiated with terms, producing lem, in the current
-   * round. trigger is the trigger that matched, as an SEXPR of its terms over
-   * the variables of q, which e-matching passes; null if the instantiation
-   * did not come from a trigger. Must be called while the equality engine is
-   * that of the check making the instantiation, before lem is sent.
-   */
-  void record(Node q,
-              const std::vector<Node>& terms,
-              Node trigger,
-              Node lem,
-              TermDb* tdb);
-  /** An instantiation round that added lemmas ended. */
-  void notifyEndRound();
-  /**
-   * Print the analysis of the recorded check-sat:
+   * Print the analysis of the first count nodes of the graph, whose
+   * formulas are quants and which left dropped instantiations unrecorded:
    *
    *   (:rounds <n> :instantiations <n> :dropped <n> :max-inst-rounds <bool>
    *    :loops ((loop :qid <qid or _> :confidence <high|medium|low>
@@ -92,15 +73,20 @@ class MatchingLoops : protected EnvObj
    * check-sat that returned unknown; only then is a loop high confidence.
    * See matching_loops.cpp for how each field is computed.
    */
-  void print(std::ostream& out, bool maxInstRounds) const;
+  void print(std::ostream& out,
+             bool maxInstRounds,
+             const std::vector<Instantiate::GraphNode>& nodes,
+             size_t count,
+             const std::vector<Node>& quants,
+             uint64_t dropped) const;
 
  private:
-  /** One recorded instantiation */
+  /** One instantiation, as the analysis reads it */
   struct Inst
   {
-    /** Index of its quantified formula in d_quants */
+    /** Index of its quantified formula in quants */
     size_t d_quant;
-    /** Its instantiation round in this check-sat, from 1 */
+    /** The round that sent it, from 1 */
     uint64_t d_round;
     /** The depth of its deepest instantiating term */
     uint64_t d_depth;
@@ -115,13 +101,9 @@ class MatchingLoops : protected EnvObj
      * database held, else q's first pattern; null if q has none.
      */
     Node d_trigger;
-    /** Earlier instantiations that introduced a term it matched, unique */
+    /** Earlier instantiations that introduced a term it matched, exact first */
     std::vector<size_t> d_parents;
   };
-  /** The ground term congruent to s that the term database holds, if any */
-  Node ground(TNode s, TermDb* tdb, std::unordered_map<Node, Node>& cache);
-  /** The instantiation that introduced t, or its representative; -1 if none */
-  int64_t ownerOf(TNode t) const;
   /**
    * The least general generalization of the terms in ts (all of one type):
    * the common structure, with each position where they differ replaced by
@@ -138,19 +120,7 @@ class MatchingLoops : protected EnvObj
               std::map<std::vector<Node>, Node>& cache,
               size_t firstHole) const;
 
-  QuantifiersState& d_qstate;
   QuantifiersRegistry& d_qreg;
-  /** The instantiations of this check-sat, in order */
-  std::vector<Inst> d_insts;
-  /** The quantified formulas instantiated, and their indices */
-  std::vector<Node> d_quants;
-  std::map<Node, size_t> d_quantIndex;
-  /** Each term an instantiation introduced, and the first that did */
-  std::unordered_map<Node, size_t> d_owner;
-  /** The current instantiation round, from 1 */
-  uint64_t d_round;
-  /** Instantiations not recorded once --matching-loops-max were */
-  uint64_t d_dropped;
 };
 
 }  // namespace quantifiers

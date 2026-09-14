@@ -17,6 +17,7 @@
 
 #include <map>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 #include "context/cdhashset.h"
@@ -359,6 +360,90 @@ class Instantiate : public QuantifiersUtil
                 std::map<Node, std::vector<std::vector<Node>>>& out) const;
   //--------------------------------------end saved instantiations
 
+  //--------------------------------------instantiation graph
+  /**
+   * Set the ground terms the next call to addInstantiation matched, as
+   * IMGenerator::getMatchedTerms splits them. E-matching sets them just
+   * before it sends a match, when --inst-graph or --matching-loops is on.
+   * Without them the instantiation's own terms stand in.
+   */
+  void setMatchedTerms(std::vector<Node>&& outer, std::vector<Node>&& inner);
+  /** An instantiation in the instantiation graph */
+  struct GraphNode
+  {
+    /** Index of its quantified formula in d_graphQuants */
+    size_t d_quant;
+    /** The strategy that made it */
+    InferenceId d_id;
+    /** The quantifiers engine's reset count in the check-sat, from 1 */
+    uint64_t d_round;
+    /** 0 without parents, otherwise one more than the deepest parent */
+    uint64_t d_depth;
+    /** The depth of the deepest instantiating term */
+    uint64_t d_termDepth;
+    /** Earlier instantiations that introduced a term it matched, ascending */
+    std::vector<size_t> d_parents;
+    /**
+     * Earlier instantiations found only by attribution: owners of a nested
+     * matched term, of a binding, of the ground term at an application of a
+     * trigger pattern (not inside a binding), or of an equivalence-class
+     * representative. None is in d_parents, none counts towards d_depth;
+     * ascending.
+     */
+    std::vector<size_t> d_eqParents;
+    /** With --matching-loops: the rounds that sent lemmas so far, from 1 */
+    uint64_t d_lemmaRound = 0;
+    /**
+     * With --matching-loops: d_trigger instantiated with the terms in
+     * original form, as an SEXPR, or those terms if q has no trigger.
+     */
+    Node d_rung;
+    /**
+     * With --matching-loops: the trigger over the variables of q, as an SEXPR
+     * of its terms: the one that matched, else the first of q's patterns
+     * whose instance the term database held, else q's first pattern; null if
+     * q has none.
+     */
+    Node d_trigger;
+  };
+  /**
+   * Print the instantiation graph of the last check-sat (see --inst-graph):
+   *
+   *   (instantiation-graph
+   *   (quantifier <index> <qid or _>)*
+   *   (node <index> <quantifier> <inference id> <round> <depth> <term depth>
+   *         (<parent>*) [(eq <parent>*)])*
+   *   (dropped <count>)
+   *   )
+   *
+   * The eq list, printed when not empty, holds the node's attributed parents
+   * (GraphNode::d_eqParents): found through a nested matched term, a binding,
+   * the ground term at an application of the trigger pattern, or a
+   * representative, rather than as the owner of a term the match was made
+   * against. They are kept apart from the exact parents, which alone
+   * determine the depth.
+   *
+   * The record is shared with --matching-loops. Each report reads its first
+   * instantiations up to its own cap, and counts the rest in its dropped.
+   *
+   * Nodes are the instantiations added in this check-sat, in order. A parent
+   * is an earlier instantiation whose lemma first introduced a term this one
+   * matched: first the terms e-matching's outermost generators matched, then,
+   * if none has an owner, the nested ones; any other strategy is blamed on
+   * the terms it instantiated with. A term the term
+   * database already held before the lemma introduced none. Terms are
+   * compared in original form (SkolemManager::getOriginalForm), so a term
+   * the preprocessor purified, e.g. an ite it replaced by a skolem, still
+   * finds the instantiation that introduced it. The depth is 0 without
+   * parents, otherwise one more than the deepest parent; the term
+   * depth is that of the deepest instantiating term. The round counts the
+   * quantifiers engine's resets in this check-sat from 1, including rounds
+   * that instantiate nothing. Instantiations past --inst-graph-max are
+   * counted in dropped.
+   */
+  void printInstantiationGraph(std::ostream& out) const;
+  //--------------------------------------end instantiation graph
+
   /**
    * Print the matching loops among the instantiations of the last check-sat
    * (see MatchingLoops::print). Requires --matching-loops. maxInstRounds is
@@ -408,6 +493,29 @@ class Instantiate : public QuantifiersUtil
   static bool isLocalInstId(InferenceId id);
   /** Get or make the instantiation list for quantified formula q */
   InstLemmaList* getOrMkInstLemmaList(TNode q);
+  /**
+   * How many instantiations the record keeps: the larger cap of the reports
+   * that are on, 0 when one of them has none.
+   */
+  uint64_t graphRecordCap() const;
+  /** The ground term congruent to s that the term database holds, if any */
+  Node groundTerm(TNode s, std::unordered_map<Node, Node>& cache) const;
+  /**
+   * The instantiation that introduced t, or else its representative, compared
+   * in original form; -1 if none.
+   */
+  int64_t graphOwnerOf(TNode t) const;
+  /**
+   * Add the instantiation lem of q for terms to the instantiation graph.
+   * trigger is the trigger that matched, as an SEXPR of its terms over the
+   * variables of q, which e-matching passes as pfArg; otherwise null or not
+   * an SEXPR.
+   */
+  void recordGraphNode(Node q,
+                       const std::vector<Node>& terms,
+                       InferenceId id,
+                       Node trigger,
+                       Node lem);
 
   /** Reference to the quantifiers state */
   QuantifiersState& d_qstate;
@@ -433,6 +541,26 @@ class Instantiate : public QuantifiersUtil
    * on presolve, e.g. it is local to a check-sat call.
    */
   std::map<Node, std::vector<Node>> d_recordedInst;
+  //--------------------------------------instantiation graph
+  /** The instantiations of the last check-sat, in order (--inst-graph) */
+  std::vector<GraphNode> d_graph;
+  /** The quantified formulas the graph instantiates, and their indices */
+  std::vector<Node> d_graphQuants;
+  std::unordered_map<Node, size_t> d_graphQuantIndex;
+  /** Each term an instantiation of the graph introduced, and which one */
+  std::unordered_map<Node, size_t> d_graphOwner;
+  /** The terms the instantiation being added matched, if known */
+  std::vector<Node> d_matchedOuter;
+  std::vector<Node> d_matchedInner;
+  /** The current instantiation round of this check-sat */
+  uint64_t d_graphRound = 0;
+  /** Whether --inst-graph or --matching-loops keeps the record */
+  bool d_graphOn = false;
+  /** Instantiations added this check-sat, recorded or not */
+  uint64_t d_graphTotal = 0;
+  /** The rounds that sent lemmas this check-sat, from 1 */
+  uint64_t d_lemmaRound = 1;
+  //--------------------------------------end instantiation graph
   /** statistics for debugging total instantiations per quantifier per round */
   std::map<Node, uint32_t> d_instDebugTemp;
   /** list of all instantiations produced for each quantifier

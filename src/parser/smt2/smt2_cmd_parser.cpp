@@ -83,6 +83,7 @@ Smt2CmdParser::Smt2CmdParser(Smt2Lexer& lex,
     d_table["restore-instantiations"] = Token::RESTORE_INSTANTIATIONS_TOK;
     d_table["export-instantiations"] = Token::EXPORT_INSTANTIATIONS_TOK;
     d_table["import-instantiations"] = Token::IMPORT_INSTANTIATIONS_TOK;
+    d_table["get-instantiation-graph"] = Token::GET_INSTANTIATION_GRAPH_TOK;
     d_table["get-difficulty"] = Token::GET_DIFFICULTY_TOK;
     d_table["get-interpolant-next"] = Token::GET_INTERPOL_NEXT_TOK;
     d_table["get-interpolant"] = Token::GET_INTERPOL_TOK;
@@ -704,6 +705,13 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
         only = true;
       }
       cmd.reset(new RestoreInstantiationsCommand(key, only));
+    }
+    break;
+    // (get-instantiation-graph)
+    case Token::GET_INSTANTIATION_GRAPH_TOK:
+    {
+      d_state.checkThatLogicIsSet();
+      cmd.reset(new GetInstantiationGraphCommand());
     }
     break;
     // (export-instantiations <symbol>)
