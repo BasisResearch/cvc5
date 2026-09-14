@@ -12,6 +12,7 @@
 
 #include "theory/quantifiers/instantiate.h"
 
+#include "base/modal_exception.h"
 #include "expr/node_algorithm.h"
 #include "options/base_options.h"
 #include "options/quantifiers_options.h"
@@ -22,6 +23,7 @@
 #include "theory/quantifiers/cegqi/inst_strategy_cegqi.h"
 #include "theory/quantifiers/entailment_check.h"
 #include "theory/quantifiers/first_order_model.h"
+#include "theory/quantifiers/matching_loops.h"
 #include "theory/quantifiers/quantifiers_attributes.h"
 #include "theory/quantifiers/quantifiers_preprocess.h"
 #include "theory/quantifiers/term_database.h"
@@ -64,6 +66,10 @@ Instantiate::Instantiate(Env& env,
   // We need to use user context-dependent trie for the main instantiation
   // trie if incremental.
   d_useCdInstTrie = options().base.incrementalSolving;
+  if (options().quantifiers.matchingLoops)
+  {
+    d_matchingLoops = std::make_unique<MatchingLoops>(env, qs, qr);
+  }
 }
 
 Instantiate::~Instantiate() {}
@@ -75,6 +81,14 @@ bool Instantiate::reset(Theory::Effort e)
   d_recordedInst.clear();
   d_instDebugTemp.clear();
   return true;
+}
+
+void Instantiate::presolve()
+{
+  if (d_matchingLoops != nullptr)
+  {
+    d_matchingLoops->clear();
+  }
 }
 
 void Instantiate::registerQuantifier(CVC5_UNUSED Node q) {}
@@ -401,6 +415,10 @@ bool Instantiate::addInstantiationInternal(
       }
     }
     QuantAttributes::setInstantiationLevelAttr(lem[1], maxInstLevel + 1);
+  }
+  if (d_matchingLoops != nullptr)
+  {
+    d_matchingLoops->record(q, terms, lem, d_treg.getTermDatabase());
   }
   Trace("inst-add-debug") << " --> Success." << std::endl;
   ++(d_statistics.d_instantiations);
@@ -895,6 +913,10 @@ bool Instantiate::isProofEnabled() const
 
 void Instantiate::notifyEndRound()
 {
+  if (d_matchingLoops != nullptr)
+  {
+    d_matchingLoops->notifyEndRound();
+  }
   // debug information
   if (TraceIsOn("inst-per-quant-round"))
   {
@@ -918,6 +940,17 @@ void Instantiate::notifyEndRound()
                               << i.second << ")" << std::endl;
     }
   }
+}
+
+void Instantiate::printMatchingLoops(std::ostream& out,
+                                     bool maxInstRounds) const
+{
+  if (d_matchingLoops == nullptr)
+  {
+    throw ModalException(
+        "Cannot get matching loops unless option matching-loops is on.");
+  }
+  d_matchingLoops->print(out, maxInstRounds);
 }
 
 void Instantiate::debugPrintModel()

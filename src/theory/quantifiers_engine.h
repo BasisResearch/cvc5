@@ -107,6 +107,13 @@ class QuantifiersEngine : protected EnvObj
    * is false. Sets name to the result of the above method.
    */
   bool getNameForQuant(Node q, Node& name, bool req = true) const;
+  /**
+   * Print the matching loops among the instantiations of the last check-sat
+   * (see quantifiers::MatchingLoops::print). Requires --matching-loops.
+   * unknown is whether that check-sat answered unknown: only then can the
+   * instantiation round limit have caused its answer.
+   */
+  void printMatchingLoops(std::ostream& out, bool unknown) const;
   //----------user interface for instantiations (see quantifiers/instantiate.h)
   /** get list of quantified formulas that were instantiated */
   void getInstantiatedQuantifiedFormulas(std::vector<Node>& qs);

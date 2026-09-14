@@ -1831,6 +1831,9 @@ set(regress_0_tests
   regress0/quantifiers/macros-int-real.smt2
   regress0/quantifiers/macros-real-arg.smt2
   regress0/quantifiers/matching-lia-1arg.smt2
+  regress0/quantifiers/matching-loops-cons.smt2
+  regress0/quantifiers/matching-loops-linear.smt2
+  regress0/quantifiers/matching-loops-none.smt2
   regress0/quantifiers/mbqi-simple.smt2
   regress0/quantifiers/merge-shadow.smt2
   regress0/quantifiers/miniscope-ite.smt2
