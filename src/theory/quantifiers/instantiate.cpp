@@ -68,6 +68,12 @@ Instantiate::Instantiate(Env& env,
 
 Instantiate::~Instantiate() {}
 
+void Instantiate::presolve()
+{
+  d_pressure.clear();
+  d_pressureRounds = 0;
+}
+
 bool Instantiate::reset(Theory::Effort e)
 {
   Trace("inst-debug") << "Reset, effort " << e << std::endl;
@@ -228,6 +234,7 @@ bool Instantiate::addInstantiationInternal(
     {
       Trace("inst-add-debug") << " --> Currently entailed." << std::endl;
       ++(d_statistics.d_inst_duplicate_ent);
+      ++d_pressure[q].d_dupEnt;
       return false;
     }
   }
@@ -251,6 +258,7 @@ bool Instantiate::addInstantiationInternal(
   {
     Trace("inst-add-debug") << " --> Already exists (no record)." << std::endl;
     ++(d_statistics.d_inst_duplicate_eq);
+    ++d_pressure[q].d_dupEq;
     return false;
   }
 
@@ -356,6 +364,7 @@ bool Instantiate::addInstantiationInternal(
   {
     Trace("inst-add-debug") << " --> Lemma already exists." << std::endl;
     ++(d_statistics.d_inst_duplicate);
+    ++d_pressure[q].d_dupLemma;
     return false;
   }
 
@@ -404,6 +413,21 @@ bool Instantiate::addInstantiationInternal(
   }
   Trace("inst-add-debug") << " --> Success." << std::endl;
   ++(d_statistics.d_instantiations);
+  Pressure& pressure = d_pressure[q];
+  if (pressure.d_added++ == 0)
+  {
+    pressure.d_firstRound = d_pressureRounds;
+  }
+  pressure.d_lastRound = d_pressureRounds;
+  if (id == InferenceId::QUANTIFIERS_INST_CBQI_CONFLICT
+      || id == InferenceId::QUANTIFIERS_INST_SUB_CONFLICT)
+  {
+    ++pressure.d_conflict;
+  }
+  else if (id == InferenceId::QUANTIFIERS_INST_CBQI_PROP)
+  {
+    ++pressure.d_propagate;
+  }
   return true;
 }
 
@@ -895,6 +919,7 @@ bool Instantiate::isProofEnabled() const
 
 void Instantiate::notifyEndRound()
 {
+  ++d_pressureRounds;
   // debug information
   if (TraceIsOn("inst-per-quant-round"))
   {
