@@ -183,6 +183,56 @@ void flattenInto(const Node& h, const Node& s, std::vector<Node>& out)
   out.push_back(s);
 }
 
+/**
+ * The keys a host h applied to args can match an atom by: the arguments
+ * with same-head applications flattened (`(Mul (Mul 2 y) y)` gives 2, y,
+ * y), and, when that differs, the arguments as they stand ((Mul 2 y), y),
+ * so that an atom whose factor is itself an application of the host's
+ * function, such as `(* y (Mul 2 y))`, still finds it.
+ */
+std::vector<std::vector<Node>> hostKeys(const Node& h,
+                                        const std::vector<Node>& args)
+{
+  std::vector<Node> flat;
+  for (const Node& a : args)
+  {
+    flattenInto(h, a, flat);
+  }
+  std::sort(flat.begin(), flat.end());
+  std::vector<Node> direct(args);
+  std::sort(direct.begin(), direct.end());
+  std::vector<std::vector<Node>> keys{flat};
+  if (direct != flat)
+  {
+    keys.push_back(direct);
+  }
+  return keys;
+}
+
+/** The positions of the atoms any of keys belongs to, each once. */
+std::vector<size_t> atomsMatching(
+    const std::map<std::vector<Node>, std::vector<size_t>>& byKey,
+    const std::vector<std::vector<Node>>& keys)
+{
+  std::vector<size_t> out;
+  for (const std::vector<Node>& key : keys)
+  {
+    auto it = byKey.find(key);
+    if (it == byKey.end())
+    {
+      continue;
+    }
+    for (size_t pos : it->second)
+    {
+      if (std::find(out.begin(), out.end(), pos) == out.end())
+      {
+        out.push_back(pos);
+      }
+    }
+  }
+  return out;
+}
+
 /** The :qid of quantified formula q, or empty if it has none. */
 std::string quantName(const Node& q)
 {
@@ -360,18 +410,8 @@ std::string getNlFrontierInfo(TheoryEngine* te,
           continue;
         }
         Node host = sf(cur);
-        std::vector<Node> key;
-        for (const Node& c : host)
-        {
-          flattenInto(host, c, key);
-        }
-        std::sort(key.begin(), key.end());
-        auto it = byKey.find(key);
-        if (it == byKey.end())
-        {
-          continue;
-        }
-        for (size_t pos : it->second)
+        std::vector<Node> args(host.begin(), host.end());
+        for (size_t pos : atomsMatching(byKey, hostKeys(host, args)))
         {
           std::vector<Host>& hs = hosts[pos].d_input;
           auto h = std::find_if(hs.begin(), hs.end(), [&host](const Host& e) {
@@ -458,7 +498,7 @@ std::string getNlFrontierInfo(TheoryEngine* te,
         }
         for (const Node& cand : candidates)
         {
-          std::vector<Node> key;
+          std::vector<Node> args;
           for (const Node& c : cand)
           {
             Node value;
@@ -476,11 +516,11 @@ std::string getNlFrontierInfo(TheoryEngine* te,
               value =
                   c.substitute(vars.begin(), vars.end(), tv.begin(), tv.end());
             }
-            flattenInto(cand, sf(value), key);
+            args.push_back(sf(value));
           }
-          std::sort(key.begin(), key.end());
-          auto it = byKey.find(key);
-          if (it == byKey.end())
+          std::vector<size_t> matched =
+              atomsMatching(byKey, hostKeys(cand, args));
+          if (matched.empty())
           {
             continue;
           }
@@ -488,7 +528,7 @@ std::string getNlFrontierInfo(TheoryEngine* te,
           {
             qid = quantName(q);
           }
-          for (size_t pos : it->second)
+          for (size_t pos : matched)
           {
             std::vector<Host>& hs = hosts[pos].d_instance;
             auto h = std::find_if(hs.begin(), hs.end(), [&](const Host& e) {
