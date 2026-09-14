@@ -72,8 +72,10 @@ Instantiate::Instantiate(Env& env,
   d_useCdInstTrie = options().base.incrementalSolving;
   if (options().quantifiers.matchingLoops)
   {
-    d_matchingLoops = std::make_unique<MatchingLoops>(env, qs, qr);
+    d_matchingLoops = std::make_unique<MatchingLoops>(env, qr);
   }
+  d_graphOn =
+      options().quantifiers.instGraph || options().quantifiers.matchingLoops;
 }
 
 Instantiate::~Instantiate() {}
@@ -97,11 +99,8 @@ void Instantiate::presolve()
   d_matchedOuter.clear();
   d_matchedInner.clear();
   d_graphRound = 0;
-  d_graphDropped = 0;
-  if (d_matchingLoops != nullptr)
-  {
-    d_matchingLoops->clear();
-  }
+  d_graphTotal = 0;
+  d_lemmaRound = 1;
   d_pressure.clear();
   d_pressureRounds = 0;
 }
@@ -437,13 +436,9 @@ bool Instantiate::addInstantiationInternal(
     }
     QuantAttributes::setInstantiationLevelAttr(lem[1], maxInstLevel + 1);
   }
-  if (options().quantifiers.instGraph)
+  if (d_graphOn)
   {
     recordGraphNode(q, terms, id, lem);
-  }
-  if (d_matchingLoops != nullptr)
-  {
-    d_matchingLoops->record(q, terms, lem, d_treg.getTermDatabase());
   }
   Trace("inst-add-debug") << " --> Success." << std::endl;
   ++(d_statistics.d_instantiations);
@@ -481,10 +476,10 @@ void Instantiate::recordGraphNode(Node q,
                                   InferenceId id,
                                   Node lem)
 {
-  uint64_t max = options().quantifiers.instGraphMax;
+  ++d_graphTotal;
+  uint64_t max = graphRecordCap();
   if (max != 0 && d_graph.size() >= max)
   {
-    ++d_graphDropped;
     return;
   }
   size_t self = d_graph.size();
@@ -535,6 +530,90 @@ void Instantiate::recordGraphNode(Node q,
     blame(terms);
   }
   std::sort(gn.d_parents.begin(), gn.d_parents.end());
+  // Attributed parents: owners reached through the nested matched terms, the
+  // bindings, the ground terms congruent to each trigger instance's
+  // applications, and failing an exact owner through the representative.
+  // They are kept apart from the exact parents: a nested term's owner is
+  // often an ancestor of the outer one's, and the representative is
+  // whichever term the e-graph chose.
+  std::vector<Node> attributed(d_matchedOuter.begin(), d_matchedOuter.end());
+  attributed.insert(
+      attributed.end(), d_matchedInner.begin(), d_matchedInner.end());
+  attributed.insert(attributed.end(), terms.begin(), terms.end());
+  std::vector<Node> vars(q[0].begin(), q[0].end());
+  std::vector<std::vector<Node>> pats = MatchingLoops::triggersOf(q);
+  std::unordered_map<TNode, Node> cache;
+  bool keepRung = d_matchingLoops != nullptr;
+  std::vector<Node> origTerms;
+  if (keepRung)
+  {
+    for (const Node& t : terms)
+    {
+      origTerms.push_back(SkolemManager::getOriginalForm(t));
+    }
+  }
+  NodeManager* nm = nodeManager();
+  for (size_t p = 0, np = pats.size(); p < np; p++)
+  {
+    std::vector<Node> instTerms;
+    for (const Node& pt : pats[p])
+    {
+      Node ti =
+          pt.substitute(vars.begin(), vars.end(), terms.begin(), terms.end());
+      if (keepRung)
+      {
+        // the rung as written, so a purified ite still shows its growth
+        instTerms.push_back(pt.substitute(
+            vars.begin(), vars.end(), origTerms.begin(), origTerms.end()));
+      }
+      std::unordered_set<TNode> seen;
+      std::vector<TNode> todo{ti};
+      while (!todo.empty())
+      {
+        TNode cur = todo.back();
+        todo.pop_back();
+        if (!seen.insert(cur).second || cur.getNumChildren() == 0)
+        {
+          continue;
+        }
+        Node g = groundTerm(cur, cache);
+        if (!g.isNull())
+        {
+          attributed.push_back(g);
+        }
+        todo.insert(todo.end(), cur.begin(), cur.end());
+      }
+    }
+    if (p == 0 && keepRung)
+    {
+      gn.d_rung = nm->mkNode(Kind::SEXPR, instTerms);
+    }
+  }
+  for (const Node& t : attributed)
+  {
+    int64_t o = graphOwnerOf(t);
+    if (o < 0)
+    {
+      continue;
+    }
+    size_t op = static_cast<size_t>(o);
+    if (std::find(gn.d_parents.begin(), gn.d_parents.end(), op)
+            == gn.d_parents.end()
+        && std::find(gn.d_eqParents.begin(), gn.d_eqParents.end(), op)
+               == gn.d_eqParents.end())
+    {
+      gn.d_eqParents.push_back(op);
+    }
+  }
+  std::sort(gn.d_eqParents.begin(), gn.d_eqParents.end());
+  if (keepRung)
+  {
+    if (gn.d_rung.isNull())
+    {
+      gn.d_rung = nm->mkNode(Kind::SEXPR, origTerms);
+    }
+    gn.d_lemmaRound = d_lemmaRound;
+  }
   for (const Node& t : terms)
   {
     // in original form, so a purified term has the depth it was written with
@@ -574,10 +653,89 @@ void Instantiate::recordGraphNode(Node q,
   }
 }
 
+uint64_t Instantiate::graphRecordCap() const
+{
+  uint64_t cap = 0;
+  bool bounded = true;
+  auto consider = [&](bool on, uint64_t c) {
+    if (on)
+    {
+      bounded = bounded && c != 0;
+      cap = std::max(cap, c);
+    }
+  };
+  consider(options().quantifiers.instGraph, options().quantifiers.instGraphMax);
+  consider(options().quantifiers.matchingLoops,
+           options().quantifiers.matchingLoopsMax);
+  return bounded ? cap : 0;
+}
+
+Node Instantiate::groundTerm(TNode s,
+                             std::unordered_map<TNode, Node>& cache) const
+{
+  auto it = cache.find(s);
+  if (it != cache.end())
+  {
+    return it->second;
+  }
+  Node res;
+  if (d_qstate.hasTerm(s))
+  {
+    res = s;
+  }
+  else if (s.getNumChildren() > 0 && !s.isClosure())
+  {
+    TermDb* tdb = d_treg.getTermDatabase();
+    Node f = tdb->getMatchOperator(s);
+    if (!f.isNull())
+    {
+      std::vector<TNode> args;
+      bool ok = true;
+      for (const Node& c : s)
+      {
+        Node gc = groundTerm(c, cache);
+        if (gc.isNull())
+        {
+          ok = false;
+          break;
+        }
+        args.push_back(d_qstate.getRepresentative(gc));
+      }
+      if (ok)
+      {
+        res = tdb->getCongruentTerm(f, args);
+      }
+    }
+  }
+  cache[s] = res;
+  return res;
+}
+
+int64_t Instantiate::graphOwnerOf(TNode t) const
+{
+  auto it = d_graphOwner.find(SkolemManager::getOriginalForm(t));
+  if (it == d_graphOwner.end() && d_qstate.hasTerm(t))
+  {
+    it = d_graphOwner.find(
+        SkolemManager::getOriginalForm(d_qstate.getRepresentative(t)));
+  }
+  return it == d_graphOwner.end() ? -1 : static_cast<int64_t>(it->second);
+}
+
 void Instantiate::printInstantiationGraph(std::ostream& out) const
 {
+  uint64_t max = options().quantifiers.instGraphMax;
+  size_t count =
+      max == 0 ? d_graph.size() : std::min<size_t>(d_graph.size(), max);
+  // quantified formulas are indexed in order of first instantiation, so
+  // those of the first count nodes are a prefix too
+  size_t quants = 0;
+  for (size_t i = 0; i < count; i++)
+  {
+    quants = std::max(quants, d_graph[i].d_quant + 1);
+  }
   out << "(instantiation-graph" << std::endl;
-  for (size_t i = 0, size = d_graphQuants.size(); i < size; i++)
+  for (size_t i = 0; i < quants; i++)
   {
     Node name;
     out << "(quantifier " << i << " ";
@@ -591,7 +749,7 @@ void Instantiate::printInstantiationGraph(std::ostream& out) const
     }
     out << ")" << std::endl;
   }
-  for (size_t i = 0, size = d_graph.size(); i < size; i++)
+  for (size_t i = 0; i < count; i++)
   {
     const GraphNode& gn = d_graph[i];
     out << "(node " << i << " " << gn.d_quant << " " << gn.d_id << " "
@@ -600,9 +758,19 @@ void Instantiate::printInstantiationGraph(std::ostream& out) const
     {
       out << (j == 0 ? "" : " ") << gn.d_parents[j];
     }
-    out << "))" << std::endl;
+    out << ")";
+    if (!gn.d_eqParents.empty())
+    {
+      out << " (eq";
+      for (size_t p : gn.d_eqParents)
+      {
+        out << " " << p;
+      }
+      out << ")";
+    }
+    out << ")" << std::endl;
   }
-  out << "(dropped " << d_graphDropped << ")" << std::endl;
+  out << "(dropped " << (d_graphTotal - count) << ")" << std::endl;
   out << ")" << std::endl;
 }
 
@@ -1095,10 +1263,7 @@ bool Instantiate::isProofEnabled() const
 void Instantiate::notifyEndRound()
 {
   ++d_pressureRounds;
-  if (d_matchingLoops != nullptr)
-  {
-    d_matchingLoops->notifyEndRound();
-  }
+  ++d_lemmaRound;
   // debug information
   if (TraceIsOn("inst-per-quant-round"))
   {
@@ -1132,7 +1297,11 @@ void Instantiate::printMatchingLoops(std::ostream& out,
     throw ModalException(
         "Cannot get matching loops unless option matching-loops is on.");
   }
-  d_matchingLoops->print(out, maxInstRounds);
+  uint64_t max = options().quantifiers.matchingLoopsMax;
+  size_t count =
+      max == 0 ? d_graph.size() : std::min<size_t>(d_graph.size(), max);
+  d_matchingLoops->print(
+      out, maxInstRounds, d_graph, count, d_graphQuants, d_graphTotal - count);
 }
 
 void Instantiate::debugPrintModel()

@@ -76,29 +76,6 @@ constexpr size_t kFanoutSteps = 5;
 /** The most rounds between two rounds whose counts the fan-out compares */
 constexpr uint64_t kMaxRoundGap = 3;
 
-bool isConnective(Kind k)
-{
-  return k == Kind::AND || k == Kind::OR || k == Kind::NOT || k == Kind::IMPLIES
-         || k == Kind::XOR;
-}
-
-/** The instantiation patterns of q, each as its list of trigger terms */
-std::vector<std::vector<Node>> triggersOf(const Node& q)
-{
-  std::vector<std::vector<Node>> pats;
-  if (q.getNumChildren() == 3)
-  {
-    for (const Node& p : q[2])
-    {
-      if (p.getKind() == Kind::INST_PATTERN)
-      {
-        pats.emplace_back(p.begin(), p.end());
-      }
-    }
-  }
-  return pats;
-}
-
 /**
  * n with every application at depth `depth` replaced by a variable named
  * `...` of its type.
@@ -222,186 +199,26 @@ std::string decimal(double d)
 
 }  // namespace
 
-MatchingLoops::MatchingLoops(Env& env,
-                             QuantifiersState& qs,
-                             QuantifiersRegistry& qr)
-    : EnvObj(env), d_qstate(qs), d_qreg(qr), d_round(1), d_dropped(0)
+MatchingLoops::MatchingLoops(Env& env, QuantifiersRegistry& qr)
+    : EnvObj(env), d_qreg(qr)
 {
 }
 
-void MatchingLoops::clear()
+/** The instantiation patterns of q, each as its list of trigger terms */
+std::vector<std::vector<Node>> MatchingLoops::triggersOf(const Node& q)
 {
-  d_insts.clear();
-  d_quants.clear();
-  d_quantIndex.clear();
-  d_owner.clear();
-  d_round = 1;
-  d_dropped = 0;
-}
-
-void MatchingLoops::notifyEndRound() { ++d_round; }
-
-Node MatchingLoops::ground(TNode s,
-                           TermDb* tdb,
-                           std::unordered_map<TNode, Node>& cache)
-{
-  auto it = cache.find(s);
-  if (it != cache.end())
+  std::vector<std::vector<Node>> pats;
+  if (q.getNumChildren() == 3)
   {
-    return it->second;
-  }
-  Node res;
-  if (d_qstate.hasTerm(s))
-  {
-    res = s;
-  }
-  else if (s.getNumChildren() > 0 && !s.isClosure())
-  {
-    Node f = tdb->getMatchOperator(s);
-    if (!f.isNull())
+    for (const Node& p : q[2])
     {
-      std::vector<TNode> args;
-      bool ok = true;
-      for (const Node& c : s)
+      if (p.getKind() == Kind::INST_PATTERN)
       {
-        Node gc = ground(c, tdb, cache);
-        if (gc.isNull())
-        {
-          ok = false;
-          break;
-        }
-        args.push_back(d_qstate.getRepresentative(gc));
-      }
-      if (ok)
-      {
-        res = tdb->getCongruentTerm(f, args);
+        pats.emplace_back(p.begin(), p.end());
       }
     }
   }
-  cache[s] = res;
-  return res;
-}
-
-int64_t MatchingLoops::ownerOf(TNode t) const
-{
-  auto it = d_owner.find(t);
-  if (it != d_owner.end())
-  {
-    return static_cast<int64_t>(it->second);
-  }
-  if (d_qstate.hasTerm(t))
-  {
-    it = d_owner.find(d_qstate.getRepresentative(t));
-    if (it != d_owner.end())
-    {
-      return static_cast<int64_t>(it->second);
-    }
-  }
-  return -1;
-}
-
-void MatchingLoops::record(Node q,
-                           const std::vector<Node>& terms,
-                           Node lem,
-                           TermDb* tdb)
-{
-  uint64_t max = options().quantifiers.matchingLoopsMax;
-  if (max != 0 && d_insts.size() >= max)
-  {
-    ++d_dropped;
-    return;
-  }
-  size_t self = d_insts.size();
-  auto qi = d_quantIndex.find(q);
-  if (qi == d_quantIndex.end())
-  {
-    qi = d_quantIndex.emplace(q, d_quants.size()).first;
-    d_quants.push_back(q);
-  }
-  Inst inst;
-  inst.d_quant = qi->second;
-  inst.d_round = d_round;
-  inst.d_depth = 0;
-  for (const Node& t : terms)
-  {
-    inst.d_depth = std::max(inst.d_depth,
-                            static_cast<uint64_t>(TermUtil::getTermDepth(t)));
-  }
-  std::vector<Node> vars(q[0].begin(), q[0].end());
-  std::vector<std::vector<Node>> pats = triggersOf(q);
-  NodeManager* nm = nodeManager();
-  // The terms the match could have been made against: the bindings, and the
-  // ground term congruent to each application in each trigger's instance.
-  std::vector<Node> blame(terms.begin(), terms.end());
-  std::unordered_map<TNode, Node> cache;
-  for (size_t p = 0, np = pats.size(); p < np; p++)
-  {
-    std::vector<Node> inst_terms;
-    for (const Node& pt : pats[p])
-    {
-      Node ti =
-          pt.substitute(vars.begin(), vars.end(), terms.begin(), terms.end());
-      inst_terms.push_back(ti);
-      std::unordered_set<TNode> visited;
-      std::vector<TNode> visit{ti};
-      while (!visit.empty())
-      {
-        TNode cur = visit.back();
-        visit.pop_back();
-        if (!visited.insert(cur).second || cur.getNumChildren() == 0)
-        {
-          continue;
-        }
-        Node g = ground(cur, tdb, cache);
-        if (!g.isNull())
-        {
-          blame.push_back(g);
-        }
-        visit.insert(visit.end(), cur.begin(), cur.end());
-      }
-    }
-    if (p == 0)
-    {
-      inst.d_rung = nm->mkNode(Kind::SEXPR, inst_terms);
-    }
-  }
-  if (inst.d_rung.isNull())
-  {
-    inst.d_rung = nm->mkNode(Kind::SEXPR, terms);
-  }
-  for (const Node& b : blame)
-  {
-    int64_t o = ownerOf(b);
-    if (o >= 0
-        && std::find(inst.d_parents.begin(),
-                     inst.d_parents.end(),
-                     static_cast<size_t>(o))
-               == inst.d_parents.end())
-    {
-      inst.d_parents.push_back(static_cast<size_t>(o));
-    }
-  }
-  d_insts.push_back(std::move(inst));
-  // The lemma introduces each of its terms that the equality engine does not
-  // yet hold and no earlier instantiation introduced. Quantified formulas,
-  // including q, are not ground and introduce nothing.
-  std::unordered_set<TNode> visited;
-  std::vector<TNode> visit{lem};
-  while (!visit.empty())
-  {
-    TNode cur = visit.back();
-    visit.pop_back();
-    if (!visited.insert(cur).second || cur.isClosure())
-    {
-      continue;
-    }
-    if (!isConnective(cur.getKind()) && !d_qstate.hasTerm(cur))
-    {
-      // emplace keeps the first instantiation to introduce the term
-      d_owner.emplace(cur, self);
-    }
-    visit.insert(visit.end(), cur.begin(), cur.end());
-  }
+  return pats;
 }
 
 Node MatchingLoops::lggRec(const std::vector<Node>& ts,
@@ -476,19 +293,43 @@ Node MatchingLoops::lgg(const std::vector<Node>& ts, size_t firstHole) const
   return lgg(ts, holes, firstHole);
 }
 
-void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
+void MatchingLoops::print(std::ostream& out,
+                          bool maxInstRounds,
+                          const std::vector<Instantiate::GraphNode>& nodes,
+                          size_t count,
+                          const std::vector<Node>& quants,
+                          uint64_t dropped) const
 {
+  // The analysis reads the first count nodes of the instantiation graph:
+  // their round, depth and rung, and their parents both exact and
+  // attributed, as the recorder this replaced took any owner of the
+  // bindings, the trigger instance's ground terms and their representatives.
+  std::vector<Inst> recs;
+  recs.reserve(count);
+  for (size_t i = 0; i < count; i++)
+  {
+    const Instantiate::GraphNode& gn = nodes[i];
+    Inst rec;
+    rec.d_quant = gn.d_quant;
+    rec.d_round = gn.d_lemmaRound;
+    rec.d_depth = gn.d_termDepth;
+    rec.d_rung = gn.d_rung;
+    rec.d_parents = gn.d_parents;
+    rec.d_parents.insert(
+        rec.d_parents.end(), gn.d_eqParents.begin(), gn.d_eqParents.end());
+    recs.push_back(std::move(rec));
+  }
   // Terms print flat: a reader renders each rung, and let-bound sharing
   // would hide the nesting the ladder exists to show.
   options::ioutils::applyDagThresh(out, 0);
   // the last round in which anything was instantiated
   uint64_t lastRound = 0;
-  for (const Inst& i : d_insts)
+  for (const Inst& i : recs)
   {
     lastRound = std::max(lastRound, i.d_round);
   }
-  out << "(:rounds " << lastRound << " :instantiations " << d_insts.size()
-      << " :dropped " << d_dropped << " :max-inst-rounds "
+  out << "(:rounds " << lastRound << " :instantiations " << recs.size()
+      << " :dropped " << dropped << " :max-inst-rounds "
       << (maxInstRounds ? "true" : "false") << " :loops (";
 
   struct Loop
@@ -499,21 +340,21 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
     std::string d_text;
   };
   std::vector<Loop> loops;
-  std::vector<std::vector<size_t>> byQuant(d_quants.size());
-  for (size_t i = 0, n = d_insts.size(); i < n; i++)
+  std::vector<std::vector<size_t>> byQuant(quants.size());
+  for (size_t i = 0, n = recs.size(); i < n; i++)
   {
-    byQuant[d_insts[i].d_quant].push_back(i);
+    byQuant[recs[i].d_quant].push_back(i);
   }
   // for each instantiation: its longest self-feeding chain, and the previous
   // rung of that chain with the formulas the step passed through
-  std::vector<size_t> len(d_insts.size(), 1);
-  std::vector<int64_t> prev(d_insts.size(), -1);
-  std::vector<std::vector<size_t>> via(d_insts.size());
+  std::vector<size_t> len(recs.size(), 1);
+  std::vector<int64_t> prev(recs.size(), -1);
+  std::vector<std::vector<size_t>> via(recs.size());
   // per formula: how many of its instantiations were self-fed, and whether
   // any ends a chain long enough to be a loop
-  std::vector<size_t> selfFed(d_quants.size(), 0);
-  std::vector<bool> looping(d_quants.size(), false);
-  for (size_t qi = 0, nq = d_quants.size(); qi < nq; qi++)
+  std::vector<size_t> selfFed(quants.size(), 0);
+  std::vector<bool> looping(quants.size(), false);
+  for (size_t qi = 0, nq = quants.size(); qi < nq; qi++)
   {
     const std::vector<size_t>& insts = byQuant[qi];
     if (insts.size() < kMinChain)
@@ -525,7 +366,7 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
       // breadth-first over parents, stopping at instantiations of qi; each
       // entry is (instantiation, formulas passed through on the way)
       std::vector<std::pair<size_t, std::vector<size_t>>> frontier;
-      for (size_t p : d_insts[i].d_parents)
+      for (size_t p : recs[i].d_parents)
       {
         frontier.push_back({p, {}});
       }
@@ -539,7 +380,7 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
           {
             continue;
           }
-          if (d_insts[j].d_quant == qi)
+          if (recs[j].d_quant == qi)
           {
             if (len[j] + 1 > len[i])
             {
@@ -550,8 +391,8 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
             continue;
           }
           std::vector<size_t> ext = path;
-          ext.push_back(d_insts[j].d_quant);
-          for (size_t p : d_insts[j].d_parents)
+          ext.push_back(recs[j].d_quant);
+          for (size_t p : recs[j].d_parents)
           {
             next.push_back({p, ext});
           }
@@ -568,7 +409,7 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
       }
     }
   }
-  for (size_t qi = 0, nq = d_quants.size(); qi < nq; qi++)
+  for (size_t qi = 0, nq = quants.size(); qi < nq; qi++)
   {
     const std::vector<size_t>& insts = byQuant[qi];
     if (insts.size() < kMinChain)
@@ -583,9 +424,9 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
       size_t riding = 0;
       for (size_t i : insts)
       {
-        const std::vector<size_t>& ps = d_insts[i].d_parents;
+        const std::vector<size_t>& ps = recs[i].d_parents;
         if (std::any_of(ps.begin(), ps.end(), [&](size_t p) {
-              size_t pq = d_insts[p].d_quant;
+              size_t pq = recs[p].d_quant;
               return pq != qi && looping[pq];
             }))
         {
@@ -601,7 +442,7 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
     std::vector<uint64_t> perRound(lastRound + 1, 0);
     for (size_t i : insts)
     {
-      perRound[d_insts[i].d_round]++;
+      perRound[recs[i].d_round]++;
     }
     size_t roundsUsed = static_cast<size_t>(std::count_if(
         perRound.begin(), perRound.end(), [](uint64_t c) { return c > 0; }));
@@ -631,11 +472,10 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
       std::map<uint64_t, size_t> deepest;
       for (size_t i : insts)
       {
-        auto it = deepest.find(d_insts[i].d_round);
-        if (it == deepest.end()
-            || d_insts[i].d_depth > d_insts[it->second].d_depth)
+        auto it = deepest.find(recs[i].d_round);
+        if (it == deepest.end() || recs[i].d_depth > recs[it->second].d_depth)
         {
-          deepest[d_insts[i].d_round] = i;
+          deepest[recs[i].d_round] = i;
         }
       }
       for (const auto& [r, i] : deepest)
@@ -649,25 +489,25 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
       continue;
     }
     // depth along the chain
-    uint64_t d0 = d_insts[chain.front()].d_depth;
-    uint64_t dn = d_insts[chain.back()].d_depth;
+    uint64_t d0 = recs[chain.front()].d_depth;
+    uint64_t dn = recs[chain.back()].d_depth;
     size_t nondecreasing = 0;
     for (size_t k = 0; k + 1 < L; k++)
     {
-      if (d_insts[chain[k + 1]].d_depth >= d_insts[chain[k]].d_depth)
+      if (recs[chain[k + 1]].d_depth >= recs[chain[k]].d_depth)
       {
         nondecreasing++;
       }
     }
     bool rising = dn > d0 && nondecreasing * 5 >= (L - 1) * 4;
-    uint64_t r0 = d_insts[chain.front()].d_round;
-    uint64_t rn = d_insts[chain.back()].d_round;
+    uint64_t r0 = recs[chain.front()].d_round;
+    uint64_t rn = recs[chain.back()].d_round;
     // the most rounds between consecutive rungs
     uint64_t period = 1;
     for (size_t k = 1; k < L; k++)
     {
-      period = std::max(
-          period, d_insts[chain[k]].d_round - d_insts[chain[k - 1]].d_round);
+      period =
+          std::max(period, recs[chain[k]].d_round - recs[chain[k - 1]].d_round);
     }
     double depthPerRung = static_cast<double>(dn - std::min(d0, dn)) / (L - 1);
     double depthPerRound = static_cast<double>(dn - std::min(d0, dn))
@@ -684,7 +524,7 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
     std::vector<Node> rungs;
     for (size_t c : chain)
     {
-      rungs.push_back(d_insts[c].d_rung);
+      rungs.push_back(recs[c].d_rung);
     }
     bool stable = false;
     std::vector<Node> contextClasses;
@@ -821,7 +661,7 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
     options::ioutils::applyDagThresh(ss, 0);
     Node name;
     ss << "(loop :qid ";
-    if (d_qreg.getNameForQuant(d_quants[qi], name, true))
+    if (d_qreg.getNameForQuant(quants[qi], name, true))
     {
       ss << name;
     }
@@ -853,7 +693,7 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
     {
       Node vname;
       ss << (k == 0 ? "" : " ");
-      if (d_qreg.getNameForQuant(d_quants[passed[k]], vname, true))
+      if (d_qreg.getNameForQuant(quants[passed[k]], vname, true))
       {
         ss << vname;
       }
@@ -863,7 +703,7 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
       }
     }
     ss << ") :trigger (";
-    std::vector<std::vector<Node>> pats = triggersOf(d_quants[qi]);
+    std::vector<std::vector<Node>> pats = triggersOf(quants[qi]);
     if (!pats.empty())
     {
       for (size_t k = 0; k < pats[0].size(); k++)
