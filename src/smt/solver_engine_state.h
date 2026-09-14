@@ -79,6 +79,17 @@ class SolverEngineState : protected EnvObj
    */
   void notifyUserPop();
   /**
+   * Called when a pending pop of the context is done. In incremental mode
+   * the context that held a check-sat-assuming's assumptions is popped at
+   * the start of the next command that needs a current context, e.g. an
+   * assertion. An unsat answer does not survive this pop: its refutation
+   * used the assumptions, so the unsat core, the unsat assumptions and the
+   * proof are gone, and asking for them would build a proof with a free
+   * assumption. A model does survive, so sat and unknown answers keep
+   * their mode and get-value still works after check-sat-assuming.
+   */
+  void notifyPendingPop();
+  /**
    * Notify that the result of the last check-sat was r. This should be called
    * once immediately following notifyCheckSat() if the check-sat call
    * returned normal (i.e. it was not interupted).
