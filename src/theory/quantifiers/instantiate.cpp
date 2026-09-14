@@ -418,7 +418,8 @@ bool Instantiate::addInstantiationInternal(
   }
   if (d_matchingLoops != nullptr)
   {
-    d_matchingLoops->record(q, terms, lem, d_treg.getTermDatabase());
+    // e-matching passes the trigger that matched as pfArg
+    d_matchingLoops->record(q, terms, pfArg, lem, d_treg.getTermDatabase());
   }
   Trace("inst-add-debug") << " --> Success." << std::endl;
   ++(d_statistics.d_instantiations);
