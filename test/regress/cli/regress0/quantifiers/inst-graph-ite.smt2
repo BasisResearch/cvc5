@@ -5,15 +5,16 @@
 ; EXPECT: (instantiation-graph
 ; EXPECT: (quantifier 0 step)
 ; EXPECT: (node 0 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 0 0 ())
-; EXPECT: (node 1 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 1 1 (0))
-; EXPECT: (node 2 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 2 1 (1))
-; EXPECT: (node 3 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 3 1 (2))
+; EXPECT: (node 1 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 1 3 (0))
+; EXPECT: (node 2 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 2 6 (1))
+; EXPECT: (node 3 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 3 9 (2))
 ; EXPECT: (dropped 0)
 ; EXPECT: )
 ; A matching loop whose new term passes through an ite. Preprocessing
 ; replaces the ite by a skolem, so the (P (f k)) the next instance matches is
 ; not the term the lemma introduced; comparing in original form still makes
-; each instance the parent of the next.
+; each instance the parent of the next. Term depth is also taken in original
+; form, where each rung's instantiating term nests one more ite (3, 6, 9).
 (set-logic UFLIA)
 (declare-fun P (Int) Bool)
 (declare-fun Q (Int) Bool)

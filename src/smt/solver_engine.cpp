@@ -2123,22 +2123,32 @@ void SolverEngine::getInstantiationsToSave(
 
 void SolverEngine::printInstantiationGraph(std::ostream& out)
 {
-  // the graph may be asked for before any check, when nothing is set up yet
-  finishInit();
-  // see if another solver engine was responsible for the last status
-  SolverEngine* ssolver = d_state->getStatusSolver();
-  if (ssolver != nullptr)
-  {
-    return ssolver->printInstantiationGraph(out);
-  }
   if (!d_env->getOptions().quantifiers.instGraph)
   {
     throw RecoverableModalException(
         "Cannot get the instantiation graph unless option inst-graph is on.");
   }
-  QuantifiersEngine* qe =
-      getAvailableQuantifiersEngine("printInstantiationGraph");
-  qe->printInstantiationGraph(out);
+  // Before the solver is fully initialized there has been no check, so the
+  // graph is empty; initializing here would lock the options. A logic
+  // without quantifiers instantiates nothing either.
+  if (d_state->isFullyInited())
+  {
+    // see if another solver engine was responsible for the last status
+    SolverEngine* ssolver = d_state->getStatusSolver();
+    if (ssolver != nullptr)
+    {
+      return ssolver->printInstantiationGraph(out);
+    }
+    QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine();
+    if (qe != nullptr)
+    {
+      qe->printInstantiationGraph(out);
+      return;
+    }
+  }
+  out << "(instantiation-graph" << std::endl
+      << "(dropped 0)" << std::endl
+      << ")" << std::endl;
 }
 
 void SolverEngine::exportInstantiations(

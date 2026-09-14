@@ -108,6 +108,7 @@ TermDb::TermDb(Env& env, QuantifiersState& qs, QuantifiersRegistry& qr)
       d_qim(nullptr),
       d_qreg(qr),
       d_processed(context()),
+      d_graphSeen(userContext()),
       d_typeMap(context()),
       d_ops(context()),
       d_opMap(context()),
@@ -303,7 +304,11 @@ void TermDb::addTerm(Node n)
 {
   if (options().quantifiers.instGraph)
   {
+    // The database holds terms after preprocessing, while instantiation
+    // lemmas still hold, e.g., the ite it purified away. Keep the original
+    // form too, so a lemma repeating an input term does not claim it.
     d_graphSeen.insert(n);
+    d_graphSeen.insert(SkolemManager::getOriginalForm(n));
   }
   if (d_processed.find(n) != d_processed.end())
   {
@@ -704,7 +709,7 @@ void TermDb::setHasTerm(Node n)
   } while (!visit.empty());
 }
 
-void TermDb::presolve() { d_graphSeen.clear(); }
+void TermDb::presolve() {}
 
 bool TermDb::reset(Theory::Effort effort)
 {

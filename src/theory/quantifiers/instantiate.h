@@ -438,7 +438,7 @@ class Instantiate : public QuantifiersUtil
   std::vector<GraphNode> d_graph;
   /** The quantified formulas the graph instantiates, and their indices */
   std::vector<Node> d_graphQuants;
-  std::map<Node, size_t> d_graphQuantIndex;
+  std::unordered_map<Node, size_t> d_graphQuantIndex;
   /** Each term an instantiation of the graph introduced, and which one */
   std::unordered_map<Node, size_t> d_graphOwner;
   /** The terms the instantiation being added matched, if known */

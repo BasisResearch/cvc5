@@ -465,9 +465,11 @@ void Instantiate::recordGraphNode(Node q,
   // Parents are the earlier instantiations that introduced the terms the
   // match was made against. The terms each pattern's outermost generator
   // matched come first. Nested terms count only if none of those has an
-  // owner: a nested term's owner is otherwise an ancestor of the outer term's,
-  // and listing it would give every rung of a loop through a nested trigger
-  // all earlier rungs as parents. Without matched terms, the instantiating
+  // owner: on a loop through a nested trigger the nested term's owner is an
+  // earlier rung, and listing it would give every rung all earlier rungs as
+  // parents. The cost: when the nested term equals the outer term's subterm
+  // only through an equality another instantiation introduced, that
+  // instantiation is not listed. Without matched terms, the instantiating
   // terms stand in. Owners are keyed by original form: the term database
   // holds terms after preprocessing, which may have replaced part of the
   // lemma's term by a skolem (e.g. an ite).
@@ -497,7 +499,9 @@ void Instantiate::recordGraphNode(Node q,
   std::sort(gn.d_parents.begin(), gn.d_parents.end());
   for (const Node& t : terms)
   {
-    uint64_t depth = static_cast<uint64_t>(TermUtil::getTermDepth(t));
+    // in original form, so a purified term has the depth it was written with
+    uint64_t depth = static_cast<uint64_t>(
+        TermUtil::getTermDepth(SkolemManager::getOriginalForm(t)));
     gn.d_termDepth = std::max(gn.d_termDepth, depth);
   }
   d_graph.push_back(std::move(gn));
@@ -517,10 +521,16 @@ void Instantiate::recordGraphNode(Node q,
     }
     Kind k = cur.getKind();
     if (k != Kind::AND && k != Kind::OR && k != Kind::NOT && k != Kind::IMPLIES
-        && k != Kind::XOR && !tdb->isRegistered(cur))
+        && k != Kind::XOR)
     {
-      // emplace keeps the first instantiation to introduce the term
-      d_graphOwner.emplace(SkolemManager::getOriginalForm(cur), self);
+      Node orig = SkolemManager::getOriginalForm(cur);
+      // The lemma has not been purified yet, so an input term containing an
+      // ite is registered only through its original form.
+      if (!tdb->isRegistered(cur) && !tdb->isRegistered(orig))
+      {
+        // emplace keeps the first instantiation to introduce the term
+        d_graphOwner.emplace(orig, self);
+      }
     }
     visit.insert(visit.end(), cur.begin(), cur.end());
   }
