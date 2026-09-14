@@ -57,10 +57,16 @@ class MatchingLoops : protected EnvObj
   void clear();
   /**
    * Record that q was instantiated with terms, producing lem, in the current
-   * round. Must be called while the equality engine is that of the check
-   * making the instantiation, before lem is sent.
+   * round. trigger is the trigger that matched, as an SEXPR of its terms over
+   * the variables of q, which e-matching passes; null if the instantiation
+   * did not come from a trigger. Must be called while the equality engine is
+   * that of the check making the instantiation, before lem is sent.
    */
-  void record(Node q, const std::vector<Node>& terms, Node lem, TermDb* tdb);
+  void record(Node q,
+              const std::vector<Node>& terms,
+              Node trigger,
+              Node lem,
+              TermDb* tdb);
   /** An instantiation round that added lemmas ended. */
   void notifyEndRound();
   /**
@@ -99,15 +105,21 @@ class MatchingLoops : protected EnvObj
     /** The depth of its deepest instantiating term */
     uint64_t d_depth;
     /**
-     * Its first trigger instantiated with its terms, as an SEXPR with one
-     * child per trigger term; the terms themselves if q has no trigger.
+     * Its trigger instantiated with its terms, as an SEXPR with one child per
+     * trigger term; the terms themselves if q has no trigger.
      */
     Node d_rung;
+    /**
+     * That trigger over the variables of q, as an SEXPR of its terms: the one
+     * that matched, else the first of q's patterns whose instance the term
+     * database held, else q's first pattern; null if q has none.
+     */
+    Node d_trigger;
     /** Earlier instantiations that introduced a term it matched, unique */
     std::vector<size_t> d_parents;
   };
   /** The ground term congruent to s that the term database holds, if any */
-  Node ground(TNode s, TermDb* tdb, std::unordered_map<TNode, Node>& cache);
+  Node ground(TNode s, TermDb* tdb, std::unordered_map<Node, Node>& cache);
   /** The instantiation that introduced t, or its representative; -1 if none */
   int64_t ownerOf(TNode t) const;
   /**

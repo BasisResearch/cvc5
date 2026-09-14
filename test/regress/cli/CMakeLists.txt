@@ -1839,11 +1839,13 @@ set(regress_0_tests
   regress0/quantifiers/macros-real-arg.smt2
   regress0/quantifiers/matching-lia-1arg.smt2
   regress0/quantifiers/matching-loops-alternating.smt2
+  regress0/quantifiers/matching-loops-before-check.smt2
   regress0/quantifiers/matching-loops-branching.smt2
   regress0/quantifiers/matching-loops-cons.smt2
   regress0/quantifiers/matching-loops-cons-deep.smt2
   regress0/quantifiers/matching-loops-incremental.smt2
   regress0/quantifiers/matching-loops-linear.smt2
+  regress0/quantifiers/matching-loops-multi-pattern.smt2
   regress0/quantifiers/matching-loops-none.smt2
   regress0/quantifiers/matching-loops-rider.smt2
   regress0/quantifiers/mbqi-simple.smt2

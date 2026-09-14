@@ -616,7 +616,11 @@ std::string SolverEngine::getInfo(const std::string& key) const
     Result status = d_state->getStatus();
     bool unknown = !status.isNull() && status.isUnknown();
     std::stringstream ss;
-    QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine();
+    // before the first check-sat there may be no theory engine yet, and
+    // nothing has been recorded
+    QuantifiersEngine* qe = d_state->isFullyInited()
+                                ? d_smtSolver->getQuantifiersEngine()
+                                : nullptr;
     if (qe == nullptr)
     {
       ss << "(:rounds 0 :instantiations 0 :dropped 0 :max-inst-rounds false "
