@@ -115,6 +115,8 @@ class QuantifiersEngine : protected EnvObj
    */
   void printMatchingLoops(std::ostream& out, bool unknown) const;
   //----------user interface for instantiations (see quantifiers/instantiate.h)
+  /** The instantiation utility, e.g. for its per-check-sat pressure. */
+  quantifiers::Instantiate* getInstantiate();
   /** get list of quantified formulas that were instantiated */
   void getInstantiatedQuantifiedFormulas(std::vector<Node>& qs);
   /** Save this user context's instantiation term vectors under key. */

@@ -1787,6 +1787,9 @@ set(regress_0_tests
   regress0/quantifiers/floor.smt2
   regress0/quantifiers/global_negate.smt2
   regress0/quantifiers/horn-ground-pre-post.smt2
+  regress0/quantifiers/inst-pressure-proof.smt2
+  regress0/quantifiers/inst-pressure-refutation.smt2
+  regress0/quantifiers/inst-pressure.smt2
   regress0/quantifiers/is-even-pred.smt2
   regress0/quantifiers/is-int.smt2
   regress0/quantifiers/issue1805.smt2

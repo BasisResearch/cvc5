@@ -857,6 +857,11 @@ void QuantifiersEngine::restoreInstantiations(const std::string& key, bool only)
   d_qim.getInstantiate()->restoreInstantiations(key, only);
 }
 
+quantifiers::Instantiate* QuantifiersEngine::getInstantiate()
+{
+  return d_qim.getInstantiate();
+}
+
 void QuantifiersEngine::getInstantiatedQuantifiedFormulas(std::vector<Node>& qs)
 {
   d_qim.getInstantiate()->getInstantiatedQuantifiedFormulas(qs);
