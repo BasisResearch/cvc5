@@ -1009,6 +1009,7 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
                << endl;
   // notify our state of the check-sat result
   d_state->notifyCheckSatResult(r);
+  d_checkedAssertions = d_smtSolver->getAssertions().getAssertionList().size();
 
   // Check that SAT results generate a model correctly.
   if (d_env->getOptions().smt.checkModels)
@@ -1091,6 +1092,7 @@ std::pair<Result, std::vector<Node>> SolverEngine::getTimeoutCore(
   SolverEngine* solver = d_tcm->getSubSolver();
   Assert(solver != nullptr);
   d_state->notifyCheckSatResult(ret.first, solver);
+  d_checkedAssertions = d_smtSolver->getAssertions().getAssertionList().size();
   endCall();
   return std::pair<Result, std::vector<Node>>(ret.first, core);
 }
@@ -2829,15 +2831,18 @@ std::string SolverEngine::getDifficultyGradient() const
   bool checked = d_smtSolver != nullptr && d_state->isFullyInited()
                  && (mode == SmtMode::SAT || mode == SmtMode::SAT_UNKNOWN
                      || mode == SmtMode::UNSAT);
+  // Difficulty and the unsat core belong to the engine that answered. After
+  // get-timeout-core that is a subsolver, whose state this engine cannot see.
+  bool answered = d_state->getStatusSolver() == nullptr;
   // Difficulty is kept per preprocessed assertion, in the user context, so it
   // is still there after the check; the preprocessing proofs carry it back
   // to the input assertions, as getDifficultyMap does.
-  bool difficulty = checked && d_env->getOptions().smt.produceDifficulty
+  bool difficulty = checked && answered
+                    && d_env->getOptions().smt.produceDifficulty
                     && d_pfManager != nullptr;
-  // An unsat core exists only right after unsat, and only from this engine.
-  bool core = checked && mode == SmtMode::UNSAT
-              && d_env->getOptions().smt.produceUnsatCores
-              && d_state->getStatusSolver() == nullptr;
+  // An unsat core exists only right after unsat.
+  bool core = checked && answered && mode == SmtMode::UNSAT
+              && d_env->getOptions().smt.produceUnsatCores;
   std::map<Node, Node> dmap;
   if (difficulty)
   {
@@ -2847,6 +2852,8 @@ std::string SolverEngine::getDifficultyGradient() const
   std::unordered_set<Node> inCore;
   if (core)
   {
+    // The core get-unsat-core returns, so membership agrees with it. Under
+    // minimal-unsat-cores this reduces the core again, as get-unsat-core does.
     std::vector<Node> c = d_ucManager->getUnsatCore(false);
     inCore.insert(c.begin(), c.end());
   }
@@ -2863,10 +2870,15 @@ std::string SolverEngine::getDifficultyGradient() const
   if (checked)
   {
     const Assertions& as = d_smtSolver->getAssertions();
+    const context::CDList<Node>& al = as.getAssertionList();
+    // Only what the check saw: an assertion made since has no difficulty
+    // and no place in the core. The bound is the list's length at the check.
+    size_t nchecked = std::min(d_checkedAssertions, al.size());
     // A formula asserted twice is one input assertion, its tags merged.
     std::unordered_set<Node> seen;
-    for (const Node& a : as.getAssertionList())
+    for (size_t i = 0; i < nchecked; i++)
     {
+      const Node& a = al[i];
       if (!seen.insert(a).second)
       {
         continue;

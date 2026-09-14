@@ -1509,6 +1509,9 @@ set(regress_0_tests
   regress0/printer/assert-sources-subst.smt2
   regress0/printer/get-assertion-sources-tags-only.smt2
   regress0/printer/get-assertion-sources.smt2
+  regress0/printer/get-info-difficulty-gradient-edges.smt2
+  regress0/printer/get-info-difficulty-gradient-off.smt2
+  regress0/printer/get-info-difficulty-gradient-timeout-core.smt2
   regress0/printer/get-info-difficulty-gradient.smt2
   regress0/printer/inst-sources-output.smt2
   regress0/printer/learned-lit-output.smt2

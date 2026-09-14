@@ -790,15 +790,21 @@ class CVC5_EXPORT SolverEngine
   void getDifficultyMap(std::map<Node, Node>& dmap);
   /**
    * The (get-info :difficulty-gradient) reply for the last check-sat: one
-   * row per distinct input assertion that carried :assert-id tags, with its
-   * tags, its difficulty (the difficulty map, translated to input assertions
-   * as getDifficultyMap does) and, after unsat with unsat cores on, whether
-   * the unsat core contains it. Untagged input assertions are summed into one
-   * :untagged entry, and difficulty that no current input assertion received
-   * is reported as :unmatched-difficulty rather than dropped. Rows are sorted
-   * by difficulty, largest first. Difficulty needs produce-difficulty and
-   * membership needs produce-unsat-cores; :difficulty and :core say whether
-   * each was available. Read-only: the search is unchanged.
+   * row per distinct input assertion that carried :assert-id tags and was
+   * asserted when that check ran, with its tags, its difficulty (the
+   * difficulty map, translated to input assertions as getDifficultyMap does)
+   * and, after unsat with unsat cores on, whether the unsat core that
+   * get-unsat-core returns contains it. That core is one sufficient set, not
+   * the only one: which assertions it holds depends on the unsat core mode.
+   * Untagged input assertions, check-sat-assuming assumptions among them, are
+   * summed into one :untagged entry, and difficulty that no such assertion
+   * received is reported as :unmatched-difficulty rather than dropped. Rows
+   * are sorted by difficulty, largest first. Difficulty needs
+   * produce-difficulty and membership needs produce-unsat-cores; :difficulty
+   * and :core say whether each was available. After get-timeout-core neither
+   * is, since a subsolver answered. The search is unchanged, but under
+   * minimal-unsat-cores each call reduces the core again, as get-unsat-core
+   * does.
    */
   std::string getDifficultyGradient() const;
   /**
@@ -1203,6 +1209,12 @@ class CVC5_EXPORT SolverEngine
    * The timeout core manager, for responding to get-timeout-core commands.
    */
   std::unique_ptr<smt::TimeoutCoreManager> d_tcm;
+  /**
+   * The length of the input assertion list when the last check-sat or
+   * get-timeout-core answered, so getDifficultyGradient reports only the
+   * assertions that check saw.
+   */
+  size_t d_checkedAssertions = 0;
 
   /** The solver for sygus queries */
   std::unique_ptr<smt::SygusSolver> d_sygusSolver;
