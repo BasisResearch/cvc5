@@ -1511,6 +1511,7 @@ set(regress_0_tests
   regress0/printer/get-assertion-sources.smt2
   regress0/printer/get-info-nl-frontier-budget.smt2
   regress0/printer/get-info-nl-frontier-hosts.smt2
+  regress0/printer/get-info-nl-frontier-punt.smt2
   regress0/printer/get-info-nl-frontier.smt2
   regress0/printer/inst-sources-output.smt2
   regress0/printer/learned-lit-output.smt2

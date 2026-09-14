@@ -324,12 +324,28 @@ class SourceView
   std::unordered_map<TNode, bool> d_respelled;
 };
 
+/** Whether the arguments of f are distinct bound variables. */
+bool overBoundVars(TNode f)
+{
+  std::unordered_set<TNode> seen;
+  for (TNode x : f)
+  {
+    if (x.getKind() != Kind::BOUND_VARIABLE || !seen.insert(x).second)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * The uninterpreted functions the input defines as an operation that can
- * host an atom, mapped to it: f wraps op when an assertion, or a quantifier
- * body, holds (= (f x1 ... xn) (op x1 ... xn)), or the same with a wrapper
- * of op for op, over the same arguments in the same order. Verus's prelude
+ * host an atom, mapped to it: f wraps op when a quantifier body holds
+ * (= (f x1 ... xn) (op x1 ... xn)), or the same with a wrapper of op for op,
+ * over the same distinct bound variables in the same order. Verus's prelude
  * defines Mul, EucDiv and EucMod so; its Add and Sub wrap no such operation.
+ * A ground equation such as (= (g a b) (* a b)) defines g at one point only,
+ * so it makes no wrapper.
  */
 std::unordered_map<Node, Kind> findWrappers(const std::vector<Node>& input)
 {
@@ -359,7 +375,7 @@ std::unordered_map<Node, Kind> findWrappers(const std::vector<Node>& input)
     {
       TNode f = cur[i];
       TNode g = cur[1 - i];
-      if (f.getKind() != Kind::APPLY_UF || g.isClosure()
+      if (f.getKind() != Kind::APPLY_UF || !overBoundVars(f) || g.isClosure()
           || g.getNumChildren() != f.getNumChildren()
           || !std::equal(f.begin(), f.end(), g.begin()))
       {
@@ -426,7 +442,11 @@ class HostMatcher
 
   /**
    * The key of the term t applying operation op: its operands, with nested
-   * products (through any wrapper) flattened.
+   * products (through any wrapper) flattened. The constant factors of a
+   * builtin product are dropped, as the rewriter drops them from the atom:
+   * (* 2 a b) hosts (* a b). A wrapper's constant arguments are kept, since
+   * arithmetic sees the wrapper as an opaque term: (Mul (Mul 2 v) v) hosts
+   * (* v (Mul 2 v)), not (* v v).
    */
   AtomKey key(TNode t, Kind op) const
   {
@@ -493,6 +513,11 @@ class HostMatcher
     for (size_t i = 0, n = d_sv.numChildren(t); i < n; i++)
     {
       TNode c = d_sv.top(d_sv.child(t, i));
+      if (op == Kind::NONLINEAR_MULT && c.isConst()
+          && d_sv.kind(t) != Kind::APPLY_UF)
+      {
+        continue;
+      }
       if (op == Kind::NONLINEAR_MULT && operation(c) == op)
       {
         addOperands(c, op, out);
@@ -505,6 +530,30 @@ class HostMatcher
   SourceView& d_sv;
   std::unordered_map<Node, Kind> d_wrappers;
 };
+
+/**
+ * The division that extended term x stands for, or null: operator
+ * elimination multiplies the term purifying a division or modulus by its
+ * divisor, (* d q) for q purifying (div n d). Any other product with such a
+ * factor, (* c (div a b)) with c not b, is a product the input wrote.
+ */
+TNode eliminatedDivision(SourceView& sv, const Node& x)
+{
+  if (x.getKind() != Kind::NONLINEAR_MULT || x.getNumChildren() != 2)
+  {
+    return TNode();
+  }
+  for (size_t i = 0; i < 2; i++)
+  {
+    TNode t = sv.top(x[i]);
+    if (!sv.isLeaf(t) && isDivisionKind(sv.kind(t))
+        && sv.equal(sv.child(t, 1), x[1 - i]))
+    {
+      return t;
+    }
+  }
+  return TNode();
+}
 
 /** The frontier kind of extended term x. */
 const char* frontierKind(SourceView& sv, const Node& x)
@@ -519,14 +568,9 @@ const char* frontierKind(SourceView& sv, const Node& x)
     case Kind::PI: return "transcendental";
     default: break;
   }
-  // a factor that purifies an integer division or modulus (operator
-  // elimination multiplies it by the divisor) makes it a division
-  for (const Node& f : x)
+  if (!eliminatedDivision(sv, x).isNull())
   {
-    if (isDivisionKind(sv.kind(sv.top(f))))
-    {
-      return "division";
-    }
+    return "division";
   }
   for (const Node& f : x)
   {
@@ -622,7 +666,10 @@ std::string getNlFrontierInfo(TheoryEngine* te,
   options::ioutils::applyDagThresh(ss, 0);
   ss << "(:result " << result << " :reason " << reason << " :enabled "
      << (nl != nullptr ? "true" : "false");
-  if (nl == nullptr)
+  // With no result to report there is no record either: after a push the
+  // extension still holds the last check's atoms, but the reply would have
+  // no assertions or instantiations to find their hosts in.
+  if (nl == nullptr || result == "none")
   {
     ss << " :checks 0 :rounds 0 :punts 0 :last none :atoms () :omitted 0 "
           ":truncated false)";
@@ -686,26 +733,17 @@ std::string getNlFrontierInfo(TheoryEngine* te,
   }
   HostMatcher hm(sv, findWrappers(input));
 
-  // Each atom's key: the operation computing it and its operands; for a
-  // division, the dividend and divisor of the division it purifies.
+  // Each atom's key: the operation computing it and its operands; for
+  // operator elimination's (* d q), the dividend and divisor of the division
+  // q purifies.
   std::vector<AtomKey> keys(order.size());
   std::map<std::pair<Kind, std::vector<size_t>>, std::vector<size_t>> byKey;
   for (size_t pos = 0; pos < order.size(); pos++)
   {
     const Node& x = f.d_atoms[order[pos]].d_atom.d_term;
-    for (const Node& factor : x)
-    {
-      TNode t = sv.top(factor);
-      if (!sv.isLeaf(t) && isDivisionKind(sv.kind(t)))
-      {
-        keys[pos] = hm.key(t, sv.kind(t));
-        break;
-      }
-    }
-    if (keys[pos].d_op == Kind::UNDEFINED_KIND)
-    {
-      keys[pos] = hm.key(x, operationOf(x.getKind()));
-    }
+    TNode d = eliminatedDivision(sv, x);
+    keys[pos] = d.isNull() ? hm.key(x, operationOf(x.getKind()))
+                           : hm.key(d, sv.kind(d));
     if (keys[pos].d_op == Kind::UNDEFINED_KIND || keys[pos].d_args.empty())
     {
       continue;

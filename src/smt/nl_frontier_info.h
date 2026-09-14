@@ -33,19 +33,22 @@ class Assertions;
  * The (get-info :nl-frontier) reply for the last check-sat: the nonlinear
  * extension's frontier record (see theory/arith/nl/nl_frontier.h), each atom
  * written as the input spelled it, and, per atom, its hosts: the terms that
- * apply the atom's operation, or an uninterpreted function the input
+ * apply the atom's operation, or an uninterpreted function a quantifier
  * defines as it, to exactly the atom's operands (flattening nested
- * products), found in the tagged input assertions (with their :assert-id
- * tags) and in the instantiations of each quantified formula (with its :qid
- * and how many of its instantiations produced a host). A host is where the
- * atom entered the problem: a product the input wrote through an
- * uninterpreted wrapper such as Verus's Mul, whose defining axiom
- * (= (Mul x y) (* x y)) brings it to arithmetic, say. Read-only, and builds
- * no terms, so asking does not change later checks.
+ * products, and dropping the constant factors of builtin ones), found in the
+ * tagged input assertions (with their :assert-id tags) and in the
+ * instantiations of each quantified formula (with its :qid and how many of
+ * its instantiations produced a host). A host is where the atom entered the
+ * problem: a product the input wrote through an uninterpreted wrapper such
+ * as Verus's Mul, whose defining axiom (= (Mul x y) (* x y)) brings it to
+ * arithmetic, say. Read-only, and builds no terms, so asking does not change
+ * later checks.
  *
  * te, qe and as are null before the first check. result is the answer of the
- * last check-sat (none, sat, unsat or unknown), reason its unknown
- * explanation in lower case (none unless unknown).
+ * last check-sat (sat, unsat or unknown), or none when there is none to
+ * report (before the first check, or after a push or pop), and the record is
+ * then empty. reason is the unknown explanation in lower case (none unless
+ * unknown).
  */
 std::string getNlFrontierInfo(TheoryEngine* te,
                               theory::QuantifiersEngine* qe,
