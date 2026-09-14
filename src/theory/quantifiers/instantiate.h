@@ -16,6 +16,8 @@
 #define CVC5__THEORY__QUANTIFIERS__INSTANTIATE_H
 
 #include <map>
+#include <set>
+#include <vector>
 
 #include "context/cdhashset.h"
 #include "context/cdo.h"
@@ -146,6 +148,11 @@ class Instantiate : public QuantifiersUtil
      * in the current assignment (QUANTIFIERS_INST_CBQI_PROP).
      */
     uint64_t d_propagate = 0;
+    /**
+     * The term vectors added, kept only when proofs are enabled, so that a
+     * refutation's instances can be matched against this check-sat's.
+     */
+    std::set<std::vector<Node>> d_addedVecs;
   };
   /** The pressure on each quantified formula attempted this check-sat. */
   const std::map<Node, Pressure>& getPressure() const { return d_pressure; }

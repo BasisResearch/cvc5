@@ -419,6 +419,10 @@ bool Instantiate::addInstantiationInternal(
     pressure.d_firstRound = d_pressureRounds;
   }
   pressure.d_lastRound = d_pressureRounds;
+  if (isProofEnabled())
+  {
+    pressure.d_addedVecs.insert(terms);
+  }
   if (id == InferenceId::QUANTIFIERS_INST_CBQI_CONFLICT
       || id == InferenceId::QUANTIFIERS_INST_SUB_CONFLICT)
   {

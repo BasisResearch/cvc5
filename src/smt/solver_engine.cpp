@@ -389,7 +389,9 @@ std::string quantIdName(const Node& q);
  * per quantified formula it tried to instantiate, most instantiated first.
  * Formulas with the same :qid share a row. A formula without one gets a
  * synthetic name and :named false. used, when non-null, holds the term
- * vectors the refutation used per formula.
+ * vectors the refutation used per formula. A row's refutation count is the
+ * number of its formulas' instances from this check-sat that the refutation
+ * used, counted per formula, so it never exceeds its instantiations.
  */
 std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
                              const std::map<Node, InstantiationList>* used)
@@ -399,7 +401,7 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
   {
     std::string d_name;
     Pressure d_p;
-    std::set<std::vector<Node>> d_used;
+    uint64_t d_refuted = 0;
   };
   std::vector<Row> rows;
   std::map<std::string, size_t> byName;
@@ -427,7 +429,8 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
   {
     for (const auto& [q, p] : inst->getPressure())
     {
-      Pressure& r = rowFor(q).d_p;
+      Row& row = rowFor(q);
+      Pressure& r = row.d_p;
       if (p.d_added > 0)
       {
         r.d_firstRound =
@@ -441,16 +444,25 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
       r.d_dupLemma += p.d_dupLemma;
       r.d_conflict += p.d_conflict;
       r.d_propagate += p.d_propagate;
-    }
-  }
-  if (used != nullptr)
-  {
-    for (const auto& [q, list] : *used)
-    {
-      Row& r = rowFor(q);
-      for (const InstantiationVec& v : list.d_inst)
+      // The proof may also use instances of earlier check-sats, which are not
+      // this check-sat's pressure, and formulas sharing a qid may be used
+      // with equal term vectors, which are distinct instances.
+      if (used == nullptr)
       {
-        r.d_used.insert(v.d_vec);
+        continue;
+      }
+      auto it = used->find(q);
+      if (it == used->end())
+      {
+        continue;
+      }
+      std::set<std::vector<Node>> seen;
+      for (const InstantiationVec& v : it->second.d_inst)
+      {
+        if (p.d_addedVecs.count(v.d_vec) > 0 && seen.insert(v.d_vec).second)
+        {
+          ++row.d_refuted;
+        }
       }
     }
   }
@@ -486,7 +498,7 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
     }
     if (used != nullptr)
     {
-      ss << " :refutation " << r.d_used.size();
+      ss << " :refutation " << r.d_refuted;
     }
     ss << ")";
   }
