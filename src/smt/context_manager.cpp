@@ -183,6 +183,8 @@ void ContextManager::doPendingPops()
     // pop the context
     userContext()->pop();
     --d_pendingPops;
+    // an unsat answer used what was popped
+    d_state.notifyPendingPop();
     // no need for pop post (for now)
   }
 }

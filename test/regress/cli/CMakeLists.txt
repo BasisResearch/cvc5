@@ -1721,6 +1721,7 @@ set(regress_0_tests
   regress0/push-pop/bug691.smt2
   regress0/push-pop/bug821-check_sat_assuming.smt2
   regress0/push-pop/bug821.smt2
+  regress0/push-pop/check-sat-assuming-unsat-pop.smt2
   regress0/push-pop/inc-define.smt2
   regress0/push-pop/inc-double-u.smt2
   regress0/push-pop/incremental-subst-bug.cvc.smt2
