@@ -531,8 +531,9 @@ void Instantiate::recordGraphNode(Node q,
   }
   std::sort(gn.d_parents.begin(), gn.d_parents.end());
   // Attributed parents: owners reached through the nested matched terms, the
-  // bindings, the ground terms congruent to each trigger instance's
-  // applications, and failing an exact owner through the representative.
+  // bindings, the ground terms congruent to the applications of each trigger
+  // instance at the pattern's own positions, and failing an exact owner
+  // through the representative.
   // They are kept apart from the exact parents: a nested term's owner is
   // often an ancestor of the outer one's, and the representative is
   // whichever term the e-graph chose.
@@ -566,13 +567,18 @@ void Instantiate::recordGraphNode(Node q,
         instTerms.push_back(pt.substitute(
             vars.begin(), vars.end(), origTerms.begin(), origTerms.end()));
       }
+      // Only the applications of the pattern itself were matched. Below a
+      // variable lies a binding, whose subterms earlier rungs of a loop each
+      // introduced: descending there would attribute every earlier rung to
+      // each instantiation, quadratic in the loop's length. The binding
+      // itself is already in attributed.
       std::unordered_set<TNode> seen;
-      std::vector<TNode> todo{ti};
+      std::vector<std::pair<TNode, TNode>> todo{{pt, ti}};
       while (!todo.empty())
       {
-        TNode cur = todo.back();
+        auto [pcur, cur] = todo.back();
         todo.pop_back();
-        if (!seen.insert(cur).second || cur.getNumChildren() == 0)
+        if (pcur.getNumChildren() == 0 || !seen.insert(cur).second)
         {
           continue;
         }
@@ -581,7 +587,11 @@ void Instantiate::recordGraphNode(Node q,
         {
           attributed.push_back(g);
         }
-        todo.insert(todo.end(), cur.begin(), cur.end());
+        Assert(cur.getNumChildren() == pcur.getNumChildren());
+        for (size_t i = 0, n = pcur.getNumChildren(); i < n; i++)
+        {
+          todo.emplace_back(pcur[i], cur[i]);
+        }
       }
     }
     if (p == 0 && keepRung)

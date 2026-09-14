@@ -9,7 +9,7 @@
 ; EXPECT: (quantifier 0 step)
 ; EXPECT: (node 0 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 0 0 ())
 ; EXPECT: (node 1 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 1 1 (0))
-; EXPECT: (node 2 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 2 2 (1) (eq 0))
+; EXPECT: (node 2 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 2 2 (1))
 ; EXPECT: (dropped 0)
 ; EXPECT: )
 ; EXPECT: unsat
@@ -20,7 +20,10 @@
 ; EXPECT: )
 ; Before any check-sat the graph is empty. A matching loop: each instance of
 ; step introduces the (P (f t)) the next one matches, so each is the parent of
-; the next and one deeper. The graph belongs to the last check-sat only, is
+; the next and one deeper. Attribution stops at the pattern's variable, so no
+; node lists the earlier rungs inside its binding as eq parents; such lists
+; would grow with the square of the loop's length. The graph belongs to the
+; last check-sat only, is
 ; still there after its pop, and an unnamed formula prints as _.
 (set-logic UFLIA)
 (declare-fun P (Int) Bool)

@@ -304,6 +304,8 @@ void MatchingLoops::print(std::ostream& out,
   // their round, depth and rung, and their parents both exact and
   // attributed, as the recorder this replaced took any owner of the
   // bindings, the trigger instance's ground terms and their representatives.
+  // Unlike that recorder, attribution stops at the pattern's variables: the
+  // subterms of a binding are not part of the match.
   std::vector<Inst> recs;
   recs.reserve(count);
   for (size_t i = 0; i < count; i++)

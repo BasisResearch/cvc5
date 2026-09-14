@@ -385,8 +385,9 @@ class Instantiate : public QuantifiersUtil
     std::vector<size_t> d_parents;
     /**
      * Earlier instantiations found only by attribution: owners of a nested
-     * matched term, of a binding, of a grounded subterm of a trigger
-     * instance, or of an equivalence-class representative. None is in
+     * matched term, of a binding, of the ground term at an application of a
+     * trigger pattern (not inside a binding), or of an equivalence-class
+     * representative. None is in
      * d_parents, none counts towards d_depth; ascending.
      */
     std::vector<size_t> d_eqParents;
@@ -410,7 +411,8 @@ class Instantiate : public QuantifiersUtil
    *
    * The eq list, printed when not empty, holds the node's attributed parents
    * (GraphNode::d_eqParents): found through a nested matched term, a binding,
-   * a grounded trigger subterm or a representative, rather than as the owner
+   * the ground term at an application of the trigger pattern, or a
+   * representative, rather than as the owner
    * of a term the match was made against. They are kept apart from the exact
    * parents, which alone determine the depth.
    *

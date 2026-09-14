@@ -8,7 +8,7 @@
 ; EXPECT: (node 1 0 QUANTIFIERS_INST_E_MATCHING R 1 1 (0))
 ; EXPECT: (node 2 0 QUANTIFIERS_INST_E_MATCHING R 2 2 (1) (eq 0))
 ; EXPECT: (node 3 0 QUANTIFIERS_INST_E_MATCHING R 3 3 (2) (eq 0 1))
-; EXPECT: (node 4 0 QUANTIFIERS_INST_E_MATCHING R 4 4 (3) (eq 0 1 2))
+; EXPECT: (node 4 0 QUANTIFIERS_INST_E_MATCHING R 4 4 (3) (eq 1 2))
 ; EXPECT: (dropped 0)
 ; EXPECT: )
 ; A loop through a nested trigger. Each instance matches (f (f t)), whose
@@ -16,7 +16,9 @@
 ; before that did. The parent is the owner of the outer term alone, so the
 ; rungs chain one to the next rather than each listing every earlier rung.
 ; The owners of the nested terms are listed apart, as attributed (eq)
-; parents, which the matching-loops analysis reads and depth does not.
+; parents, which the matching-loops analysis reads and depth does not. They
+; come from the pattern's own positions and the binding, so each rung lists
+; at most the two rungs before its parent, however long the loop runs.
 (set-logic UFLIA)
 (declare-fun f (Int) Int)
 (declare-const a Int)
