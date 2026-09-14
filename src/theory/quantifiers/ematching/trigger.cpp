@@ -190,7 +190,7 @@ bool Trigger::sendInstantiation(std::vector<Node>& m)
   {
     std::vector<Node> matched;
     d_mg->getMatchedTerms(matched);
-    inst->setMatchedTerms(matched);
+    inst->setMatchedTerms(std::move(matched));
   }
   return inst->addInstantiation(d_quant, m, id, d_trNode);
 }

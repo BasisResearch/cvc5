@@ -16,6 +16,7 @@
 #include <unordered_set>
 
 #include "expr/node_algorithm.h"
+#include "expr/skolem_manager.h"
 #include "options/base_options.h"
 #include "options/quantifiers_options.h"
 #include "options/smt_options.h"
@@ -428,10 +429,9 @@ bool Instantiate::addInstantiationInternal(
   return true;
 }
 
-void Instantiate::setMatchedTerms(std::vector<Node>& terms)
+void Instantiate::setMatchedTerms(std::vector<Node>&& terms)
 {
-  d_matchedTerms.clear();
-  d_matchedTerms.swap(terms);
+  d_matchedTerms = std::move(terms);
 }
 
 void Instantiate::recordGraphNode(Node q,
@@ -459,12 +459,14 @@ void Instantiate::recordGraphNode(Node q,
   gn.d_depth = 0;
   gn.d_termDepth = 0;
   // A term the match was made against, or failing those a term it binds,
-  // blames the earlier instantiation that introduced it.
+  // blames the earlier instantiation that introduced it. Owners are keyed by
+  // original form: the term database holds terms after preprocessing, which
+  // may have replaced part of the lemma's term by a skolem (e.g. an ite).
   const std::vector<Node>& blame =
       d_matchedTerms.empty() ? terms : d_matchedTerms;
   for (const Node& t : blame)
   {
-    auto it = d_graphOwner.find(t);
+    auto it = d_graphOwner.find(SkolemManager::getOriginalForm(t));
     if (it == d_graphOwner.end()
         || std::find(gn.d_parents.begin(), gn.d_parents.end(), it->second)
                != gn.d_parents.end())
@@ -500,7 +502,7 @@ void Instantiate::recordGraphNode(Node q,
         && k != Kind::XOR && !tdb->isRegistered(cur))
     {
       // emplace keeps the first instantiation to introduce the term
-      d_graphOwner.emplace(cur, self);
+      d_graphOwner.emplace(SkolemManager::getOriginalForm(cur), self);
     }
     visit.insert(visit.end(), cur.begin(), cur.end());
   }

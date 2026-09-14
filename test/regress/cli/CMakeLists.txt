@@ -1747,6 +1747,7 @@ set(regress_0_tests
   regress0/quantifiers/cegqi-nl-simp.cvc.smt2
   regress0/quantifiers/cegqi-nl-sq.smt2
   regress0/quantifiers/inst-graph.smt2
+  regress0/quantifiers/inst-graph-ite.smt2
   regress0/quantifiers/nl-sqrt2-q.smt2
   regress0/quantifiers/cegqi-par-dt-simple.smt2
   regress0/quantifiers/clock-10.smt2

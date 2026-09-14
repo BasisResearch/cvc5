@@ -140,7 +140,7 @@ class InstMatchGenerator : public IMGenerator
    * Returns the term we are currently matching.
    */
   Node getCurrentMatch() { return d_curr_matched; }
-  /** Add the terms this generator and those below it are matching. */
+  /** Add the terms this generator and those after it are matching. */
   void getMatchedTerms(std::vector<Node>& terms) const override;
   /** set that this match generator is independent
    *

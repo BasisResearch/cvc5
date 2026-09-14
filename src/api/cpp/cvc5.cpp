@@ -8729,12 +8729,8 @@ std::string Solver::getInstantiations() const
 std::string Solver::getInstantiationGraph() const
 {
   CVC5_API_TRY_CATCH_BEGIN;
-  CVC5_API_RECOVERABLE_CHECK(d_slv->getSmtMode() == internal::SmtMode::UNSAT
-                             || d_slv->getSmtMode() == internal::SmtMode::SAT
-                             || d_slv->getSmtMode()
-                                    == internal::SmtMode::SAT_UNKNOWN)
-      << "cannot get the instantiation graph unless after a UNSAT, SAT or "
-         "UNKNOWN response.";
+  // No mode check: the graph is kept until the next check-sat, so it can be
+  // read after a pop, which returns the solver to assert mode.
   //////// all checks before this line
   std::stringstream ss;
   d_slv->printInstantiationGraph(ss);

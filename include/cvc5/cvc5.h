@@ -6827,7 +6827,8 @@ class CVC5_EXPORT Solver
    * instantiated, then each instantiation in order with its formula, the
    * strategy that made it, its round, its depth, the depth of its deepest
    * instantiating term, and the earlier instantiations that introduced a
-   * term it matched.
+   * term it matched. The graph is kept until the next check, so it can be
+   * read after popping the check's scope.
    *
    * SMT-LIB:
    *

@@ -313,9 +313,9 @@ class Instantiate : public QuantifiersUtil
   /**
    * Set the ground terms the next call to addInstantiation matched. E-matching
    * sets them just before it sends a match, when --inst-graph is on. Without
-   * them the instantiation's own terms stand in. Takes the contents of terms.
+   * them the instantiation's own terms stand in.
    */
-  void setMatchedTerms(std::vector<Node>& terms);
+  void setMatchedTerms(std::vector<Node>&& terms);
   /**
    * Print the instantiation graph of the last check-sat (see --inst-graph):
    *
@@ -330,7 +330,10 @@ class Instantiate : public QuantifiersUtil
    * is an earlier instantiation whose lemma first introduced a term this one
    * matched: e-matching reports the terms it matched against; any other
    * strategy is blamed on the terms it instantiated with. A term the term
-   * database already held before the lemma introduced none. The depth is 0
+   * database already held before the lemma introduced none. Terms are
+   * compared in original form (SkolemManager::getOriginalForm), so a term
+   * the preprocessor purified, e.g. an ite it replaced by a skolem, still
+   * finds the instantiation that introduced it. The depth is 0
    * without parents, otherwise one more than the deepest parent; the term
    * depth is that of the deepest instantiating term. The round counts the
    * quantifiers engine's resets in this check-sat from 1, including rounds

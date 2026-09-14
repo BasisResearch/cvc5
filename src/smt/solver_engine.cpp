@@ -2123,6 +2123,8 @@ void SolverEngine::getInstantiationsToSave(
 
 void SolverEngine::printInstantiationGraph(std::ostream& out)
 {
+  // the graph may be asked for before any check, when nothing is set up yet
+  finishInit();
   // see if another solver engine was responsible for the last status
   SolverEngine* ssolver = d_state->getStatusSolver();
   if (ssolver != nullptr)

@@ -473,17 +473,14 @@ int InstMatchGenerator::continueNextMatch(InstMatch& m)
 
 void InstMatchGenerator::getMatchedTerms(std::vector<Node>& terms) const
 {
-  if (!d_curr_candidate.isNull())
+  // mkInstMatchGenerator chains every generator of the trigger, children
+  // included, through d_next, so following it visits each exactly once.
+  for (const InstMatchGenerator* g = this; g != nullptr; g = g->d_next)
   {
-    terms.push_back(d_curr_candidate);
-  }
-  for (const InstMatchGenerator* c : d_children)
-  {
-    c->getMatchedTerms(terms);
-  }
-  if (d_next != nullptr)
-  {
-    d_next->getMatchedTerms(terms);
+    if (!g->d_curr_candidate.isNull())
+    {
+      terms.push_back(g->d_curr_candidate);
+    }
   }
 }
 
