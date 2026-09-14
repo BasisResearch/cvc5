@@ -516,7 +516,8 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
       || key == "name" || key == "version" || key == "authors"
       || key == "status" || key == "time" || key == "reason-unknown"
       || key == "inst-pressure" || key == "matching-loops"
-      || key == "assertion-stack-levels" || key == "all-options")
+      || key == "assertion-stack-levels" || key == "all-options"
+      || key == "difficulty-gradient")
   {
     return true;
   }
@@ -627,6 +628,10 @@ std::string SolverEngine::getInfo(const std::string& key) const
       qe->printMatchingLoops(ss, unknown);
     }
     return ss.str();
+  }
+  if (key == "difficulty-gradient")
+  {
+    return getDifficultyGradient();
   }
   if (key == "assertion-stack-levels")
   {
@@ -2814,6 +2819,119 @@ void SolverEngine::getDifficultyMap(std::map<Node, Node>& dmap)
   te->getDifficultyMap(dmap, false);
   // then ask proof manager to translate dmap in terms of the input
   d_pfManager->translateDifficultyMap(dmap, d_smtSolver->getAssertions());
+}
+
+std::string SolverEngine::getDifficultyGradient() const
+{
+  Trace("smt") << "SMT getDifficultyGradient()\n";
+  SmtMode mode = d_state->getMode();
+  // Before the first check there is no theory engine to ask.
+  bool checked = d_smtSolver != nullptr && d_state->isFullyInited()
+                 && (mode == SmtMode::SAT || mode == SmtMode::SAT_UNKNOWN
+                     || mode == SmtMode::UNSAT);
+  // Difficulty is kept per preprocessed assertion, in the user context, so it
+  // is still there after the check; the preprocessing proofs carry it back
+  // to the input assertions, as getDifficultyMap does.
+  bool difficulty = checked && d_env->getOptions().smt.produceDifficulty
+                    && d_pfManager != nullptr;
+  // An unsat core exists only right after unsat, and only from this engine.
+  bool core = checked && mode == SmtMode::UNSAT
+              && d_env->getOptions().smt.produceUnsatCores
+              && d_state->getStatusSolver() == nullptr;
+  std::map<Node, Node> dmap;
+  if (difficulty)
+  {
+    d_smtSolver->getTheoryEngine()->getDifficultyMap(dmap, false);
+    d_pfManager->translateDifficultyMap(dmap, d_smtSolver->getAssertions());
+  }
+  std::unordered_set<Node> inCore;
+  if (core)
+  {
+    std::vector<Node> c = d_ucManager->getUnsatCore(false);
+    inCore.insert(c.begin(), c.end());
+  }
+  struct Row
+  {
+    std::vector<std::string> d_tags;
+    Integer d_difficulty;
+    bool d_inCore;
+  };
+  std::vector<Row> rows;
+  size_t untagged = 0;
+  size_t untaggedInCore = 0;
+  Integer untaggedDifficulty;
+  if (checked)
+  {
+    const Assertions& as = d_smtSolver->getAssertions();
+    // A formula asserted twice is one input assertion, its tags merged.
+    std::unordered_set<Node> seen;
+    for (const Node& a : as.getAssertionList())
+    {
+      if (!seen.insert(a).second)
+      {
+        continue;
+      }
+      Integer d;
+      std::map<Node, Node>::iterator it = dmap.find(a);
+      if (it != dmap.end())
+      {
+        d = it->second.getConst<Rational>().getNumerator();
+        dmap.erase(it);
+      }
+      bool c = inCore.find(a) != inCore.end();
+      std::vector<std::string> tags;
+      if (as.getAssertionTags(a, tags))
+      {
+        rows.push_back(Row{tags, d, c});
+      }
+      else
+      {
+        untagged++;
+        untaggedDifficulty += d;
+        untaggedInCore += c ? 1 : 0;
+      }
+    }
+  }
+  // What is left went to formulas that are not current input assertions.
+  Integer unmatched;
+  for (const std::pair<const Node, Node>& d : dmap)
+  {
+    unmatched += d.second.getConst<Rational>().getNumerator();
+  }
+  std::stable_sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) {
+    return a.d_difficulty > b.d_difficulty;
+  });
+  const char* result = !checked                 ? "none"
+                       : mode == SmtMode::UNSAT ? "unsat"
+                       : mode == SmtMode::SAT   ? "sat"
+                                                : "unknown";
+  std::stringstream ss;
+  ss << "(:result " << result << " :difficulty "
+     << (difficulty ? "true" : "false") << " :core "
+     << (core ? "true" : "false") << " :rows (";
+  for (size_t i = 0, nrows = rows.size(); i < nrows; i++)
+  {
+    const Row& r = rows[i];
+    ss << (i > 0 ? " " : "") << "(:tags (";
+    for (size_t j = 0, ntags = r.d_tags.size(); j < ntags; j++)
+    {
+      ss << (j > 0 ? " " : "") << quoteSymbol(r.d_tags[j]);
+    }
+    ss << ") :difficulty " << r.d_difficulty;
+    if (core)
+    {
+      ss << " :in-core " << (r.d_inCore ? "true" : "false");
+    }
+    ss << ")";
+  }
+  ss << ") :untagged (:asserted " << untagged << " :difficulty "
+     << untaggedDifficulty;
+  if (core)
+  {
+    ss << " :in-core " << untaggedInCore;
+  }
+  ss << ") :unmatched-difficulty " << unmatched << ")";
+  return ss.str();
 }
 
 void SolverEngine::push()
