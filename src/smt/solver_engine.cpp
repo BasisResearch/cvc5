@@ -383,7 +383,8 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
   if (key == "all-statistics" || key == "error-behavior" || key == "filename"
       || key == "name" || key == "version" || key == "authors"
       || key == "status" || key == "time" || key == "reason-unknown"
-      || key == "assertion-stack-levels" || key == "all-options")
+      || key == "matching-loops" || key == "assertion-stack-levels"
+      || key == "all-options")
   {
     return true;
   }
@@ -450,6 +451,29 @@ std::string SolverEngine::getInfo(const std::string& key) const
           "Can't get-info :reason-unknown when the "
           "last result wasn't unknown!");
     }
+  }
+  if (key == "matching-loops")
+  {
+    if (!options().quantifiers.matchingLoops)
+    {
+      throw RecoverableModalException(
+          "Can't get-info :matching-loops unless option matching-loops is "
+          "on.");
+    }
+    Result status = d_state->getStatus();
+    bool unknown = !status.isNull() && status.isUnknown();
+    std::stringstream ss;
+    QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine();
+    if (qe == nullptr)
+    {
+      ss << "(:rounds 0 :instantiations 0 :dropped 0 :max-inst-rounds false "
+            ":loops ())";
+    }
+    else
+    {
+      qe->printMatchingLoops(ss, unknown);
+    }
+    return ss.str();
   }
   if (key == "assertion-stack-levels")
   {
