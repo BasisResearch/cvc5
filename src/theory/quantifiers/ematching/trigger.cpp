@@ -188,9 +188,10 @@ bool Trigger::sendInstantiation(std::vector<Node>& m)
   Instantiate* inst = d_qim.getInstantiate();
   if (options().quantifiers.instGraph)
   {
-    std::vector<Node> matched;
-    d_mg->getMatchedTerms(matched);
-    inst->setMatchedTerms(std::move(matched));
+    std::vector<Node> outer;
+    std::vector<Node> inner;
+    d_mg->getMatchedTerms(outer, inner);
+    inst->setMatchedTerms(std::move(outer), std::move(inner));
   }
   return inst->addInstantiation(d_quant, m, id, d_trNode);
 }

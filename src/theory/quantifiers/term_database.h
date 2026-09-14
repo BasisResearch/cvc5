@@ -17,6 +17,7 @@
 
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "context/cdhashmap.h"
 #include "context/cdhashset.h"
@@ -209,7 +210,12 @@ class TermDb : public QuantifiersUtil
    * Otherwise, it returns the lookup in the map d_has_map.
    */
   bool hasTermCurrent(const Node& n, bool useMode = true) const;
-  /** Whether n was added to this database by addTerm. */
+  /**
+   * Whether n is in this database, or (with --inst-graph) was added since
+   * the last presolve. The database follows the SAT context, so a term
+   * registered above level 0 leaves it on backtrack; the instantiation graph
+   * must not then treat it as new.
+   */
   bool isRegistered(const Node& n) const;
   /** is term eligble for instantiation? */
   bool isTermEligibleForInstantiation(TNode n, TNode f);
@@ -240,6 +246,8 @@ class TermDb : public QuantifiersUtil
   context::Context* d_termsContextUse;
   /** terms processed */
   NodeSet d_processed;
+  /** With --inst-graph, every term added since the last presolve */
+  std::unordered_set<Node> d_graphSeen;
   /** map from types to ground terms for that type */
   TypeNodeDbListMap d_typeMap;
   /** list of all operators */

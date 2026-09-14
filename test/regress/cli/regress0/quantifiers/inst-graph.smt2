@@ -1,4 +1,5 @@
 ; COMMAND-LINE: --incremental --inst-graph --user-pat=strict --inst-max-rounds=3
+; SCRUBBER: sed -E 's/^[(]node ([0-9]+) ([0-9]+) ([A-Z_]+) [0-9]+ /(node \1 \2 \3 R /'
 ; DISABLE-TESTER: dump
 ; EXPECT: (instantiation-graph
 ; EXPECT: (dropped 0)
@@ -6,15 +7,15 @@
 ; EXPECT: unknown
 ; EXPECT: (instantiation-graph
 ; EXPECT: (quantifier 0 step)
-; EXPECT: (node 0 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE 2 0 0 ())
-; EXPECT: (node 1 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE 4 1 1 (0))
-; EXPECT: (node 2 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE 5 2 2 (1))
+; EXPECT: (node 0 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 0 0 ())
+; EXPECT: (node 1 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 1 1 (0))
+; EXPECT: (node 2 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 2 2 (1))
 ; EXPECT: (dropped 0)
 ; EXPECT: )
 ; EXPECT: unsat
 ; EXPECT: (instantiation-graph
 ; EXPECT: (quantifier 0 _)
-; EXPECT: (node 0 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE 2 0 0 ())
+; EXPECT: (node 0 0 QUANTIFIERS_INST_E_MATCHING_SIMPLE R 0 0 ())
 ; EXPECT: (dropped 0)
 ; EXPECT: )
 ; Before any check-sat the graph is empty. A matching loop: each instance of

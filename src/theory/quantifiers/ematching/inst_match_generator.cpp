@@ -12,6 +12,8 @@
 
 #include "theory/quantifiers/ematching/inst_match_generator.h"
 
+#include <unordered_set>
+
 #include "expr/dtype_cons.h"
 #include "options/quantifiers_options.h"
 #include "theory/datatypes/theory_datatypes_utils.h"
@@ -471,15 +473,26 @@ int InstMatchGenerator::continueNextMatch(InstMatch& m)
   return 1;
 }
 
-void InstMatchGenerator::getMatchedTerms(std::vector<Node>& terms) const
+void InstMatchGenerator::getMatchedTerms(std::vector<Node>& outer,
+                                         std::vector<Node>& inner) const
 {
   // mkInstMatchGenerator chains every generator of the trigger, children
-  // included, through d_next, so following it visits each exactly once.
+  // included, through d_next, so following it visits each exactly once. A
+  // generator is nested if one with a pattern lists it as a child; the head
+  // of a multi-trigger has no pattern and lists the pattern roots.
+  std::unordered_set<const InstMatchGenerator*> nested;
+  for (const InstMatchGenerator* g = this; g != nullptr; g = g->d_next)
+  {
+    if (!g->d_pattern.isNull())
+    {
+      nested.insert(g->d_children.begin(), g->d_children.end());
+    }
+  }
   for (const InstMatchGenerator* g = this; g != nullptr; g = g->d_next)
   {
     if (!g->d_curr_candidate.isNull())
     {
-      terms.push_back(g->d_curr_candidate);
+      (nested.count(g) ? inner : outer).push_back(g->d_curr_candidate);
     }
   }
 }

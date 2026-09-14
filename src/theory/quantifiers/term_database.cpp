@@ -301,6 +301,10 @@ void TermDb::eqNotifyMerge(TNode t1, TNode t2)
 
 void TermDb::addTerm(Node n)
 {
+  if (options().quantifiers.instGraph)
+  {
+    d_graphSeen.insert(n);
+  }
   if (d_processed.find(n) != d_processed.end())
   {
     return;
@@ -574,7 +578,8 @@ void TermDb::setTermInactive(Node n) { d_inactive_map[n] = true; }
 
 bool TermDb::isRegistered(const Node& n) const
 {
-  return d_processed.find(n) != d_processed.end();
+  return d_processed.find(n) != d_processed.end()
+         || d_graphSeen.find(n) != d_graphSeen.end();
 }
 
 bool TermDb::hasTermCurrent(const Node& n, bool useMode) const
@@ -699,7 +704,7 @@ void TermDb::setHasTerm(Node n)
   } while (!visit.empty());
 }
 
-void TermDb::presolve() {}
+void TermDb::presolve() { d_graphSeen.clear(); }
 
 bool TermDb::reset(Theory::Effort effort)
 {

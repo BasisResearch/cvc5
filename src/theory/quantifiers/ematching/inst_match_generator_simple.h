@@ -55,7 +55,8 @@ class InstMatchGeneratorSimple : public IMGenerator
   /** Get the inference id, for statistics. */
   InferenceId getInferenceId() override;
   /** Add the term the match being sent was made against. */
-  void getMatchedTerms(std::vector<Node>& terms) const override;
+  void getMatchedTerms(std::vector<Node>& outer,
+                       std::vector<Node>& inner) const override;
 
  private:
   /** quantified formula for the trigger term */

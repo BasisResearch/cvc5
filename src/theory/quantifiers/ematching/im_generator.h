@@ -99,11 +99,16 @@ class IMGenerator : protected EnvObj
   virtual InferenceId getInferenceId() = 0;
   /**
    * Add the ground terms the current match was made against, for the
-   * instantiation graph (see --inst-graph). The parent trigger calls this
-   * just before it sends the match. Adds nothing if this generator does not
-   * keep them.
+   * instantiation graph (see --inst-graph): to outer, the terms each
+   * pattern's outermost generator matched; to inner, the terms nested
+   * generators matched, which are subterms of an outer term up to equality.
+   * The parent trigger calls this just before it sends the match. Adds
+   * nothing if this generator does not keep them.
    */
-  virtual void getMatchedTerms(CVC5_UNUSED std::vector<Node>& terms) const {}
+  virtual void getMatchedTerms(CVC5_UNUSED std::vector<Node>& outer,
+                               CVC5_UNUSED std::vector<Node>& inner) const
+  {
+  }
 
  protected:
   /** send instantiation

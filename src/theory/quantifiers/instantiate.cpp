@@ -88,7 +88,8 @@ void Instantiate::presolve()
   d_graphQuants.clear();
   d_graphQuantIndex.clear();
   d_graphOwner.clear();
-  d_matchedTerms.clear();
+  d_matchedOuter.clear();
+  d_matchedInner.clear();
   d_graphRound = 0;
   d_graphDropped = 0;
 }
@@ -117,7 +118,8 @@ bool Instantiate::addInstantiation(
   // do the instantiation
   bool ret = addInstantiationInternal(q, terms, id, pfArg, doVts);
   // the matched terms belong to this call only, whatever it decided
-  d_matchedTerms.clear();
+  d_matchedOuter.clear();
+  d_matchedInner.clear();
   // process the instantiation with callbacks via term registry
   d_treg.processInstantiation(q, terms);
   // return whether the instantiation was successful
@@ -429,9 +431,11 @@ bool Instantiate::addInstantiationInternal(
   return true;
 }
 
-void Instantiate::setMatchedTerms(std::vector<Node>&& terms)
+void Instantiate::setMatchedTerms(std::vector<Node>&& outer,
+                                  std::vector<Node>&& inner)
 {
-  d_matchedTerms = std::move(terms);
+  d_matchedOuter = std::move(outer);
+  d_matchedInner = std::move(inner);
 }
 
 void Instantiate::recordGraphNode(Node q,
@@ -458,23 +462,37 @@ void Instantiate::recordGraphNode(Node q,
   gn.d_round = d_graphRound;
   gn.d_depth = 0;
   gn.d_termDepth = 0;
-  // A term the match was made against, or failing those a term it binds,
-  // blames the earlier instantiation that introduced it. Owners are keyed by
-  // original form: the term database holds terms after preprocessing, which
-  // may have replaced part of the lemma's term by a skolem (e.g. an ite).
-  const std::vector<Node>& blame =
-      d_matchedTerms.empty() ? terms : d_matchedTerms;
-  for (const Node& t : blame)
-  {
-    auto it = d_graphOwner.find(SkolemManager::getOriginalForm(t));
-    if (it == d_graphOwner.end()
-        || std::find(gn.d_parents.begin(), gn.d_parents.end(), it->second)
-               != gn.d_parents.end())
+  // Parents are the earlier instantiations that introduced the terms the
+  // match was made against. The terms each pattern's outermost generator
+  // matched come first. Nested terms count only if none of those has an
+  // owner: a nested term's owner is otherwise an ancestor of the outer term's,
+  // and listing it would give every rung of a loop through a nested trigger
+  // all earlier rungs as parents. Without matched terms, the instantiating
+  // terms stand in. Owners are keyed by original form: the term database
+  // holds terms after preprocessing, which may have replaced part of the
+  // lemma's term by a skolem (e.g. an ite).
+  auto blame = [&](const std::vector<Node>& ts) {
+    for (const Node& t : ts)
     {
-      continue;
+      auto it = d_graphOwner.find(SkolemManager::getOriginalForm(t));
+      if (it == d_graphOwner.end()
+          || std::find(gn.d_parents.begin(), gn.d_parents.end(), it->second)
+                 != gn.d_parents.end())
+      {
+        continue;
+      }
+      gn.d_parents.push_back(it->second);
+      gn.d_depth = std::max(gn.d_depth, d_graph[it->second].d_depth + 1);
     }
-    gn.d_parents.push_back(it->second);
-    gn.d_depth = std::max(gn.d_depth, d_graph[it->second].d_depth + 1);
+  };
+  blame(d_matchedOuter);
+  if (gn.d_parents.empty())
+  {
+    blame(d_matchedInner);
+  }
+  if (d_matchedOuter.empty() && d_matchedInner.empty())
+  {
+    blame(terms);
   }
   std::sort(gn.d_parents.begin(), gn.d_parents.end());
   for (const Node& t : terms)

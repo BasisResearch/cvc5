@@ -311,11 +311,12 @@ class Instantiate : public QuantifiersUtil
 
   //--------------------------------------instantiation graph
   /**
-   * Set the ground terms the next call to addInstantiation matched. E-matching
-   * sets them just before it sends a match, when --inst-graph is on. Without
-   * them the instantiation's own terms stand in.
+   * Set the ground terms the next call to addInstantiation matched, as
+   * IMGenerator::getMatchedTerms splits them. E-matching sets them just
+   * before it sends a match, when --inst-graph is on. Without them the
+   * instantiation's own terms stand in.
    */
-  void setMatchedTerms(std::vector<Node>&& terms);
+  void setMatchedTerms(std::vector<Node>&& outer, std::vector<Node>&& inner);
   /**
    * Print the instantiation graph of the last check-sat (see --inst-graph):
    *
@@ -328,8 +329,9 @@ class Instantiate : public QuantifiersUtil
    *
    * Nodes are the instantiations added in this check-sat, in order. A parent
    * is an earlier instantiation whose lemma first introduced a term this one
-   * matched: e-matching reports the terms it matched against; any other
-   * strategy is blamed on the terms it instantiated with. A term the term
+   * matched: first the terms e-matching's outermost generators matched, then,
+   * if none has an owner, the nested ones; any other strategy is blamed on
+   * the terms it instantiated with. A term the term
    * database already held before the lemma introduced none. Terms are
    * compared in original form (SkolemManager::getOriginalForm), so a term
    * the preprocessor purified, e.g. an ite it replaced by a skolem, still
@@ -440,7 +442,8 @@ class Instantiate : public QuantifiersUtil
   /** Each term an instantiation of the graph introduced, and which one */
   std::unordered_map<Node, size_t> d_graphOwner;
   /** The terms the instantiation being added matched, if known */
-  std::vector<Node> d_matchedTerms;
+  std::vector<Node> d_matchedOuter;
+  std::vector<Node> d_matchedInner;
   /** The current instantiation round of this check-sat */
   uint64_t d_graphRound = 0;
   /** Instantiations not recorded once the graph held --inst-graph-max */
