@@ -821,6 +821,28 @@ class CVC5_EXPORT SolverEngine
    */
   std::string getNlFrontier() const;
   /**
+   * The (get-info :difficulty-gradient) reply for the last check-sat: one
+   * row per distinct input assertion that carried :assert-id tags, with its
+   * tags, its difficulty (the
+   * difficulty map, translated to input assertions as getDifficultyMap does)
+   * and, after unsat with unsat cores on, whether the unsat core that
+   * get-unsat-core returns contains it. That core is one sufficient set, not
+   * the only one: which assertions it holds depends on the unsat core mode.
+   * Untagged input assertions, check-sat-assuming assumptions among them, are
+   * summed into one :untagged entry, and difficulty that no such assertion
+   * received is reported as :unmatched-difficulty rather than dropped. Rows
+   * are sorted by difficulty, largest first. Difficulty needs
+   * produce-difficulty and membership needs produce-unsat-cores; :difficulty
+   * and :core say whether each was available. After get-timeout-core neither
+   * is, since a subsolver answered. The reply covers the check only until
+   * the assertions change: after an assertion, a declaration, a push or a
+   * pop, and after the pop of a check-sat-assuming's assumptions that the
+   * next command performs in incremental mode, its :result is none. The
+   * search is unchanged, but under minimal-unsat-cores each call reduces the
+   * core again, as get-unsat-core does.
+   */
+  std::string getDifficultyGradient() const;
+  /**
    * Get, for every preprocessed assertion currently asserted, the :assert-id
    * tags of the input assertions it was derived from (an untagged input is
    * `?`). Requires preprocessing proofs; throws ModalException otherwise.
@@ -1016,6 +1038,18 @@ class CVC5_EXPORT SolverEngine
    * This impacts whether the unsat core is post-processed.
    */
   UnsatCore getUnsatCoreInternal(bool isInternal = true);
+
+  /**
+   * The difficulty map of the last check, translated to input assertions.
+   * Requires produce-difficulty (see getDifficultyMap).
+   */
+  void getDifficultyMapInternal(std::map<Node, Node>& dmap) const;
+
+  /**
+   * Record the assertion list's length and the user context level for
+   * getDifficultyGradient, when a check-sat or get-timeout-core answers.
+   */
+  void recordCheckedAssertions();
 
   /** Internal version of assertFormula */
   void assertFormulaInternal(const Node& formula,
@@ -1222,6 +1256,13 @@ class CVC5_EXPORT SolverEngine
    * The timeout core manager, for responding to get-timeout-core commands.
    */
   std::unique_ptr<smt::TimeoutCoreManager> d_tcm;
+  /**
+   * The length of the input assertion list and the user context level when
+   * the last check-sat or get-timeout-core answered. getDifficultyGradient
+   * reports on that check only while both are unchanged.
+   */
+  size_t d_checkedAssertions = 0;
+  uint32_t d_checkedLevel = 0;
 
   /** The solver for sygus queries */
   std::unique_ptr<smt::SygusSolver> d_sygusSolver;

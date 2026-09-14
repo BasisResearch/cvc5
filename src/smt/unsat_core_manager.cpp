@@ -260,7 +260,8 @@ std::vector<Node> UnsatCoreManager::reduceUnsatCore(
         d_env.warning()
             << "SolverEngine::reduceUnsatCore(): could not reduce unsat core "
                "due to "
-               "unknown result.";
+               "unknown result."
+            << std::endl;
       }
     }
   }

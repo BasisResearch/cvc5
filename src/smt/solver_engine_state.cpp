@@ -189,6 +189,14 @@ void SolverEngineState::notifyUserPop()
   d_smtMode = SmtMode::ASSERT;
 }
 
+void SolverEngineState::notifyPendingPop()
+{
+  if (d_smtMode == SmtMode::UNSAT)
+  {
+    d_smtMode = SmtMode::ASSERT;
+  }
+}
+
 Result SolverEngineState::getStatus() const { return d_status; }
 
 SolverEngine* SolverEngineState::getStatusSolver() const
