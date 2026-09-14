@@ -16,8 +16,8 @@
 #define CVC5__THEORY__QUANTIFIERS__INSTANTIATE_H
 
 #include <map>
-#include <unordered_map>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 #include "context/cdhashset.h"
@@ -365,8 +365,7 @@ class Instantiate : public QuantifiersUtil
    * Set the ground terms the next call to addInstantiation matched, as
    * IMGenerator::getMatchedTerms splits them. E-matching sets them just
    * before it sends a match, when --inst-graph or --matching-loops is on.
-   * Without them the
-   * instantiation's own terms stand in.
+   * Without them the instantiation's own terms stand in.
    */
   void setMatchedTerms(std::vector<Node>&& outer, std::vector<Node>&& inner);
   /** An instantiation in the instantiation graph */
@@ -388,8 +387,8 @@ class Instantiate : public QuantifiersUtil
      * Earlier instantiations found only by attribution: owners of a nested
      * matched term, of a binding, of the ground term at an application of a
      * trigger pattern (not inside a binding), or of an equivalence-class
-     * representative. None is in
-     * d_parents, none counts towards d_depth; ascending.
+     * representative. None is in d_parents, none counts towards d_depth;
+     * ascending.
      */
     std::vector<size_t> d_eqParents;
     /** With --matching-loops: the rounds that sent lemmas so far, from 1 */
@@ -420,9 +419,9 @@ class Instantiate : public QuantifiersUtil
    * The eq list, printed when not empty, holds the node's attributed parents
    * (GraphNode::d_eqParents): found through a nested matched term, a binding,
    * the ground term at an application of the trigger pattern, or a
-   * representative, rather than as the owner
-   * of a term the match was made against. They are kept apart from the exact
-   * parents, which alone determine the depth.
+   * representative, rather than as the owner of a term the match was made
+   * against. They are kept apart from the exact parents, which alone
+   * determine the depth.
    *
    * The record is shared with --matching-loops. Each report reads its first
    * instantiations up to its own cap, and counts the rest in its dropped.
@@ -435,8 +434,8 @@ class Instantiate : public QuantifiersUtil
    * database already held before the lemma introduced none. Terms are
    * compared in original form (SkolemManager::getOriginalForm), so a term
    * the preprocessor purified, e.g. an ite it replaced by a skolem, still
-   * finds the instantiation that introduced it. The depth is 0
-   * without parents, otherwise one more than the deepest parent; the term
+   * finds the instantiation that introduced it. The depth is 0 without
+   * parents, otherwise one more than the deepest parent; the term
    * depth is that of the deepest instantiating term. The round counts the
    * quantifiers engine's resets in this check-sat from 1, including rounds
    * that instantiate nothing. Instantiations past --inst-graph-max are

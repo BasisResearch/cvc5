@@ -302,7 +302,15 @@ void TermDb::eqNotifyMerge(TNode t1, TNode t2)
 
 void TermDb::addTerm(Node n)
 {
-  // --matching-loops reads the same record as --inst-graph
+  if (d_processed.find(n) != d_processed.end())
+  {
+    return;
+  }
+  // --matching-loops reads the same record as --inst-graph. This sits below
+  // the check above, so it runs once per term rather than on every call: a
+  // term already in d_processed was recorded when it was first registered,
+  // and getOriginalForm on the hot path perturbed node allocation enough to
+  // make the search itself vary between runs.
   if (options().quantifiers.instGraph || options().quantifiers.matchingLoops)
   {
     // The database holds terms after preprocessing, while instantiation
@@ -310,10 +318,6 @@ void TermDb::addTerm(Node n)
     // form too, so a lemma repeating an input term does not claim it.
     d_graphSeen.insert(n);
     d_graphSeen.insert(SkolemManager::getOriginalForm(n));
-  }
-  if (d_processed.find(n) != d_processed.end())
-  {
-    return;
   }
   d_processed.insert(n);
   if (!TermUtil::hasInstConstAttr(n))

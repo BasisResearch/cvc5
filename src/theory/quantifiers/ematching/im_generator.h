@@ -103,7 +103,11 @@ class IMGenerator : protected EnvObj
    * pattern's outermost generator matched; to inner, the terms nested
    * generators matched, which are subterms of an outer term up to equality.
    * The parent trigger calls this just before it sends the match. Adds
-   * nothing if this generator does not keep them.
+   * nothing if this generator does not keep them: InstMatchGeneratorMulti,
+   * and the generators that override getNextMatch without going through
+   * InstMatchGenerator::getMatch (RelationalMatchGenerator and
+   * VarMatchGeneratorTermSubs), report none, so a match made through one of
+   * those falls back to the instantiation's own terms.
    */
   virtual void getMatchedTerms(CVC5_UNUSED std::vector<Node>& outer,
                                CVC5_UNUSED std::vector<Node>& inner) const
