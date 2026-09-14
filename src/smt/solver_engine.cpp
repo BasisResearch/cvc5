@@ -47,6 +47,7 @@
 #include "smt/assertions.h"
 #include "smt/check_models.h"
 #include "smt/context_manager.h"
+#include "smt/egraph_equalities.h"
 #include "smt/env.h"
 #include "smt/expand_definitions.h"
 #include "smt/find_synth_solver.h"
@@ -70,9 +71,11 @@
 #include "smt/unsat_core_manager.h"
 #include "theory/datatypes/sygus_datatype_utils.h"
 #include "theory/quantifiers/candidate_rewrite_database.h"
+#include "theory/quantifiers/instantiate.h"
 #include "theory/quantifiers/instantiation_list.h"
 #include "theory/quantifiers/oracle_engine.h"
 #include "theory/quantifiers/quantifiers_attributes.h"
+#include "theory/quantifiers/quantifiers_state.h"
 #include "theory/quantifiers/query_generator.h"
 #include "theory/quantifiers/rewrite_verifier.h"
 #include "theory/quantifiers/sygus/sygus_enumerator.h"
@@ -81,6 +84,7 @@
 #include "theory/rewriter.h"
 #include "theory/smt_engine_subsolver.h"
 #include "theory/theory_engine.h"
+#include "theory/uf/equality_engine.h"
 #include "util/random.h"
 #include "util/rational.h"
 #include "util/resource_manager.h"
@@ -391,6 +395,129 @@ std::string quantIdName(const Node& q)
   }
   return qa.d_name.getName();
 }
+
+/**
+ * The (get-info :inst-pressure) reply for the last check-sat: its
+ * instantiation rounds, whether refutation counts are present, and one row
+ * per quantified formula it tried to instantiate, most instantiated first.
+ * Formulas with the same :qid share a row. A formula without one gets a
+ * synthetic name and :named false. used, when non-null, holds the term
+ * vectors the refutation used per formula. A row's refutation count is the
+ * number of its formulas' instances from this check-sat that the refutation
+ * used, counted per formula, so it never exceeds its instantiations.
+ */
+std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
+                             const std::map<Node, InstantiationList>* used)
+{
+  using Pressure = theory::quantifiers::Instantiate::Pressure;
+  struct Row
+  {
+    std::string d_name;
+    Pressure d_p;
+    uint64_t d_refuted = 0;
+  };
+  std::vector<Row> rows;
+  std::map<std::string, size_t> byName;
+  std::map<Node, size_t> byNode;
+  auto rowFor = [&](const Node& q) -> Row& {
+    std::string name = quantIdName(q);
+    std::pair<size_t, bool> slot(rows.size(), false);
+    if (name.empty())
+    {
+      auto [it, isNew] = byNode.emplace(q, rows.size());
+      slot = {it->second, isNew};
+    }
+    else
+    {
+      auto [it, isNew] = byName.emplace(name, rows.size());
+      slot = {it->second, isNew};
+    }
+    if (slot.second)
+    {
+      rows.push_back(Row{name, Pressure(), {}});
+    }
+    return rows[slot.first];
+  };
+  if (inst != nullptr)
+  {
+    for (const auto& [q, p] : inst->getPressure())
+    {
+      Row& row = rowFor(q);
+      Pressure& r = row.d_p;
+      if (p.d_added > 0)
+      {
+        r.d_firstRound =
+            r.d_added == 0 ? p.d_firstRound
+                           : std::min(r.d_firstRound, p.d_firstRound);
+        r.d_lastRound = std::max(r.d_lastRound, p.d_lastRound);
+      }
+      r.d_added += p.d_added;
+      r.d_dupEq += p.d_dupEq;
+      r.d_dupEnt += p.d_dupEnt;
+      r.d_dupLemma += p.d_dupLemma;
+      r.d_conflict += p.d_conflict;
+      r.d_propagate += p.d_propagate;
+      // The proof may also use instances of earlier check-sats, which are not
+      // this check-sat's pressure, and formulas sharing a qid may be used
+      // with equal term vectors, which are distinct instances.
+      if (used == nullptr)
+      {
+        continue;
+      }
+      auto it = used->find(q);
+      if (it == used->end())
+      {
+        continue;
+      }
+      std::set<std::vector<Node>> seen;
+      for (const InstantiationVec& v : it->second.d_inst)
+      {
+        if (p.d_addedVecs.count(v.d_vec) > 0 && seen.insert(v.d_vec).second)
+        {
+          ++row.d_refuted;
+        }
+      }
+    }
+  }
+  std::stable_sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) {
+    return a.d_p.d_added > b.d_p.d_added;
+  });
+  std::stringstream ss;
+  ss << "(:rounds " << (inst == nullptr ? 0 : inst->getPressureRounds())
+     << " :refutation " << (used != nullptr ? "true" : "false")
+     << " :quantifiers (";
+  size_t unnamed = 0;
+  for (size_t i = 0; i < rows.size(); i++)
+  {
+    const Row& r = rows[i];
+    const Pressure& p = r.d_p;
+    ss << (i > 0 ? " " : "") << "(";
+    if (r.d_name.empty())
+    {
+      ss << "quant_" << unnamed++ << " :named false";
+    }
+    else
+    {
+      ss << quoteSymbol(r.d_name);
+    }
+    ss << " :instantiations " << p.d_added << " :duplicate-eq " << p.d_dupEq
+       << " :duplicate-ent " << p.d_dupEnt << " :duplicate-lemma "
+       << p.d_dupLemma << " :conflict " << p.d_conflict << " :propagate "
+       << p.d_propagate;
+    if (p.d_added > 0)
+    {
+      ss << " :first-round " << p.d_firstRound << " :last-round "
+         << p.d_lastRound;
+    }
+    if (used != nullptr)
+    {
+      ss << " :refutation " << r.d_refuted;
+    }
+    ss << ")";
+  }
+  ss << "))";
+  return ss.str();
+}
 }  // namespace
 
 bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
@@ -399,7 +526,8 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
       || key == "name" || key == "version" || key == "authors"
       || key == "status" || key == "time" || key == "reason-unknown"
       || key == "incomplete-id" || key == "incomplete-ids"
-      || key == "incomplete-culprits" || key == "assertion-stack-levels"
+      || key == "incomplete-culprits" || key == "inst-pressure"
+      || key == "matching-loops" || key == "assertion-stack-levels"
       || key == "all-options")
   {
     return true;
@@ -503,6 +631,54 @@ std::string SolverEngine::getInfo(const std::string& key) const
       }
     }
     ss << ")";
+    return ss.str();
+  }
+  if (key == "inst-pressure")
+  {
+    // Before the first check there is no theory engine, and no pressure.
+    QuantifiersEngine* qe = d_smtSolver == nullptr || !d_state->isFullyInited()
+                                ? nullptr
+                                : d_smtSolver->getQuantifiersEngine();
+    const theory::quantifiers::Instantiate* inst =
+        qe == nullptr ? nullptr : qe->getInstantiate();
+    // Which instances the refutation used is known exactly only from a
+    // proof, so only after unsat with theory proofs on.
+    std::map<Node, InstantiationList> used;
+    bool refuted = inst != nullptr && d_state->getMode() == SmtMode::UNSAT
+                   && d_env->isTheoryProofProducing()
+                   && d_state->getStatusSolver() == nullptr;
+    if (refuted)
+    {
+      std::map<Node, std::vector<Node>> sks;
+      d_ucManager->getRelevantQuantTermVectors(used, sks, false);
+    }
+    return instPressureInfo(inst, refuted ? &used : nullptr);
+  }
+  if (key == "matching-loops")
+  {
+    if (!options().quantifiers.matchingLoops)
+    {
+      throw RecoverableModalException(
+          "Can't get-info :matching-loops unless option matching-loops is "
+          "on.");
+    }
+    Result status = d_state->getStatus();
+    bool unknown = !status.isNull() && status.isUnknown();
+    std::stringstream ss;
+    // before the first check-sat there may be no theory engine yet, and
+    // nothing has been recorded
+    QuantifiersEngine* qe = d_state->isFullyInited()
+                                ? d_smtSolver->getQuantifiersEngine()
+                                : nullptr;
+    if (qe == nullptr)
+    {
+      ss << "(:rounds 0 :instantiations 0 :dropped 0 :max-inst-rounds false "
+            ":loops ())";
+    }
+    else
+    {
+      qe->printMatchingLoops(ss, unknown);
+    }
     return ss.str();
   }
   if (key == "assertion-stack-levels")
@@ -2612,6 +2788,110 @@ std::vector<std::string> SolverEngine::getAssertionSourcesOf(const Node& n)
   std::vector<std::string> tags;
   d_smtSolver->getSourceTags(inputs, tags);
   return tags;
+}
+
+void SolverEngine::getEgraphEqualities(const std::vector<Node>& focus,
+                                       size_t limit,
+                                       bool includeUsed,
+                                       size_t maxTermSize,
+                                       smt::MinedEqualities& out)
+{
+  // see if another solver engine was responsible for the last status
+  SolverEngine* ssolver = d_state->getStatusSolver();
+  if (ssolver != nullptr)
+  {
+    ssolver->getEgraphEqualities(focus, limit, includeUsed, maxTermSize, out);
+    return;
+  }
+  Trace("smt") << "SMT getEgraphEqualities()\n";
+  finishInit();
+  QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine();
+  TheoryEngine* te = d_smtSolver->getTheoryEngine();
+  const theory::eq::EqualityEngine* master =
+      qe == nullptr ? nullptr : qe->getState().getEqualityEngine();
+  if (master == nullptr || te == nullptr)
+  {
+    throw RecoverableModalException(
+        "Cannot get e-graph equalities without the quantifiers theory, whose "
+        "equality engine is the master one.");
+  }
+  // In the distributed mode the master engine records merges without
+  // reasons, so the theories' own engines explain them. In the central mode
+  // every theory shares the master engine, which then has the reasons.
+  bool central =
+      d_env->getOptions().theory.eeMode == options::EqEngineMode::CENTRAL;
+  std::vector<std::pair<theory::TheoryId, const theory::eq::EqualityEngine*>>
+      explainers;
+  std::unordered_set<const theory::eq::EqualityEngine*> seen;
+  for (theory::TheoryId tid = theory::THEORY_FIRST; tid < theory::THEORY_LAST;
+       ++tid)
+  {
+    theory::Theory* t = te->theoryOf(tid);
+    const theory::eq::EqualityEngine* ee =
+        t == nullptr ? nullptr : t->getEqualityEngine();
+    if (ee != nullptr && (ee != master || central) && seen.insert(ee).second)
+    {
+      explainers.emplace_back(tid, ee);
+    }
+  }
+  std::function<Node(TNode, theory::TheoryId)> explainFact =
+      [te](TNode lit, theory::TheoryId tid) {
+        return te->explainFact(lit, tid);
+      };
+  std::unordered_set<Node> focusTerms;
+  std::unordered_map<Node, Node> cache;
+  ExpandDefs expDef(*d_env.get());
+  for (const Node& f : focus)
+  {
+    Node n = d_smtSolver->getPreprocessor()->applySubstitutions(f);
+    n = expDef.expandDefinitions(n, cache);
+    n = d_env->getRewriter()->rewrite(n);
+    if (master->hasTerm(n))
+    {
+      focusTerms.insert(n);
+    }
+  }
+  out.d_focusFound = focusTerms.size();
+  std::map<Node, std::vector<std::vector<Node>>> insts;
+  qe->getInstantiationTermVectors(insts);
+  // Each term a quantifier was instantiated with, in both forms, mapped to
+  // the :qid of each such quantifier. A quantifier without a :qid is `?` if
+  // it comes from the input, and `@internal` if the solver introduced it, as
+  // the reductions of the strings theory do: its original form names a
+  // skolem.
+  std::unordered_map<Node, std::set<std::string>> instTerms;
+  static const std::unordered_set<Kind, kind::KindHashFunction> internalKinds = {
+      Kind::SKOLEM, Kind::INST_CONSTANT};
+  for (const std::pair<const Node, std::vector<std::vector<Node>>>& q : insts)
+  {
+    std::string name = quantIdName(q.first);
+    if (name.empty())
+    {
+      name = expr::hasSubtermKinds(internalKinds,
+                                   SkolemManager::getOriginalForm(q.first))
+                 ? "@internal"
+                 : "?";
+    }
+    for (const std::vector<Node>& vec : q.second)
+    {
+      for (const Node& t : vec)
+      {
+        instTerms[t].insert(name);
+        instTerms[SkolemManager::getOriginalForm(t)].insert(name);
+      }
+    }
+  }
+  smt::mineEgraphEqualities(*master,
+                            explainers,
+                            explainFact,
+                            *d_smtSolver->getPropEngine(),
+                            !focus.empty(),
+                            focusTerms,
+                            instTerms,
+                            limit,
+                            includeUsed,
+                            maxTermSize,
+                            out);
 }
 
 void SolverEngine::getDifficultyMap(std::map<Node, Node>& dmap)

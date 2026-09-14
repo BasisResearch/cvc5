@@ -565,6 +565,22 @@ name   = "Quantifiers"
   help       = "maximum inst level of terms used to instantiate quantified formulas with (-1 == no limit, default)"
 
 [[option]]
+  name       = "matchingLoops"
+  category   = "expert"
+  long       = "matching-loops"
+  type       = "bool"
+  default    = "false"
+  help       = "record each instantiation's round, terms and the earlier instantiations that introduced them, for (get-info :matching-loops)"
+
+[[option]]
+  name       = "matchingLoopsMax"
+  category   = "expert"
+  long       = "matching-loops-max=N"
+  type       = "uint64_t"
+  default    = "200000"
+  help       = "stop recording instantiations for (get-info :matching-loops) after N in a check-sat (0 == no limit)"
+
+[[option]]
   name       = "instMaxRounds"
   category   = "regular"
   long       = "inst-max-rounds=N"

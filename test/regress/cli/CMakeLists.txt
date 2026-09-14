@@ -1789,8 +1789,15 @@ set(regress_0_tests
   regress0/quantifiers/ex3.smt2
   regress0/quantifiers/ex6.smt2
   regress0/quantifiers/floor.smt2
+  regress0/quantifiers/get-egraph-equalities.smt2
+  regress0/quantifiers/get-egraph-equalities-assuming.smt2
+  regress0/quantifiers/get-egraph-equalities-internal.smt2
+  regress0/quantifiers/get-egraph-equalities-terms.smt2
   regress0/quantifiers/global_negate.smt2
   regress0/quantifiers/horn-ground-pre-post.smt2
+  regress0/quantifiers/inst-pressure-proof.smt2
+  regress0/quantifiers/inst-pressure-refutation.smt2
+  regress0/quantifiers/inst-pressure.smt2
   regress0/quantifiers/is-even-pred.smt2
   regress0/quantifiers/is-int.smt2
   regress0/quantifiers/issue1805.smt2
@@ -1835,6 +1842,16 @@ set(regress_0_tests
   regress0/quantifiers/macros-int-real.smt2
   regress0/quantifiers/macros-real-arg.smt2
   regress0/quantifiers/matching-lia-1arg.smt2
+  regress0/quantifiers/matching-loops-alternating.smt2
+  regress0/quantifiers/matching-loops-before-check.smt2
+  regress0/quantifiers/matching-loops-branching.smt2
+  regress0/quantifiers/matching-loops-cons.smt2
+  regress0/quantifiers/matching-loops-cons-deep.smt2
+  regress0/quantifiers/matching-loops-incremental.smt2
+  regress0/quantifiers/matching-loops-linear.smt2
+  regress0/quantifiers/matching-loops-multi-pattern.smt2
+  regress0/quantifiers/matching-loops-none.smt2
+  regress0/quantifiers/matching-loops-rider.smt2
   regress0/quantifiers/mbqi-simple.smt2
   regress0/quantifiers/merge-shadow.smt2
   regress0/quantifiers/miniscope-ite.smt2

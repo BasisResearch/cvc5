@@ -412,6 +412,30 @@ bool PropEngine::isFixed(TNode lit) const
   return false;
 }
 
+int32_t PropEngine::getDecisionLevel(TNode lit) const
+{
+  // A theory can hold a literal the SAT solver has in another orientation
+  // or unrewritten, as when one theory propagates an equality to another.
+  std::vector<Node> forms{lit};
+  bool polarity = lit.getKind() != Kind::NOT;
+  TNode atom = polarity ? lit : lit[0];
+  if (atom.getKind() == Kind::EQUAL)
+  {
+    Node swapped = atom[1].eqNode(atom[0]);
+    forms.push_back(polarity ? swapped : swapped.notNode());
+  }
+  forms.push_back(rewrite(lit));
+  for (const Node& form : forms)
+  {
+    if (isSatLiteral(form))
+    {
+      return d_satSolver->getDecisionLevel(
+          d_cnfStream->getLiteral(form).getSatVariable());
+    }
+  }
+  return -1;
+}
+
 void PropEngine::printSatisfyingAssignment()
 {
   const CnfStream::NodeToLiteralMap& transCache =

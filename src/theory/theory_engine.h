@@ -343,6 +343,14 @@ class TheoryEngine : protected EnvObj
   TrustNode getExplanation(TNode node);
 
   /**
+   * Explain a literal that theory tid holds as a fact because another theory
+   * propagated it there: follow the recorded propagations back to what the
+   * SAT solver asserted. Returns null if no propagation of lit to tid is
+   * recorded, or sharing is off.
+   */
+  Node explainFact(TNode lit, theory::TheoryId tid);
+
+  /**
    * Get the pointer to the model object used by this theory engine.
    */
   theory::TheoryModel* getModel();

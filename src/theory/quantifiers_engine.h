@@ -68,6 +68,8 @@ class QuantifiersEngine : protected EnvObj
   ~QuantifiersEngine();
   /** The quantifiers registry */
   quantifiers::QuantifiersRegistry& getQuantifiersRegistry();
+  /** The quantifiers state, whose equality engine is the master one */
+  quantifiers::QuantifiersState& getState();
   //---------------------- utilities
   /** get the model builder */
   quantifiers::QModelBuilder* getModelBuilder() const;
@@ -119,7 +121,16 @@ class QuantifiersEngine : protected EnvObj
     return d_incompleteCulprits;
   }
   IncompleteId getIncompleteCulpritsId() const { return d_incompleteCulpritsId; }
+  /**
+   * Print the matching loops among the instantiations of the last check-sat
+   * (see quantifiers::MatchingLoops::print). Requires --matching-loops.
+   * unknown is whether that check-sat answered unknown: only then can the
+   * instantiation round limit have caused its answer.
+   */
+  void printMatchingLoops(std::ostream& out, bool unknown) const;
   //----------user interface for instantiations (see quantifiers/instantiate.h)
+  /** The instantiation utility, e.g. for its per-check-sat pressure. */
+  quantifiers::Instantiate* getInstantiate();
   /** get list of quantified formulas that were instantiated */
   void getInstantiatedQuantifiedFormulas(std::vector<Node>& qs);
   /** Save this user context's instantiation term vectors under key. */

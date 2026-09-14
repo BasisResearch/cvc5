@@ -12,6 +12,7 @@
 
 #include "theory/quantifiers/instantiate.h"
 
+#include "base/modal_exception.h"
 #include "expr/node_algorithm.h"
 #include "options/base_options.h"
 #include "options/quantifiers_options.h"
@@ -22,6 +23,7 @@
 #include "theory/quantifiers/cegqi/inst_strategy_cegqi.h"
 #include "theory/quantifiers/entailment_check.h"
 #include "theory/quantifiers/first_order_model.h"
+#include "theory/quantifiers/matching_loops.h"
 #include "theory/quantifiers/quantifiers_attributes.h"
 #include "theory/quantifiers/quantifiers_preprocess.h"
 #include "theory/quantifiers/term_database.h"
@@ -64,6 +66,10 @@ Instantiate::Instantiate(Env& env,
   // We need to use user context-dependent trie for the main instantiation
   // trie if incremental.
   d_useCdInstTrie = options().base.incrementalSolving;
+  if (options().quantifiers.matchingLoops)
+  {
+    d_matchingLoops = std::make_unique<MatchingLoops>(env, qs, qr);
+  }
 }
 
 Instantiate::~Instantiate() {}
@@ -75,6 +81,16 @@ bool Instantiate::reset(Theory::Effort e)
   d_recordedInst.clear();
   d_instDebugTemp.clear();
   return true;
+}
+
+void Instantiate::presolve()
+{
+  if (d_matchingLoops != nullptr)
+  {
+    d_matchingLoops->clear();
+  }
+  d_pressure.clear();
+  d_pressureRounds = 0;
 }
 
 void Instantiate::registerQuantifier(CVC5_UNUSED Node q) {}
@@ -228,6 +244,7 @@ bool Instantiate::addInstantiationInternal(
     {
       Trace("inst-add-debug") << " --> Currently entailed." << std::endl;
       ++(d_statistics.d_inst_duplicate_ent);
+      ++d_pressure[q].d_dupEnt;
       return false;
     }
   }
@@ -251,6 +268,7 @@ bool Instantiate::addInstantiationInternal(
   {
     Trace("inst-add-debug") << " --> Already exists (no record)." << std::endl;
     ++(d_statistics.d_inst_duplicate_eq);
+    ++d_pressure[q].d_dupEq;
     return false;
   }
 
@@ -356,6 +374,7 @@ bool Instantiate::addInstantiationInternal(
   {
     Trace("inst-add-debug") << " --> Lemma already exists." << std::endl;
     ++(d_statistics.d_inst_duplicate);
+    ++d_pressure[q].d_dupLemma;
     return false;
   }
 
@@ -402,8 +421,32 @@ bool Instantiate::addInstantiationInternal(
     }
     QuantAttributes::setInstantiationLevelAttr(lem[1], maxInstLevel + 1);
   }
+  if (d_matchingLoops != nullptr)
+  {
+    // e-matching passes the trigger that matched as pfArg
+    d_matchingLoops->record(q, terms, pfArg, lem, d_treg.getTermDatabase());
+  }
   Trace("inst-add-debug") << " --> Success." << std::endl;
   ++(d_statistics.d_instantiations);
+  Pressure& pressure = d_pressure[q];
+  if (pressure.d_added++ == 0)
+  {
+    pressure.d_firstRound = d_pressureRounds;
+  }
+  pressure.d_lastRound = d_pressureRounds;
+  if (isProofEnabled())
+  {
+    pressure.d_addedVecs.insert(terms);
+  }
+  if (id == InferenceId::QUANTIFIERS_INST_CBQI_CONFLICT
+      || id == InferenceId::QUANTIFIERS_INST_SUB_CONFLICT)
+  {
+    ++pressure.d_conflict;
+  }
+  else if (id == InferenceId::QUANTIFIERS_INST_CBQI_PROP)
+  {
+    ++pressure.d_propagate;
+  }
   return true;
 }
 
@@ -895,6 +938,11 @@ bool Instantiate::isProofEnabled() const
 
 void Instantiate::notifyEndRound()
 {
+  ++d_pressureRounds;
+  if (d_matchingLoops != nullptr)
+  {
+    d_matchingLoops->notifyEndRound();
+  }
   // debug information
   if (TraceIsOn("inst-per-quant-round"))
   {
@@ -918,6 +966,17 @@ void Instantiate::notifyEndRound()
                               << i.second << ")" << std::endl;
     }
   }
+}
+
+void Instantiate::printMatchingLoops(std::ostream& out,
+                                     bool maxInstRounds) const
+{
+  if (d_matchingLoops == nullptr)
+  {
+    throw ModalException(
+        "Cannot get matching loops unless option matching-loops is on.");
+  }
+  d_matchingLoops->print(out, maxInstRounds);
 }
 
 void Instantiate::debugPrintModel()

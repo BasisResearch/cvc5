@@ -70,6 +70,7 @@ class QuantElimSolver;
 class FindSynthSolver;
 
 struct SolverEngineStatistics;
+struct MinedEqualities;
 class PfManager;
 class UnsatCoreManager;
 class TimeoutCoreManager;
@@ -828,6 +829,18 @@ class CVC5_EXPORT SolverEngine
    * Requires preprocessing proofs; throws ModalException otherwise.
    */
   std::vector<std::string> getAssertionSourcesOf(const Node& n);
+  /**
+   * Get the equalities the e-graph holds after the last check, see
+   * smt::mineEgraphEqualities. Each focus term is normalized as get-value
+   * normalizes a term, so it names the term the e-graph holds. Throws
+   * RecoverableModalException without the quantifiers theory, whose equality
+   * engine is the master one.
+   */
+  void getEgraphEqualities(const std::vector<Node>& focus,
+                           size_t limit,
+                           bool includeUsed,
+                           size_t maxTermSize,
+                           smt::MinedEqualities& out);
 
   /**
    * Push a user-level context.

@@ -323,6 +323,8 @@ libcvc5_add_sources(
   smt/context_manager.h
   smt/difficulty_post_processor.cpp
   smt/difficulty_post_processor.h
+  smt/egraph_equalities.cpp
+  smt/egraph_equalities.h
   smt/env.cpp
   smt/env.h
   smt/env_obj.cpp
@@ -934,6 +936,8 @@ libcvc5_add_sources(
   theory/quantifiers/inst_strategy_sub_conflict.h
   theory/quantifiers/instantiate.cpp
   theory/quantifiers/instantiate.h
+  theory/quantifiers/matching_loops.cpp
+  theory/quantifiers/matching_loops.h
   theory/quantifiers/instantiation_list.cpp
   theory/quantifiers/instantiation_list.h
   theory/quantifiers/lazy_trie.cpp

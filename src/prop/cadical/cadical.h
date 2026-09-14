@@ -86,6 +86,8 @@ class CadicalSolver : public CDCLTSatSolver, protected EnvObj
 
   bool isFixed(SatVariable var) const override;
 
+  int32_t getDecisionLevel(SatVariable var) const override;
+
   std::vector<SatLiteral> getDecisions() const override;
 
   std::vector<Node> getOrderHeap() const override;

@@ -132,6 +132,8 @@ QuantifiersRegistry& QuantifiersEngine::getQuantifiersRegistry()
   return d_qreg;
 }
 
+QuantifiersState& QuantifiersEngine::getState() { return d_qstate; }
+
 QModelBuilder* QuantifiersEngine::getModelBuilder() const
 {
   return d_builder.get();
@@ -144,6 +146,16 @@ TermDbSygus* QuantifiersEngine::getTermDatabaseSygus() const
   return d_treg.getTermDatabaseSygus();
 }
 /// !!!!!!!!!!!!!!
+
+void QuantifiersEngine::printMatchingLoops(std::ostream& out,
+                                           bool unknown) const
+{
+  int64_t maxRounds = options().quantifiers.instMaxRounds;
+  bool hitMaxRounds =
+      unknown && maxRounds >= 0
+      && d_numInstRoundsLemma >= static_cast<uint32_t>(maxRounds);
+  d_qim.getInstantiate()->printMatchingLoops(out, hitMaxRounds);
+}
 
 void QuantifiersEngine::presolve()
 {
@@ -852,6 +864,11 @@ void QuantifiersEngine::getSavedInstantiations(
 void QuantifiersEngine::restoreInstantiations(const std::string& key, bool only)
 {
   d_qim.getInstantiate()->restoreInstantiations(key, only);
+}
+
+quantifiers::Instantiate* QuantifiersEngine::getInstantiate()
+{
+  return d_qim.getInstantiate();
 }
 
 void QuantifiersEngine::getInstantiatedQuantifiedFormulas(std::vector<Node>& qs)
