@@ -99,8 +99,8 @@ bool isGuardedDivision(TNode t)
   }
   TNode z = t[1];
   return z.getKind() == Kind::APPLY_UF
-         && z.getOperator().getKind() == Kind::SKOLEM
-         && z.getNumChildren() == 1 && z[0] == d[0];
+         && z.getOperator().getKind() == Kind::SKOLEM && z.getNumChildren() == 1
+         && z[0] == d[0];
 }
 
 /**
@@ -126,7 +126,10 @@ Kind operationOf(Kind k)
 }
 
 /** Whether the arguments of operation op commute. */
-bool commutes(Kind op) { return op == Kind::NONLINEAR_MULT || op == Kind::IAND; }
+bool commutes(Kind op)
+{
+  return op == Kind::NONLINEAR_MULT || op == Kind::IAND;
+}
 
 size_t combine(size_t h, size_t v)
 {
@@ -456,6 +459,22 @@ class HostMatcher
     return k;
   }
 
+  /**
+   * The factors of t: the operands of key(t, NONLINEAR_MULT) when t is a
+   * product, and t itself when it is anything else. A product's factors are
+   * what arithmetic multiplies, so a wrapped one is flattened and a constant
+   * one dropped, exactly as in an atom.
+   */
+  std::vector<TNode> factors(TNode t) const
+  {
+    TNode x = d_sv.top(t);
+    if (operation(x) == Kind::NONLINEAR_MULT)
+    {
+      return key(x, Kind::NONLINEAR_MULT).d_args;
+    }
+    return {x};
+  }
+
   /** Where key k is looked up. */
   std::pair<Kind, std::vector<size_t>> index(const AtomKey& k) const
   {
@@ -534,20 +553,40 @@ class HostMatcher
 /**
  * The division that extended term x stands for, or null: operator
  * elimination multiplies the term purifying a division or modulus by its
- * divisor, (* d q) for q purifying (div n d). Any other product with such a
- * factor, (* c (div a b)) with c not b, is a product the input wrote.
+ * divisor, (* d q) for q purifying (div n d), and the rewriter then folds
+ * that product into one, so the atom of (div n (* b c)) is (* b c q) and the
+ * atom of (div n (* 2 b)) is (* b q). It is that product when the factors
+ * other than q are exactly the factors of d. Any other product with such a
+ * factor, (* c (div a b)) with c not b, is a product the input wrote, which
+ * keeps the division as an opaque operand.
  */
-TNode eliminatedDivision(SourceView& sv, const Node& x)
+TNode eliminatedDivision(const HostMatcher& hm, SourceView& sv, const Node& x)
 {
-  if (x.getKind() != Kind::NONLINEAR_MULT || x.getNumChildren() != 2)
+  if (x.getKind() != Kind::NONLINEAR_MULT)
   {
     return TNode();
   }
-  for (size_t i = 0; i < 2; i++)
+  for (size_t i = 0, n = x.getNumChildren(); i < n; i++)
   {
     TNode t = sv.top(x[i]);
-    if (!sv.isLeaf(t) && isDivisionKind(sv.kind(t))
-        && sv.equal(sv.child(t, 1), x[1 - i]))
+    if (sv.isLeaf(t) || !isDivisionKind(sv.kind(t)))
+    {
+      continue;
+    }
+    AtomKey rest;
+    rest.d_op = Kind::NONLINEAR_MULT;
+    for (size_t j = 0; j < n; j++)
+    {
+      if (j != i)
+      {
+        std::vector<TNode> fs = hm.factors(x[j]);
+        rest.d_args.insert(rest.d_args.end(), fs.begin(), fs.end());
+      }
+    }
+    AtomKey divisor;
+    divisor.d_op = Kind::NONLINEAR_MULT;
+    divisor.d_args = hm.factors(sv.child(t, 1));
+    if (hm.same(rest, divisor))
     {
       return t;
     }
@@ -556,7 +595,7 @@ TNode eliminatedDivision(SourceView& sv, const Node& x)
 }
 
 /** The frontier kind of extended term x. */
-const char* frontierKind(SourceView& sv, const Node& x)
+const char* frontierKind(const HostMatcher& hm, SourceView& sv, const Node& x)
 {
   switch (x.getKind())
   {
@@ -568,7 +607,7 @@ const char* frontierKind(SourceView& sv, const Node& x)
     case Kind::PI: return "transcendental";
     default: break;
   }
-  if (!eliminatedDivision(sv, x).isNull())
+  if (!eliminatedDivision(hm, sv, x).isNull())
   {
     return "division";
   }
@@ -741,7 +780,7 @@ std::string getNlFrontierInfo(TheoryEngine* te,
   for (size_t pos = 0; pos < order.size(); pos++)
   {
     const Node& x = f.d_atoms[order[pos]].d_atom.d_term;
-    TNode d = eliminatedDivision(sv, x);
+    TNode d = eliminatedDivision(hm, sv, x);
     keys[pos] = d.isNull() ? hm.key(x, operationOf(x.getKind()))
                            : hm.key(d, sv.kind(d));
     if (keys[pos].d_op == Kind::UNDEFINED_KIND || keys[pos].d_args.empty())
@@ -939,7 +978,7 @@ std::string getNlFrontierInfo(TheoryEngine* te,
     const NlFrontierAtom& a = f.d_atoms[order[pos]];
     ss << (pos > 0 ? " " : "") << "(:atom ";
     sv.print(ss, a.d_atom.d_term);
-    ss << " :kind " << frontierKind(sv, a.d_atom.d_term) << " :current "
+    ss << " :kind " << frontierKind(hm, sv, a.d_atom.d_term) << " :current "
        << (current(a) ? "true" : "false") << " :rounds " << a.d_rounds
        << " :value ";
     printValue(ss, a.d_atom.d_hasValue, a.d_atom.d_value);

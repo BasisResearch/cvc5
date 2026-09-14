@@ -92,12 +92,6 @@ class TheoryArith : public Theory
 
   void presolve() override;
   void notifyRestart() override;
-
-  /** The nonlinear extension, or nullptr when nonlinear reasoning is off. */
-  const nl::NonlinearExtension* getNonlinearExtension() const
-  {
-    return d_nonlinearExtension.get();
-  }
   bool ppAssert(TrustNode tin, TrustSubstitutionMap& outSubstitutions) override;
   /**
    * Preprocess rewrite terms, return the trust node encapsulating the
@@ -123,6 +117,12 @@ class TheoryArith : public Theory
 
   /** Return a reference to the arith::InferenceManager. */
   InferenceManager& getInferenceManager() { return d_im; }
+
+  /** The nonlinear extension, or nullptr when nonlinear reasoning is off. */
+  const nl::NonlinearExtension* getNonlinearExtension() const
+  {
+    return d_nonlinearExtension.get();
+  }
 
  private:
   /**

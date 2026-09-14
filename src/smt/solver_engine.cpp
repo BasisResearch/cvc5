@@ -12,6 +12,8 @@
 
 #include "smt/solver_engine.h"
 
+#include <algorithm>
+#include <cctype>
 #include <functional>
 
 #include "base/check.h"
@@ -2821,7 +2823,12 @@ std::string SolverEngine::getNlFrontier() const
     std::stringstream ss;
     ss << status.getUnknownExplanation();
     reason = ss.str();
-    transform(reason.begin(), reason.end(), reason.begin(), ::tolower);
+    std::transform(reason.begin(),
+                   reason.end(),
+                   reason.begin(),
+                   [](unsigned char c) {
+                     return static_cast<char>(std::tolower(c));
+                   });
   }
   if (!checked)
   {

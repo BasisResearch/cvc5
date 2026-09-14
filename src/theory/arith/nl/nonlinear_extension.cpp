@@ -744,7 +744,8 @@ void tightenBound(NlFrontierBound& b,
       return;
     }
     int cmp = isLower ? v.cmp(b.d_value) : b.d_value.cmp(v);
-    if (b.d_fixed == fixed && (cmp < 0 || (cmp == 0 && (b.d_strict || !strict))))
+    if (b.d_fixed == fixed
+        && (cmp < 0 || (cmp == 0 && (b.d_strict || !strict))))
     {
       // no tighter
       return;

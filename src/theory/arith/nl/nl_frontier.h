@@ -17,6 +17,7 @@
 #ifndef CVC5__THEORY__ARITH__NL__NL_FRONTIER_H
 #define CVC5__THEORY__ARITH__NL__NL_FRONTIER_H
 
+#include <cstddef>
 #include <unordered_map>
 #include <vector>
 
