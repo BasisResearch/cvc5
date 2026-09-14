@@ -551,6 +551,13 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
     bool rising = dn > d0 && nondecreasing * 5 >= (L - 1) * 4;
     uint64_t r0 = d_insts[chain.front()].d_round;
     uint64_t rn = d_insts[chain.back()].d_round;
+    // the most rounds between consecutive rungs
+    uint64_t period = 1;
+    for (size_t k = 1; k < L; k++)
+    {
+      period = std::max(
+          period, d_insts[chain[k]].d_round - d_insts[chain[k - 1]].d_round);
+    }
     double depthPerRung = static_cast<double>(dn - std::min(d0, dn)) / (L - 1);
     double depthPerRound = static_cast<double>(dn - std::min(d0, dn))
                            / std::max<uint64_t>(1, rn - r0);
@@ -643,8 +650,8 @@ void MatchingLoops::print(std::ostream& out, bool maxInstRounds) const
     if (confirmed && rising && stable && L >= kMinStableChain)
     {
       // high only when the round limit cut the check off while this loop
-      // was still climbing
-      rank = (maxInstRounds && rn == lastRound) ? 2 : 1;
+      // was still climbing: its next rung was due after the last round
+      rank = (maxInstRounds && rn + period >= lastRound) ? 2 : 1;
     }
     else if (rising && (confirmed || stable))
     {
