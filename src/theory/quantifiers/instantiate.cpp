@@ -12,6 +12,9 @@
 
 #include "theory/quantifiers/instantiate.h"
 
+#include <algorithm>
+#include <unordered_set>
+
 #include "expr/node_algorithm.h"
 #include "options/base_options.h"
 #include "options/quantifiers_options.h"
@@ -71,10 +74,22 @@ Instantiate::~Instantiate() {}
 bool Instantiate::reset(Theory::Effort e)
 {
   Trace("inst-debug") << "Reset, effort " << e << std::endl;
+  ++d_graphRound;
   // clear explicitly recorded instantiations
   d_recordedInst.clear();
   d_instDebugTemp.clear();
   return true;
+}
+
+void Instantiate::presolve()
+{
+  d_graph.clear();
+  d_graphQuants.clear();
+  d_graphQuantIndex.clear();
+  d_graphOwner.clear();
+  d_matchedTerms.clear();
+  d_graphRound = 0;
+  d_graphDropped = 0;
 }
 
 void Instantiate::registerQuantifier(CVC5_UNUSED Node q) {}
@@ -100,6 +115,8 @@ bool Instantiate::addInstantiation(
 {
   // do the instantiation
   bool ret = addInstantiationInternal(q, terms, id, pfArg, doVts);
+  // the matched terms belong to this call only, whatever it decided
+  d_matchedTerms.clear();
   // process the instantiation with callbacks via term registry
   d_treg.processInstantiation(q, terms);
   // return whether the instantiation was successful
@@ -402,9 +419,123 @@ bool Instantiate::addInstantiationInternal(
     }
     QuantAttributes::setInstantiationLevelAttr(lem[1], maxInstLevel + 1);
   }
+  if (options().quantifiers.instGraph)
+  {
+    recordGraphNode(q, terms, id, lem);
+  }
   Trace("inst-add-debug") << " --> Success." << std::endl;
   ++(d_statistics.d_instantiations);
   return true;
+}
+
+void Instantiate::setMatchedTerms(std::vector<Node>& terms)
+{
+  d_matchedTerms.clear();
+  d_matchedTerms.swap(terms);
+}
+
+void Instantiate::recordGraphNode(Node q,
+                                  const std::vector<Node>& terms,
+                                  InferenceId id,
+                                  Node lem)
+{
+  uint64_t max = options().quantifiers.instGraphMax;
+  if (max != 0 && d_graph.size() >= max)
+  {
+    ++d_graphDropped;
+    return;
+  }
+  size_t self = d_graph.size();
+  auto qi = d_graphQuantIndex.find(q);
+  if (qi == d_graphQuantIndex.end())
+  {
+    qi = d_graphQuantIndex.emplace(q, d_graphQuants.size()).first;
+    d_graphQuants.push_back(q);
+  }
+  GraphNode gn;
+  gn.d_quant = qi->second;
+  gn.d_id = id;
+  gn.d_round = d_graphRound;
+  gn.d_depth = 0;
+  gn.d_termDepth = 0;
+  // A term the match was made against, or failing those a term it binds,
+  // blames the earlier instantiation that introduced it.
+  const std::vector<Node>& blame =
+      d_matchedTerms.empty() ? terms : d_matchedTerms;
+  for (const Node& t : blame)
+  {
+    auto it = d_graphOwner.find(t);
+    if (it == d_graphOwner.end()
+        || std::find(gn.d_parents.begin(), gn.d_parents.end(), it->second)
+               != gn.d_parents.end())
+    {
+      continue;
+    }
+    gn.d_parents.push_back(it->second);
+    gn.d_depth = std::max(gn.d_depth, d_graph[it->second].d_depth + 1);
+  }
+  std::sort(gn.d_parents.begin(), gn.d_parents.end());
+  for (const Node& t : terms)
+  {
+    uint64_t depth = static_cast<uint64_t>(TermUtil::getTermDepth(t));
+    gn.d_termDepth = std::max(gn.d_termDepth, depth);
+  }
+  d_graph.push_back(std::move(gn));
+  // This instantiation introduces each term of its lemma that neither the
+  // term database nor an earlier instantiation had. Nested quantified
+  // formulas, including q itself, are not ground and introduce nothing.
+  TermDb* tdb = d_treg.getTermDatabase();
+  std::unordered_set<TNode> visited;
+  std::vector<TNode> visit{lem};
+  while (!visit.empty())
+  {
+    TNode cur = visit.back();
+    visit.pop_back();
+    if (!visited.insert(cur).second || cur.isClosure())
+    {
+      continue;
+    }
+    Kind k = cur.getKind();
+    if (k != Kind::AND && k != Kind::OR && k != Kind::NOT && k != Kind::IMPLIES
+        && k != Kind::XOR && !tdb->isRegistered(cur))
+    {
+      // emplace keeps the first instantiation to introduce the term
+      d_graphOwner.emplace(cur, self);
+    }
+    visit.insert(visit.end(), cur.begin(), cur.end());
+  }
+}
+
+void Instantiate::printInstantiationGraph(std::ostream& out) const
+{
+  out << "(instantiation-graph" << std::endl;
+  for (size_t i = 0, size = d_graphQuants.size(); i < size; i++)
+  {
+    Node name;
+    out << "(quantifier " << i << " ";
+    if (d_qreg.getNameForQuant(d_graphQuants[i], name, true))
+    {
+      out << name;
+    }
+    else
+    {
+      out << "_";
+    }
+    out << ")" << std::endl;
+  }
+  for (size_t i = 0, size = d_graph.size(); i < size; i++)
+  {
+    const GraphNode& gn = d_graph[i];
+    out << "(node " << i << " " << gn.d_quant << " " << gn.d_id << " "
+        << gn.d_round << " " << gn.d_depth << " " << gn.d_termDepth << " (";
+    for (size_t j = 0, np = gn.d_parents.size(); j < np; j++)
+    {
+      out << (j == 0 ? "" : " ") << gn.d_parents[j];
+    }
+    out << "))" << std::endl;
+  }
+  out << "(dropped " << d_graphDropped << ")" << std::endl;
+  out << ")" << std::endl;
 }
 
 bool Instantiate::isLocalInstId(InferenceId id)

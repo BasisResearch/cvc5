@@ -97,6 +97,13 @@ class IMGenerator : protected EnvObj
    * Get the inference id, for statistics.
    */
   virtual InferenceId getInferenceId() = 0;
+  /**
+   * Add the ground terms the current match was made against, for the
+   * instantiation graph (see --inst-graph). The parent trigger calls this
+   * just before it sends the match. Adds nothing if this generator does not
+   * keep them.
+   */
+  virtual void getMatchedTerms(CVC5_UNUSED std::vector<Node>& terms) const {}
 
  protected:
   /** send instantiation

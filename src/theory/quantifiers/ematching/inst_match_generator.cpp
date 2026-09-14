@@ -298,6 +298,7 @@ int InstMatchGenerator::getMatch(Node t, InstMatch& m)
                     << d_children.size() << ", pattern is " << d_pattern
                     << std::endl;
   Assert(!d_match_pattern.isNull());
+  d_curr_candidate = t;
   if (d_cg == nullptr)
   {
     Trace("matching-fail") << "Internal error for match generator."
@@ -468,6 +469,22 @@ int InstMatchGenerator::continueNextMatch(InstMatch& m)
     return sendInstantiation(mc) ? 1 : -1;
   }
   return 1;
+}
+
+void InstMatchGenerator::getMatchedTerms(std::vector<Node>& terms) const
+{
+  if (!d_curr_candidate.isNull())
+  {
+    terms.push_back(d_curr_candidate);
+  }
+  for (const InstMatchGenerator* c : d_children)
+  {
+    c->getMatchedTerms(terms);
+  }
+  if (d_next != nullptr)
+  {
+    d_next->getMatchedTerms(terms);
+  }
 }
 
 /** reset instantiation round */

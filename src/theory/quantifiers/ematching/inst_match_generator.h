@@ -140,6 +140,8 @@ class InstMatchGenerator : public IMGenerator
    * Returns the term we are currently matching.
    */
   Node getCurrentMatch() { return d_curr_matched; }
+  /** Add the terms this generator and those below it are matching. */
+  void getMatchedTerms(std::vector<Node>& terms) const override;
   /** set that this match generator is independent
    *
    * A match generator is indepndent when this generator fails to produce a
@@ -224,6 +226,12 @@ class InstMatchGenerator : public IMGenerator
   Node d_match_pattern;
   /** The current term we are matching. */
   Node d_curr_matched;
+  /**
+   * The term getMatch is matching against d_match_pattern. Unlike
+   * d_curr_matched, which getNextMatch sets once a match is complete, this is
+   * already set while the match is sent.
+   */
+  Node d_curr_candidate;
   /** do we need to call reset on this generator? */
   bool d_needsReset;
   /** candidate generator

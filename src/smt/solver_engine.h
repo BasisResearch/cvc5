@@ -734,6 +734,11 @@ class CVC5_EXPORT SolverEngine
    * another process. A vector, or a formula, mentioning any other skolem has
    * no input form; it is left out and counted in dropped by skolem kind.
    */
+  /**
+   * Print the instantiation graph of the last check (see
+   * Instantiate::printInstantiationGraph). Requires --inst-graph.
+   */
+  void printInstantiationGraph(std::ostream& out);
   void exportInstantiations(
       const std::string& key,
       std::vector<std::tuple<Node, Node, size_t>>& skolems,

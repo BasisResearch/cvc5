@@ -6823,6 +6823,29 @@ class CVC5_EXPORT Solver
   std::string getInstantiations() const;
 
   /**
+   * The instantiation graph of the last check: each quantified formula it
+   * instantiated, then each instantiation in order with its formula, the
+   * strategy that made it, its round, its depth, the depth of its deepest
+   * instantiating term, and the earlier instantiations that introduced a
+   * term it matched.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (get-instantiation-graph)
+   *
+   * Requires enabling option ``inst-graph``.
+   * \endverbatim
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @return The graph, as ``(get-instantiation-graph)`` prints it.
+   */
+  std::string getInstantiationGraph() const;
+
+  /**
    * Push (a) level(s) to the assertion stack.
    *
    * SMT-LIB:

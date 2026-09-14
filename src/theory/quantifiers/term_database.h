@@ -209,6 +209,8 @@ class TermDb : public QuantifiersUtil
    * Otherwise, it returns the lookup in the map d_has_map.
    */
   bool hasTermCurrent(const Node& n, bool useMode = true) const;
+  /** Whether n was added to this database by addTerm. */
+  bool isRegistered(const Node& n) const;
   /** is term eligble for instantiation? */
   bool isTermEligibleForInstantiation(TNode n, TNode f);
   /** get eligible term in equivalence class of r */

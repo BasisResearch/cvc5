@@ -2121,6 +2121,24 @@ void SolverEngine::getInstantiationsToSave(
   }
 }
 
+void SolverEngine::printInstantiationGraph(std::ostream& out)
+{
+  // see if another solver engine was responsible for the last status
+  SolverEngine* ssolver = d_state->getStatusSolver();
+  if (ssolver != nullptr)
+  {
+    return ssolver->printInstantiationGraph(out);
+  }
+  if (!d_env->getOptions().quantifiers.instGraph)
+  {
+    throw RecoverableModalException(
+        "Cannot get the instantiation graph unless option inst-graph is on.");
+  }
+  QuantifiersEngine* qe =
+      getAvailableQuantifiersEngine("printInstantiationGraph");
+  qe->printInstantiationGraph(out);
+}
+
 void SolverEngine::exportInstantiations(
     const std::string& key,
     std::vector<std::tuple<Node, Node, size_t>>& skolems,

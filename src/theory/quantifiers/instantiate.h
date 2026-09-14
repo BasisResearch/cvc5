@@ -16,6 +16,7 @@
 #define CVC5__THEORY__QUANTIFIERS__INSTANTIATE_H
 
 #include <map>
+#include <unordered_map>
 
 #include "context/cdhashset.h"
 #include "context/cdo.h"
@@ -112,6 +113,8 @@ class Instantiate : public QuantifiersUtil
   ~Instantiate();
   /** reset */
   bool reset(Theory::Effort e) override;
+  /** presolve, clears the instantiation graph of the last check */
+  void presolve() override;
   /** register quantifier */
   void registerQuantifier(Node q) override;
   /** identify */
@@ -306,6 +309,36 @@ class Instantiate : public QuantifiersUtil
                 std::map<Node, std::vector<std::vector<Node>>>& out) const;
   //--------------------------------------end saved instantiations
 
+  //--------------------------------------instantiation graph
+  /**
+   * Set the ground terms the next call to addInstantiation matched. E-matching
+   * sets them just before it sends a match, when --inst-graph is on. Without
+   * them the instantiation's own terms stand in. Takes the contents of terms.
+   */
+  void setMatchedTerms(std::vector<Node>& terms);
+  /**
+   * Print the instantiation graph of the last check-sat (see --inst-graph):
+   *
+   *   (instantiation-graph
+   *   (quantifier <index> <qid or _>)*
+   *   (node <index> <quantifier> <inference id> <round> <depth> <term depth>
+   *         (<parent>*))*
+   *   (dropped <count>)
+   *   )
+   *
+   * Nodes are the instantiations added in this check-sat, in order. A parent
+   * is an earlier instantiation whose lemma first introduced a term this one
+   * matched: e-matching reports the terms it matched against; any other
+   * strategy is blamed on the terms it instantiated with. A term the term
+   * database already held before the lemma introduced none. The depth is 0
+   * without parents, otherwise one more than the deepest parent; the term
+   * depth is that of the deepest instantiating term. The round counts the
+   * instantiation rounds of the check-sat from 1. Instantiations past
+   * --inst-graph-max are counted in dropped.
+   */
+  void printInstantiationGraph(std::ostream& out) const;
+  //--------------------------------------end instantiation graph
+
   /** Are proofs enabled for this object? */
   bool isProofEnabled() const;
 
@@ -348,6 +381,27 @@ class Instantiate : public QuantifiersUtil
   static bool isLocalInstId(InferenceId id);
   /** Get or make the instantiation list for quantified formula q */
   InstLemmaList* getOrMkInstLemmaList(TNode q);
+  /** Add the instantiation lem of q for terms to the instantiation graph. */
+  void recordGraphNode(Node q,
+                       const std::vector<Node>& terms,
+                       InferenceId id,
+                       Node lem);
+  /** An instantiation in the instantiation graph */
+  struct GraphNode
+  {
+    /** Index of its quantified formula in d_graphQuants */
+    size_t d_quant;
+    /** The strategy that made it */
+    InferenceId d_id;
+    /** The instantiation round of the check-sat, from 1 */
+    uint64_t d_round;
+    /** 0 without parents, otherwise one more than the deepest parent */
+    uint64_t d_depth;
+    /** The depth of the deepest instantiating term */
+    uint64_t d_termDepth;
+    /** Earlier instantiations that introduced a term it matched, ascending */
+    std::vector<size_t> d_parents;
+  };
 
   /** Reference to the quantifiers state */
   QuantifiersState& d_qstate;
@@ -373,6 +427,21 @@ class Instantiate : public QuantifiersUtil
    * on presolve, e.g. it is local to a check-sat call.
    */
   std::map<Node, std::vector<Node>> d_recordedInst;
+  //--------------------------------------instantiation graph
+  /** The instantiations of the last check-sat, in order (--inst-graph) */
+  std::vector<GraphNode> d_graph;
+  /** The quantified formulas the graph instantiates, and their indices */
+  std::vector<Node> d_graphQuants;
+  std::map<Node, size_t> d_graphQuantIndex;
+  /** Each term an instantiation of the graph introduced, and which one */
+  std::unordered_map<Node, size_t> d_graphOwner;
+  /** The terms the instantiation being added matched, if known */
+  std::vector<Node> d_matchedTerms;
+  /** The current instantiation round of this check-sat */
+  uint64_t d_graphRound = 0;
+  /** Instantiations not recorded once the graph held --inst-graph-max */
+  uint64_t d_graphDropped = 0;
+  //--------------------------------------end instantiation graph
   /** statistics for debugging total instantiations per quantifier per round */
   std::map<Node, uint32_t> d_instDebugTemp;
   /** list of all instantiations produced for each quantifier

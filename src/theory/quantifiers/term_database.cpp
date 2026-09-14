@@ -572,6 +572,11 @@ bool TermDb::isTermActive(Node n)
 
 void TermDb::setTermInactive(Node n) { d_inactive_map[n] = true; }
 
+bool TermDb::isRegistered(const Node& n) const
+{
+  return d_processed.find(n) != d_processed.end();
+}
+
 bool TermDb::hasTermCurrent(const Node& n, bool useMode) const
 {
   if (!useMode)
