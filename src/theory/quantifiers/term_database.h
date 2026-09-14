@@ -210,7 +210,8 @@ class TermDb : public QuantifiersUtil
    */
   bool hasTermCurrent(const Node& n, bool useMode = true) const;
   /**
-   * Whether n is in this database, or (with --inst-graph) was added to it
+   * Whether n is in this database, or (with --inst-graph or
+   * --matching-loops) was added to it
    * in the current user context. The database follows the SAT context, so a
    * term registered above level 0 leaves it on backtrack; the instantiation
    * graph must not then treat it as new.
@@ -246,7 +247,8 @@ class TermDb : public QuantifiersUtil
   /** terms processed */
   NodeSet d_processed;
   /**
-   * With --inst-graph, every term added in the current user context, and
+   * With --inst-graph or --matching-loops, every term added in the current
+   * user context, and
    * its original form. Unlike d_processed it survives SAT backtracking;
    * input terms are added before presolve, so it is not cleared there.
    */

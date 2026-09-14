@@ -302,7 +302,8 @@ void TermDb::eqNotifyMerge(TNode t1, TNode t2)
 
 void TermDb::addTerm(Node n)
 {
-  if (options().quantifiers.instGraph)
+  // --matching-loops reads the same record as --inst-graph
+  if (options().quantifiers.instGraph || options().quantifiers.matchingLoops)
   {
     // The database holds terms after preprocessing, while instantiation
     // lemmas still hold, e.g., the ite it purified away. Keep the original

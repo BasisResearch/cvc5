@@ -364,7 +364,8 @@ class Instantiate : public QuantifiersUtil
   /**
    * Set the ground terms the next call to addInstantiation matched, as
    * IMGenerator::getMatchedTerms splits them. E-matching sets them just
-   * before it sends a match, when --inst-graph is on. Without them the
+   * before it sends a match, when --inst-graph or --matching-loops is on.
+   * Without them the
    * instantiation's own terms stand in.
    */
   void setMatchedTerms(std::vector<Node>&& outer, std::vector<Node>&& inner);

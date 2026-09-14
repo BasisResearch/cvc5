@@ -186,7 +186,8 @@ bool Trigger::sendInstantiation(std::vector<Node>& m)
 {
   InferenceId id = d_mg->getInferenceId();
   Instantiate* inst = d_qim.getInstantiate();
-  if (options().quantifiers.instGraph)
+  // --matching-loops reads the same record as --inst-graph
+  if (options().quantifiers.instGraph || options().quantifiers.matchingLoops)
   {
     std::vector<Node> outer;
     std::vector<Node> inner;
