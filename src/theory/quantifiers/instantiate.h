@@ -17,6 +17,8 @@
 
 #include <map>
 #include <unordered_map>
+#include <set>
+#include <vector>
 
 #include "context/cdhashset.h"
 #include "context/cdo.h"
@@ -39,6 +41,7 @@ class QuantifiersState;
 class QuantifiersInferenceManager;
 class QuantifiersRegistry;
 class FirstOrderModel;
+class MatchingLoops;
 
 /** Instantiation rewriter
  *
@@ -111,10 +114,58 @@ class Instantiate : public QuantifiersUtil
               QuantifiersRegistry& qr,
               TermRegistry& tr);
   ~Instantiate();
+  /**
+   * presolve, forgets the instantiations recorded for the last check and
+   * clears the pressure of the previous check-sat
+   */
+  void presolve() override;
   /** reset */
   bool reset(Theory::Effort e) override;
-  /** presolve, clears the instantiation graph of the last check */
-  void presolve() override;
+
+  /**
+   * The instantiation pressure on one quantified formula during the current
+   * check-sat. Each attempt that reaches the duplicate checks of
+   * addInstantiation is counted once: added, or rejected as entailed, as a
+   * repeated term vector, or as a repeated lemma. Summed over formulas, these
+   * are this check-sat's share of the statistics named below.
+   */
+  struct Pressure
+  {
+    /** Added (Instantiate::Instantiations). */
+    uint64_t d_added = 0;
+    /** Rejected: the term vector was used before (Duplicate_Inst_Eq). */
+    uint64_t d_dupEq = 0;
+    /** Rejected: the instance was entailed (Duplicate_Inst_Ent). */
+    uint64_t d_dupEnt = 0;
+    /** Rejected: the lemma existed already (Duplicate_Inst). */
+    uint64_t d_dupLemma = 0;
+    /** The rounds of the first and last added instantiation. */
+    uint64_t d_firstRound = 0;
+    uint64_t d_lastRound = 0;
+    /**
+     * Added by conflict-based instantiation because the instance was false
+     * in the current assignment (QUANTIFIERS_INST_CBQI_CONFLICT,
+     * QUANTIFIERS_INST_SUB_CONFLICT).
+     */
+    uint64_t d_conflict = 0;
+    /**
+     * Added by conflict-based instantiation because the instance propagates
+     * in the current assignment (QUANTIFIERS_INST_CBQI_PROP).
+     */
+    uint64_t d_propagate = 0;
+    /**
+     * The term vectors added, kept only when proofs are enabled, so that a
+     * refutation's instances can be matched against this check-sat's.
+     */
+    std::set<std::vector<Node>> d_addedVecs;
+  };
+  /** The pressure on each quantified formula attempted this check-sat. */
+  const std::map<Node, Pressure>& getPressure() const { return d_pressure; }
+  /**
+   * The instantiation rounds of this check-sat that sent lemmas so far. An
+   * instantiation made in round k (from 0) records k.
+   */
+  uint64_t getPressureRounds() const { return d_pressureRounds; }
   /** register quantifier */
   void registerQuantifier(Node q) override;
   /** identify */
@@ -345,6 +396,13 @@ class Instantiate : public QuantifiersUtil
   void printInstantiationGraph(std::ostream& out) const;
   //--------------------------------------end instantiation graph
 
+  /**
+   * Print the matching loops among the instantiations of the last check-sat
+   * (see MatchingLoops::print). Requires --matching-loops. maxInstRounds is
+   * whether the instantiation round limit stopped that check-sat.
+   */
+  void printMatchingLoops(std::ostream& out, bool maxInstRounds) const;
+
   /** Are proofs enabled for this object? */
   bool isProofEnabled() const;
 
@@ -495,8 +553,14 @@ class Instantiate : public QuantifiersUtil
    * lemmas have been sent. A round interrupted part way through resumes here.
    */
   context::CDHashMap<Node, size_t> d_replayProgress;
+  /** The pressure on each quantified formula, cleared on presolve. */
+  std::map<Node, Pressure> d_pressure;
+  /** The rounds this check-sat that sent lemmas, cleared on presolve. */
+  uint64_t d_pressureRounds = 0;
   /** The replay record for q under key's current vectors, null if none. */
   Node replayRecord(const std::string& key, const Node& q) const;
+  /** The instantiations of this check-sat, if --matching-loops */
+  std::unique_ptr<MatchingLoops> d_matchingLoops;
 };
 
 }  // namespace quantifiers
