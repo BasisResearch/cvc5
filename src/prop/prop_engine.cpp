@@ -481,6 +481,7 @@ Result PropEngine::checkSat()
   // Mark that we are in the checkSat
   ScopedBool scopedBool(d_inCheckSat);
   d_inCheckSat = true;
+  d_lastIncompleteIds.clear();
 
   if (options().base.preprocessOnly)
   {
@@ -556,6 +557,9 @@ Result PropEngine::checkSat()
   {
     if (d_theoryProxy->isModelUnsound())
     {
+      // Copy the ids now: they live in the SAT context, which is popped before
+      // the next command that begins a call.
+      d_lastIncompleteIds = d_theoryProxy->getModelUnsoundIds();
       outputIncompleteReason(UnknownExplanation::INCOMPLETE,
                              d_theoryProxy->getModelUnsoundId());
       return Result(Result::UNKNOWN, UnknownExplanation::INCOMPLETE);
@@ -563,8 +567,9 @@ Result PropEngine::checkSat()
   }
   else if (d_theoryProxy->isRefutationUnsound())
   {
-    outputIncompleteReason(UnknownExplanation::INCOMPLETE,
-                           d_theoryProxy->getRefutationUnsoundId());
+    theory::IncompleteId id = d_theoryProxy->getRefutationUnsoundId();
+    d_lastIncompleteIds = {id};
+    outputIncompleteReason(UnknownExplanation::INCOMPLETE, id);
     return Result(Result::UNKNOWN, UnknownExplanation::INCOMPLETE);
   }
 

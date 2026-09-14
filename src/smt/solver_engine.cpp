@@ -384,7 +384,17 @@ void SolverEngine::setInfo(const std::string& key, const std::string& value)
 }
 
 namespace {
-std::string quantIdName(const Node& q);
+/** The :qid of quantified formula q as a string, or empty if it has none. */
+std::string quantIdName(const Node& q)
+{
+  theory::quantifiers::QAttributes qa;
+  theory::quantifiers::QuantAttributes::computeQuantAttributes(q, qa);
+  if (qa.d_name.isNull() || !qa.d_name.hasName())
+  {
+    return "";
+  }
+  return qa.d_name.getName();
+}
 
 /**
  * The (get-info :inst-pressure) reply for the last check-sat: its
@@ -515,8 +525,10 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
   if (key == "all-statistics" || key == "error-behavior" || key == "filename"
       || key == "name" || key == "version" || key == "authors"
       || key == "status" || key == "time" || key == "reason-unknown"
-      || key == "inst-pressure" || key == "matching-loops"
-      || key == "assertion-stack-levels" || key == "all-options")
+      || key == "incomplete-id" || key == "incomplete-ids"
+      || key == "incomplete-culprits" || key == "inst-pressure"
+      || key == "matching-loops" || key == "assertion-stack-levels"
+      || key == "all-options")
   {
     return true;
   }
@@ -583,6 +595,43 @@ std::string SolverEngine::getInfo(const std::string& key) const
           "Can't get-info :reason-unknown when the "
           "last result wasn't unknown!");
     }
+  }
+  if (key == "incomplete-id")
+  {
+    return theory::toString(getIncompleteId());
+  }
+  if (key == "incomplete-ids")
+  {
+    std::stringstream ss;
+    ss << "(";
+    bool first = true;
+    for (theory::IncompleteId id : getIncompleteIds())
+    {
+      ss << (first ? "" : " ") << theory::toString(id);
+      first = false;
+    }
+    ss << ")";
+    return ss.str();
+  }
+  if (key == "incomplete-culprits")
+  {
+    // The :qid of each culprit, once each, in the order they were found.
+    // Culprits without a :qid are left out, so () with QUANTIFIERS among
+    // :incomplete-ids means they were all unnamed or the source was global.
+    // getIncompleteCulprits returns every culprit, named or not.
+    std::stringstream ss;
+    ss << "(";
+    std::unordered_set<std::string> seen;
+    for (const Node& q : getIncompleteCulprits())
+    {
+      std::string name = quantIdName(q);
+      if (!name.empty() && seen.insert(name).second)
+      {
+        ss << (seen.size() > 1 ? " " : "") << quoteSymbol(name);
+      }
+    }
+    ss << ")";
+    return ss.str();
   }
   if (key == "inst-pressure")
   {
@@ -1006,8 +1055,16 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
 
   Trace("smt") << "SolverEngine::checkSat(" << assumptions << ") => " << r
                << endl;
-  // notify our state of the check-sat result
-  d_state->notifyCheckSatResult(r);
+  // notify our state of the check-sat result, and of the ids behind an
+  // incomplete one: they are copied now since reset-assertions replaces the
+  // prop engine but keeps the result
+  std::vector<theory::IncompleteId> incompleteIds;
+  if (r.isUnknown()
+      && r.getUnknownExplanation() == UnknownExplanation::INCOMPLETE)
+  {
+    incompleteIds = d_smtSolver->getPropEngine()->getLastIncompleteIds();
+  }
+  d_state->notifyCheckSatResult(r, nullptr, incompleteIds);
 
   // Check that SAT results generate a model correctly.
   if (d_env->getOptions().smt.checkModels)
@@ -2617,19 +2674,56 @@ std::vector<Node> SolverEngine::getAssertions()
   return getAssertionsInternal();
 }
 
-namespace {
-/** The :qid of quantified formula q as a string, or empty if it has none. */
-std::string quantIdName(const Node& q)
+std::vector<theory::IncompleteId> SolverEngine::getIncompleteIds() const
 {
-  theory::quantifiers::QAttributes qa;
-  theory::quantifiers::QuantAttributes::computeQuantAttributes(q, qa);
-  if (qa.d_name.isNull() || !qa.d_name.hasName())
+  Result status = d_state->getStatus();
+  if (status.isNull() || !status.isUnknown()
+      || status.getUnknownExplanation() != UnknownExplanation::INCOMPLETE)
   {
-    return "";
+    return {};
   }
-  return qa.d_name.getName();
+  // The result of get-timeout-core comes from the timeout core manager's
+  // subsolver, which knows why it gave up.
+  SolverEngine* solver = d_state->getStatusSolver();
+  std::vector<theory::IncompleteId> ids = solver != nullptr && solver != this
+                                              ? solver->getIncompleteIds()
+                                              : d_state->getIncompleteIds();
+  if (ids.empty())
+  {
+    // an incomplete answer whose source recorded no id
+    ids.push_back(theory::IncompleteId::UNKNOWN);
+  }
+  return ids;
 }
-}  // namespace
+
+theory::IncompleteId SolverEngine::getIncompleteId() const
+{
+  std::vector<theory::IncompleteId> ids = getIncompleteIds();
+  return ids.empty() ? theory::IncompleteId::NONE : ids.back();
+}
+
+std::vector<Node> SolverEngine::getIncompleteCulprits() const
+{
+  std::vector<theory::IncompleteId> ids = getIncompleteIds();
+  if (ids.empty())
+  {
+    return {};
+  }
+  SolverEngine* solver = d_state->getStatusSolver();
+  if (solver != nullptr && solver != this)
+  {
+    return solver->getIncompleteCulprits();
+  }
+  QuantifiersEngine* qe =
+      d_smtSolver == nullptr ? nullptr : d_smtSolver->getQuantifiersEngine();
+  if (qe == nullptr
+      || std::find(ids.begin(), ids.end(), qe->getIncompleteCulpritsId())
+             == ids.end())
+  {
+    return {};
+  }
+  return qe->getIncompleteCulprits();
+}
 
 void SolverEngine::getAssertionSources(
     std::vector<std::pair<Node, std::vector<std::string>>>& srcs)

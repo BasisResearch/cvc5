@@ -1741,6 +1741,10 @@ set(regress_0_tests
   regress0/quantifiers/bug269.smt2
   regress0/quantifiers/bug290.smt2
   regress0/quantifiers/bug291.smt2
+  regress0/quantifiers/incomplete-id-culprits.smt2
+  regress0/quantifiers/incomplete-id-max-rounds.smt2
+  regress0/quantifiers/incomplete-id-reset.smt2
+  regress0/quantifiers/incomplete-ids-multi.smt2
   regress0/quantifiers/bug749-rounding.smt2
   regress0/quantifiers/cbqi-lia-dt-simp.smt2
   regress0/quantifiers/cegqi-needs-justify.smt2
@@ -2179,6 +2183,7 @@ set(regress_0_tests
   regress0/smtlib/issue4866.smt2
   regress0/smtlib/issue7374.smt2
   regress0/smtlib/issue12663.smt2
+  regress0/smtlib/incomplete-id-none.smt2
   regress0/smtlib/reason-unknown.smt2
   regress0/smtlib/reset-assertions-global.smt2
   regress0/smtlib/reset-assertions1.smt2
