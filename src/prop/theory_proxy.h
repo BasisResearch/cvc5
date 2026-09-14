@@ -141,6 +141,11 @@ class TheoryProxy : protected EnvObj, public Registrar
   bool isRefutationUnsound() const;
   /** Get model unsound id, valid when isModelUnsound is true. */
   theory::IncompleteId getModelUnsoundId() const;
+  /**
+   * Get every model unsound id (see TheoryEngine::getModelUnsoundIds), valid
+   * when isModelUnsound is true. The last one is getModelUnsoundId().
+   */
+  std::vector<theory::IncompleteId> getModelUnsoundIds() const;
   /** Get unsound id, valid when isRefutationUnsound is true. */
   theory::IncompleteId getRefutationUnsoundId() const;
 

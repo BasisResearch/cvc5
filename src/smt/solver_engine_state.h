@@ -16,10 +16,12 @@
 #define CVC5__SMT__SMT_ENGINE_STATE_H
 
 #include <string>
+#include <vector>
 
 #include "context/context.h"
 #include "smt/env_obj.h"
 #include "smt/smt_mode.h"
+#include "theory/incomplete_id.h"
 #include "util/result.h"
 #include "util/synth_result.h"
 
@@ -93,8 +95,13 @@ class SolverEngineState : protected EnvObj
    * returned normal (i.e. it was not interupted).
    *
    * @param r The result of the check-sat call.
+   * @param incompleteIds The incomplete ids behind r, if r is
+   * unknown(INCOMPLETE), see getIncompleteIds.
    */
-  void notifyCheckSatResult(const Result& r, SolverEngine* solver = nullptr);
+  void notifyCheckSatResult(
+      const Result& r,
+      SolverEngine* solver = nullptr,
+      const std::vector<theory::IncompleteId>& incompleteIds = {});
   /**
    * Notify that the result of the last check-synth or check-synth-next was r.
    * @param r The result of the check-synth or check-synth-next call.
@@ -151,6 +158,14 @@ class SolverEngineState : protected EnvObj
   /** Get the status of the last check-sat */
   Result getStatus() const;
   /**
+   * Get the incomplete ids behind the last check-sat, as given to
+   * notifyCheckSatResult. Empty unless its result was unknown(INCOMPLETE).
+   */
+  const std::vector<theory::IncompleteId>& getIncompleteIds() const
+  {
+    return d_incompleteIds;
+  }
+  /**
    * Get the solver engine that is responsible for the checkSatisfiability
    * result. If null, then the parent solver engine is assumed.
    */
@@ -182,6 +197,8 @@ class SolverEngineState : protected EnvObj
    * SolverEngine.
    */
   Result d_status;
+  /** The incomplete ids behind d_status, see getIncompleteIds */
+  std::vector<theory::IncompleteId> d_incompleteIds;
   /**
    * The solver engine that is responsible for the checkSatisfiability result.
    */
