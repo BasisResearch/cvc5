@@ -101,7 +101,12 @@ void Instantiate::presolve()
   d_graphRound = 0;
   d_graphTotal = 0;
   d_lemmaRound = 1;
-  clearPressure();
+  // After a deep restart this engine continues its check-sat's pressure (see
+  // setPressureCarry); otherwise the carry is empty, and this clears it.
+  d_pressure = std::move(d_pressureCarry.d_pressure);
+  d_pressureRounds = d_pressureCarry.d_rounds;
+  d_strategyCounts = d_pressureCarry.d_strategyCounts;
+  d_pressureCarry = PressureCarry();
 }
 
 void Instantiate::clearPressure()
@@ -109,6 +114,20 @@ void Instantiate::clearPressure()
   d_pressure.clear();
   d_pressureRounds = 0;
   d_strategyCounts.fill(0);
+  d_pressureCarry = PressureCarry();
+}
+
+Instantiate::PressureCarry Instantiate::takePressureCarry()
+{
+  PressureCarry carry{
+      std::move(d_pressure), d_pressureRounds, d_strategyCounts};
+  clearPressure();
+  return carry;
+}
+
+void Instantiate::setPressureCarry(PressureCarry carry)
+{
+  d_pressureCarry = std::move(carry);
 }
 
 Instantiate::StrategyKind Instantiate::strategyOf(InferenceId id)
@@ -479,6 +498,7 @@ bool Instantiate::addInstantiationInternal(
     pressure.d_firstRound = d_pressureRounds;
   }
   pressure.d_lastRound = d_pressureRounds;
+  ++pressure.d_byInference[id];
   if (isProofEnabled())
   {
     pressure.d_addedVecs.insert(terms);

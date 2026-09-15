@@ -35,6 +35,8 @@
 #include "smt/proof_manager.h"
 #include "smt/solver_engine_stats.h"
 #include "theory/logic_info.h"
+#include "theory/quantifiers/instantiate.h"
+#include "theory/quantifiers_engine.h"
 #include "theory/theory_engine.h"
 #include "theory/theory_traits.h"
 
@@ -61,6 +63,17 @@ SmtSolver::~SmtSolver() {}
 
 void SmtSolver::finishInit()
 {
+  // A deep restart replaces the theory engine within one check-sat, so the
+  // quantifiers engine it replaces hands on the check's instantiation
+  // pressure so far (see Instantiate::setPressureCarry).
+  theory::quantifiers::Instantiate::PressureCarry carry;
+  if (d_theoryEngine != nullptr)
+  {
+    if (theory::QuantifiersEngine* qe = getQuantifiersEngine())
+    {
+      carry = qe->getInstantiate()->takePressureCarry();
+    }
+  }
   // We have mutual dependency here, so we add the prop engine to the theory
   // engine later (it is non-essential there)
   d_theoryEngine.reset(new TheoryEngine(d_env));
@@ -92,6 +105,10 @@ void SmtSolver::finishInit()
   Trace("smt-debug") << "Finishing init for theory engine..." << std::endl;
   d_theoryEngine->finishInit();
   d_propEngine->finishInit();
+  if (theory::QuantifiersEngine* qe = getQuantifiersEngine())
+  {
+    qe->getInstantiate()->setPressureCarry(std::move(carry));
+  }
   finishInitPreprocessor();
 
   if (options().proof.proofLog)
