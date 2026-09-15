@@ -118,6 +118,12 @@ class TheoryArith : public Theory
   /** Return a reference to the arith::InferenceManager. */
   InferenceManager& getInferenceManager() { return d_im; }
 
+  /** The nonlinear extension, or nullptr when nonlinear reasoning is off. */
+  nl::NonlinearExtension* getNonlinearExtension()
+  {
+    return d_nonlinearExtension.get();
+  }
+
  private:
   /**
    * Update d_arithModelCache (if it is empty right now) and compute the termSet
