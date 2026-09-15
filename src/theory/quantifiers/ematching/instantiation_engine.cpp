@@ -46,7 +46,9 @@ InstantiationEngine::InstantiationEngine(Env& env,
   {
     d_quant_rel.reset(new quantifiers::QuantRelevance(env));
   }
-  if (options().quantifiers.eMatching)
+  // Under --quant-ladder this module exists even with --no-e-matching, for
+  // --quant-strategy=ematch to run.
+  if (options().quantifiers.eMatching || options().quantifiers.quantLadder)
   {
     // these are the instantiation strategies for E-matching
     // user-provided patterns
