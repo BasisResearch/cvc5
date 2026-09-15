@@ -182,8 +182,9 @@ class Speculation : protected EnvObj
    * The status is applied; rejected (the instantiation funnel refused the
    * directed instance); mismatch (the formula's variables do not fit the
    * request); unusable (the pattern cannot be a trigger); no-quantifier (it
-   * was applied and no asserted formula has the qid); or pending (no round
-   * has reached e-matching yet, for instance because conflict-based
+   * was applied and no asserted formula has the qid, which is also what a
+   * formula without a pattern that miniscoping split gives); or pending
+   * (no round has reached e-matching yet, for instance because conflict-based
    * instantiation closed every check first). Terms are printed in original
    * form and flat; one larger than a
    * size limit prints as the symbol ...
@@ -264,7 +265,6 @@ class Speculation : protected EnvObj
   /** Record an instance vector on h, up to a cap */
   static void keep(Hypothesis& h, const std::vector<Node>& terms);
 
-  Env& d_envRef;
   QuantifiersState& d_qstate;
   QuantifiersInferenceManager& d_qim;
   QuantifiersRegistry& d_qreg;

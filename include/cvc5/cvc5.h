@@ -6341,7 +6341,11 @@ class CVC5_EXPORT Solver
    *
    * @param qid The :qid of the formulas. A formula keeps its :qid when the
    *            rewriter eliminates one of its variables; name only the
-   *            variables that remain. A formula alpha-equivalent to one
+   *            variables that remain. A formula without a :pattern that
+   *            miniscoping splits, such as
+   *            (forall ((x Int) (y Int)) (or (P x) (R y))), does not keep
+   *            it, so its parts are not found (--miniscope-quant=off keeps
+   *            the formula whole). A formula alpha-equivalent to one
    *            asserted before it is not registered on its own
    *            (--quant-alpha-equiv), so its :qid finds nothing.
    * @param vars The names of their variables, each at most once.

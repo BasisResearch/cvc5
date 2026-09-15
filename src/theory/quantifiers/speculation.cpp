@@ -116,7 +116,6 @@ Speculation::Speculation(Env& env,
                          QuantifiersRegistry& qr,
                          TermRegistry& tr)
     : EnvObj(env),
-      d_envRef(env),
       d_qstate(qs),
       d_qim(qim),
       d_qreg(qr),
@@ -494,6 +493,12 @@ void Speculation::instantiate(Instantiate& inst, Hypothesis& h, const Node& q)
     }
     Node t = rewrite(d_env.getTopLevelSubstitutions().apply(
         r.d_terms[it - r.d_names.begin()]));
+    // An integer term for a real variable means its real, as it would in an
+    // SMT-LIB term, so "5" may stand for 5.0.
+    if (v.getType().isReal() && t.getType().isInteger())
+    {
+      t = rewrite(NodeManager::mkNode(Kind::TO_REAL, t));
+    }
     if (t.getType() != v.getType())
     {
       std::stringstream ss;
@@ -629,7 +634,7 @@ void Speculation::installTrigger(size_t i, Hypothesis& h, const Node& q)
     }
   }
   auto t = std::make_shared<inst::Trigger>(
-      d_envRef, d_qstate, d_qim, d_qreg, d_treg, q, nodes, true);
+      d_env, d_qstate, d_qim, d_qreg, d_treg, q, nodes, true);
   t->setInferenceId(InferenceId::QUANTIFIERS_INST_LLM_DIRECTED);
   d_triggers.push_back({i, t});
   h.d_status = "applied";

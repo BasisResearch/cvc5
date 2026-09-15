@@ -1844,6 +1844,7 @@ set(regress_0_tests
   regress0/quantifiers/speculate-block-model.smt2
   regress0/quantifiers/speculate-errors.smt2
   regress0/quantifiers/speculate-instantiate.smt2
+  regress0/quantifiers/speculate-instantiate-real.smt2
   regress0/quantifiers/speculate-instantiate-subst.smt2
   regress0/quantifiers/speculate-pending.smt2
   regress0/quantifiers/speculate-qf.smt2
