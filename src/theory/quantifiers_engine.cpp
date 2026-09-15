@@ -269,34 +269,49 @@ void QuantifiersEngine::check(Theory::Effort e)
 {
   IncompleteId setModelUnsoundId = IncompleteId::NONE;
   d_roundCulprits.clear();
-  checkInternal(e, setModelUnsoundId);
-  // SAT case
-  if (e == Theory::EFFORT_LAST_CALL && !d_qstate.getValuation().needCheck())
+  try
   {
-    // if we are about to say "unknown", see if anything can be done as a last
-    // resort to avoid this
-    if (setModelUnsoundId != IncompleteId::NONE
-        && shouldRecheck(e, setModelUnsoundId))
+    checkInternal(e, setModelUnsoundId);
+    // SAT case
+    if (e == Theory::EFFORT_LAST_CALL && !d_qstate.getValuation().needCheck())
     {
-      Trace("quant-engine-debug") << "*** Run recheck" << std::endl;
-      // We simply mark the output channel is used, which will ensure we are
-      // called again to check.
-      // We do this instead of checking again here since some modules (e.g. fmf)
-      // assume that models are only built once per last call effort check.
-      d_qim.markUsed();
-    }
-    else
-    {
-      if (setModelUnsoundId != IncompleteId::NONE)
+      // if we are about to say "unknown", see if anything can be done as a
+      // last resort to avoid this
+      if (setModelUnsoundId != IncompleteId::NONE
+          && shouldRecheck(e, setModelUnsoundId))
       {
-        Trace("quant-engine") << "Set incomplete flag." << std::endl;
-        d_qim.setModelUnsound(setModelUnsoundId);
-        d_incompleteCulprits = d_roundCulprits;
-        d_incompleteCulpritsId = setModelUnsoundId;
+        Trace("quant-engine-debug") << "*** Run recheck" << std::endl;
+        // We simply mark the output channel is used, which will ensure we are
+        // called again to check.
+        // We do this instead of checking again here since some modules (e.g.
+        // fmf) assume that models are only built once per last call effort
+        // check.
+        d_qim.markUsed();
       }
-      // output debug stats
-      d_qim.getInstantiate()->debugPrintModel();
+      else
+      {
+        if (setModelUnsoundId != IncompleteId::NONE)
+        {
+          Trace("quant-engine") << "Set incomplete flag." << std::endl;
+          d_qim.setModelUnsound(setModelUnsoundId);
+          d_incompleteCulprits = d_roundCulprits;
+          d_incompleteCulpritsId = setModelUnsoundId;
+        }
+        // output debug stats
+        d_qim.getInstantiate()->debugPrintModel();
+      }
     }
+  }
+  catch (...)
+  {
+    // An interrupt (the resource limit, raised by the output channel as
+    // theory::Interrupted) unwinds the check before the clear below. The
+    // lemmas built but not yet sent would then stay pending until the next
+    // presolve, but pre-registering a quantified formula sends pending lemmas
+    // before that presolve: the instances of a popped scope would reach the
+    // next check-sat.
+    d_qim.clearPending();
+    throw;
   }
   d_qim.clearPending();
 }
