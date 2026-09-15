@@ -154,6 +154,12 @@ class Instantiate : public QuantifiersUtil
      */
     uint64_t d_propagate = 0;
     /**
+     * Added, by the inference that sent the instance: which strategy made it
+     * (e-matching, conflict-based, model-based, enumerative, ...). The counts
+     * sum to d_added.
+     */
+    std::map<InferenceId, uint64_t> d_byInference;
+    /**
      * The term vectors added, kept only when proofs are enabled, so that a
      * refutation's instances can be matched against this check-sat's.
      */

@@ -1260,6 +1260,12 @@ class CVC5_EXPORT SolverEngine
    */
   size_t d_checkedAssertions = 0;
   uint32_t d_checkedLevel = 0;
+  /**
+   * The resource units the last check-sat spent, for (get-info
+   * :branch-profile): the growth of the cumulative count across it, so it
+   * includes preprocessing and every round of the search.
+   */
+  uint64_t d_lastCheckResources = 0;
 
   /** The solver for sygus queries */
   std::unique_ptr<smt::SygusSolver> d_sygusSolver;

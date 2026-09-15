@@ -518,6 +518,95 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
   ss << "))";
   return ss.str();
 }
+
+/**
+ * The (get-info :branch-profile) reply for the last check-sat: the resource
+ * units it spent, the per-check resource limit it ran under (0 for none),
+ * its instantiation rounds, and one row per quantified formula it
+ * instantiated, keyed and ordered as (get-info :inst-pressure) keys and
+ * orders them, with its instances split by the inference that sent them.
+ * Two checks of related queries can then be compared row by row and
+ * inference by inference.
+ */
+std::string branchProfileInfo(const theory::quantifiers::Instantiate* inst,
+                              uint64_t resources,
+                              uint64_t limit)
+{
+  struct Row
+  {
+    std::string d_name;
+    uint64_t d_added = 0;
+    std::map<theory::InferenceId, uint64_t> d_byInference;
+  };
+  std::vector<Row> rows;
+  std::map<std::string, size_t> byName;
+  std::map<Node, size_t> byNode;
+  if (inst != nullptr)
+  {
+    for (const auto& [q, p] : inst->getPressure())
+    {
+      if (p.d_added == 0)
+      {
+        continue;
+      }
+      std::string name = quantIdName(q);
+      // the maps have different key types, so each branch emplaces its own
+      std::pair<size_t, bool> slot;
+      if (name.empty())
+      {
+        auto [it, isNew] = byNode.emplace(q, rows.size());
+        slot = {it->second, isNew};
+      }
+      else
+      {
+        auto [it, isNew] = byName.emplace(name, rows.size());
+        slot = {it->second, isNew};
+      }
+      if (slot.second)
+      {
+        rows.push_back(Row{name, 0, {}});
+      }
+      Row& row = rows[slot.first];
+      row.d_added += p.d_added;
+      for (const auto& [id, n] : p.d_byInference)
+      {
+        row.d_byInference[id] += n;
+      }
+    }
+  }
+  std::stable_sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) {
+    return a.d_added > b.d_added;
+  });
+  std::stringstream ss;
+  ss << "(:resource-units " << resources << " :resource-limit " << limit
+     << " :rounds " << (inst == nullptr ? 0 : inst->getPressureRounds())
+     << " :quantifiers (";
+  size_t unnamed = 0;
+  for (size_t i = 0; i < rows.size(); i++)
+  {
+    const Row& r = rows[i];
+    ss << (i > 0 ? " " : "") << "(";
+    if (r.d_name.empty())
+    {
+      ss << "quant_" << unnamed++ << " :named false";
+    }
+    else
+    {
+      ss << quoteSymbol(r.d_name);
+    }
+    ss << " :instantiations " << r.d_added << " :inferences (";
+    bool first = true;
+    for (const auto& [id, n] : r.d_byInference)
+    {
+      ss << (first ? "" : " ") << "(" << theory::toString(id) << " " << n
+         << ")";
+      first = false;
+    }
+    ss << "))";
+  }
+  ss << "))";
+  return ss.str();
+}
 }  // namespace
 
 bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
@@ -528,7 +617,8 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
       || key == "incomplete-id" || key == "incomplete-ids"
       || key == "incomplete-culprits" || key == "inst-pressure"
       || key == "matching-loops" || key == "assertion-stack-levels"
-      || key == "all-options" || key == "difficulty-gradient")
+      || key == "all-options" || key == "difficulty-gradient"
+      || key == "branch-profile")
   {
     return true;
   }
@@ -684,6 +774,16 @@ std::string SolverEngine::getInfo(const std::string& key) const
   if (key == "difficulty-gradient")
   {
     return getDifficultyGradient();
+  }
+  if (key == "branch-profile")
+  {
+    // Before the first check there is no theory engine, and nothing spent.
+    QuantifiersEngine* qe = d_smtSolver == nullptr || !d_state->isFullyInited()
+                                ? nullptr
+                                : d_smtSolver->getQuantifiersEngine();
+    return branchProfileInfo(qe == nullptr ? nullptr : qe->getInstantiate(),
+                             d_lastCheckResources,
+                             d_env->getOptions().base.perCallResourceLimit);
   }
   if (key == "assertion-stack-levels")
   {
@@ -1055,7 +1155,10 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
   // Call the SMT solver driver to check for satisfiability. Note that in the
   // case of options like e.g. deep restarts, this may invokve multiple calls
   // to check satisfiability in the underlying SMT solver
+  uint64_t resourcesBefore = getResourceManager()->getResourceUsage();
   Result r = d_smtDriver->checkSat(assumptions);
+  d_lastCheckResources =
+      getResourceManager()->getResourceUsage() - resourcesBefore;
 
   Trace("smt") << "SolverEngine::checkSat(" << assumptions << ") => " << r
                << endl;

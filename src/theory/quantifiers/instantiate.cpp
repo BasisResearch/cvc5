@@ -449,6 +449,7 @@ bool Instantiate::addInstantiationInternal(
     pressure.d_firstRound = d_pressureRounds;
   }
   pressure.d_lastRound = d_pressureRounds;
+  ++pressure.d_byInference[id];
   if (isProofEnabled())
   {
     pressure.d_addedVecs.insert(terms);
