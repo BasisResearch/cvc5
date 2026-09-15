@@ -132,11 +132,12 @@ class QuantifiersEngine : protected EnvObj
   void printMatchingLoops(std::ostream& out, bool unknown) const;
   /**
    * The --quant-strategy value the current or last check-sat runs with: the
-   * option is read once, at presolve.
+   * option is read once, at presolve. Before the first check-sat, the
+   * option's current value.
    */
-  options::QuantStrategyMode getStrategy() const { return d_strategy; }
+  options::QuantStrategyMode getStrategy() const;
   /** Likewise --quant-strategy-alone. */
-  bool isStrategyAlone() const { return d_strategyAlone; }
+  bool isStrategyAlone() const;
   /** Whether a module for strategy s exists (it may be ladder-only). */
   bool hasStrategy(options::QuantStrategyMode s) const;
   //----------user interface for instantiations (see quantifiers/instantiate.h)
@@ -276,6 +277,8 @@ class QuantifiersEngine : protected EnvObj
   /** See getIncompleteCulprits */
   std::vector<Node> d_incompleteCulprits;
   IncompleteId d_incompleteCulpritsId = IncompleteId::NONE;
+  /** Whether presolve has read the strategy options for a check-sat. */
+  bool d_strategyRead = false;
   /** See getStrategy. */
   options::QuantStrategyMode d_strategy = options::QuantStrategyMode::ALL;
   /** See isStrategyAlone. */

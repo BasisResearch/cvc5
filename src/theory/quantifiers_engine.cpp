@@ -162,10 +162,22 @@ bool QuantifiersEngine::hasStrategy(options::QuantStrategyMode s) const
   return d_qmodules->getStrategyModule(s) != nullptr;
 }
 
+options::QuantStrategyMode QuantifiersEngine::getStrategy() const
+{
+  return d_strategyRead ? d_strategy : options().quantifiers.quantStrategy;
+}
+
+bool QuantifiersEngine::isStrategyAlone() const
+{
+  return d_strategyRead ? d_strategyAlone
+                        : options().quantifiers.quantStrategyAlone;
+}
+
 void QuantifiersEngine::presolve()
 {
   Trace("quant-engine-proc") << "QuantifiersEngine : presolve " << std::endl;
   // The strategy holds for the whole check-sat, so the options are read here.
+  d_strategyRead = true;
   d_strategy = options().quantifiers.quantStrategy;
   d_strategyAlone = options().quantifiers.quantStrategyAlone;
   d_switchedOff.clear();

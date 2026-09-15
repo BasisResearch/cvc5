@@ -536,12 +536,11 @@ const char* quantStrategyName(options::QuantStrategyMode s)
 /**
  * The (get-info :strategy-rung) reply: the --quant-strategy the last
  * check-sat ran with and whether alone, the ladder strategies this solver
- * has a module for,
- * that check-sat's instantiation rounds that sent lemmas, the resources it
- * spent (preprocessing included), and the instantiations it added per
- * strategy. qe is
- * null before the first check-sat and without quantifiers; the strategy is
- * then the option's value and every count is 0.
+ * has a module for, that check-sat's instantiation rounds that sent lemmas,
+ * the resources it spent (preprocessing included), and the instantiations it
+ * added per strategy. qe is null before the solver is initialized and
+ * without quantifiers; before the first check-sat the strategy is the
+ * option's value, and every count is 0.
  */
 std::string strategyRungInfo(QuantifiersEngine* qe,
                              options::QuantStrategyMode option,
