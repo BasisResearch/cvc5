@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <map>
+#include <set>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -186,13 +187,18 @@ class SourceView
   /** Read vars as vals from now on (an instantiation). */
   void bind(const std::vector<Node>& vars, const std::vector<Node>& vals)
   {
-    d_bind.clear();
+    unbind();
     for (size_t i = 0, n = vars.size(); i < n; i++)
     {
       d_bind[vars[i]] = vals[i];
     }
   }
-  void unbind() { d_bind.clear(); }
+  void unbind()
+  {
+    d_bind.clear();
+    d_boundHash.clear();
+    d_equal.clear();
+  }
 
   /** The term n stands for. */
   TNode top(TNode n) const
@@ -253,6 +259,67 @@ class SourceView
     {
       return true;
     }
+    // Memoized: a shared subterm is otherwise compared once per path to it,
+    // and a let-shared term has exponentially many. Cleared by bind, since a
+    // term mentioning a bound variable compares differently under another.
+    std::pair<TNode, TNode> key(x, y);
+    auto it = d_equal.find(key);
+    if (it != d_equal.end())
+    {
+      return it->second;
+    }
+    bool ret = sameSpelling(x, y);
+    d_equal[key] = ret;
+    return ret;
+  }
+
+  /** A hash of the spelling of n, consistent with equal. */
+  size_t hash(TNode n)
+  {
+    // Memoized for the same reason as equal, ground terms for good and the
+    // rest until the next bind.
+    std::unordered_map<TNode, size_t>& cache =
+        expr::hasBoundVar(n) ? d_boundHash : d_hash;
+    auto it = cache.find(n);
+    if (it != cache.end())
+    {
+      return it->second;
+    }
+    size_t h = spellingHash(n);
+    cache[n] = h;
+    return h;
+  }
+
+  /** Print n as the input spells it. */
+  void print(std::ostream& os, TNode n)
+  {
+    TNode x = top(n);
+    if (!respelled(x))
+    {
+      os << x;
+      return;
+    }
+    os << "(";
+    if (hasOperator(x))
+    {
+      os << x.getOperator();
+    }
+    else
+    {
+      os << printer::smt2::Smt2Printer::smtKindString(kind(x));
+    }
+    for (size_t i = 0, nc = numChildren(x); i < nc; i++)
+    {
+      os << " ";
+      print(os, child(x, i));
+    }
+    os << ")";
+  }
+
+ private:
+  /** Whether x and y, returned by top, apply one operation to equal terms. */
+  bool sameSpelling(TNode x, TNode y)
+  {
     size_t n = numChildren(x);
     if (n == 0 || n != numChildren(y) || kind(x) != kind(y)
         || hasOperator(x) != hasOperator(y)
@@ -288,18 +355,9 @@ class SourceView
     return true;
   }
 
-  /** A hash of the spelling of n, consistent with equal. */
-  size_t hash(TNode n)
+  /** The hash of n, computed from the hashes of its children. */
+  size_t spellingHash(TNode n)
   {
-    bool ground = !expr::hasBoundVar(n);
-    if (ground)
-    {
-      auto it = d_hash.find(n);
-      if (it != d_hash.end())
-      {
-        return it->second;
-      }
-    }
     TNode x = top(n);
     size_t h;
     size_t nc = numChildren(x);
@@ -331,40 +389,9 @@ class SourceView
         }
       }
     }
-    if (ground)
-    {
-      d_hash[n] = h;
-    }
     return h;
   }
 
-  /** Print n as the input spells it. */
-  void print(std::ostream& os, TNode n)
-  {
-    TNode x = top(n);
-    if (!respelled(x))
-    {
-      os << x;
-      return;
-    }
-    os << "(";
-    if (hasOperator(x))
-    {
-      os << x.getOperator();
-    }
-    else
-    {
-      os << printer::smt2::Smt2Printer::smtKindString(kind(x));
-    }
-    for (size_t i = 0, nc = numChildren(x); i < nc; i++)
-    {
-      os << " ";
-      print(os, child(x, i));
-    }
-    os << ")";
-  }
-
- private:
   /** Whether n is spelled differently from how the printer would print it. */
   bool respelled(TNode n)
   {
@@ -392,7 +419,11 @@ class SourceView
   }
 
   std::unordered_map<TNode, TNode> d_bind;
+  /** Hashes of ground terms, and of the rest under the current binding. */
   std::unordered_map<TNode, size_t> d_hash;
+  std::unordered_map<TNode, size_t> d_boundHash;
+  /** equal under the current binding, by the terms top returned. */
+  std::map<std::pair<TNode, TNode>, bool> d_equal;
   std::unordered_map<TNode, bool> d_respelled;
 };
 
@@ -430,29 +461,62 @@ struct Wrapper
  * over the same distinct bound variables in the same order. Verus's prelude
  * defines Mul, EucDiv and EucMod so; its Add and Sub wrap no such operation.
  * A ground equation such as (= (g a b) (* a b)) defines g at one point only,
- * so it makes no wrapper.
+ * so it makes no wrapper. Nor does an equation the input does not assert for
+ * every value of its variables: it must sit in a positive position under
+ * universal quantifiers only, a forall asserted or an exists denied. Denied,
+ * (not (forall ((x Int) (y Int)) (= (g x y) (* x y)))) says g differs from
+ * the product somewhere, and an asserted exists says they agree somewhere.
+ * A guard is fine, (=> (T x y) (= (W x y) (* x y))) still defines W.
  */
 std::unordered_map<Node, Wrapper> findWrappers(const std::vector<Node>& input)
 {
   std::unordered_map<Node, Wrapper> wrappers;
   std::vector<std::pair<Node, Node>> links;
-  std::unordered_set<TNode> visited;
-  std::vector<TNode> visit(input.begin(), input.end());
+  // formulas, each with whether the input asserts it (true) or denies it
+  std::set<std::pair<TNode, bool>> visited;
+  std::vector<std::pair<TNode, bool>> visit;
+  for (const Node& a : input)
+  {
+    visit.emplace_back(a, true);
+  }
   while (!visit.empty())
   {
-    TNode cur = visit.back();
+    auto [cur, pol] = visit.back();
     visit.pop_back();
-    if (!visited.insert(cur).second)
+    if (!visited.insert({cur, pol}).second)
     {
       continue;
     }
-    if (cur.isClosure())
+    switch (cur.getKind())
     {
-      visit.push_back(cur[1]);
-      continue;
+      case Kind::NOT: visit.emplace_back(cur[0], !pol); continue;
+      case Kind::AND:
+      case Kind::OR:
+        for (TNode c : cur)
+        {
+          visit.emplace_back(c, pol);
+        }
+        continue;
+      case Kind::IMPLIES:
+        visit.emplace_back(cur[0], !pol);
+        visit.emplace_back(cur[1], pol);
+        continue;
+      case Kind::ITE:
+        visit.emplace_back(cur[1], pol);
+        visit.emplace_back(cur[2], pol);
+        continue;
+      case Kind::FORALL:
+      case Kind::EXISTS:
+        // universal where a forall is asserted or an exists denied
+        if (pol == (cur.getKind() == Kind::FORALL))
+        {
+          visit.emplace_back(cur[1], pol);
+        }
+        continue;
+      case Kind::EQUAL: break;
+      default: continue;
     }
-    visit.insert(visit.end(), cur.begin(), cur.end());
-    if (cur.getKind() != Kind::EQUAL)
+    if (!pol)
     {
       continue;
     }
@@ -1058,6 +1122,12 @@ std::string getNlFrontierInfo(TheoryEngine* te,
           continue;
         }
         visit.insert(visit.end(), cur.begin(), cur.end());
+        // A term mentioning a variable has an operand that does, and no atom
+        // does, so it hosts nothing here; its ground subterms still might.
+        if (expr::hasBoundVar(cur))
+        {
+          continue;
+        }
         Kind op = hm.operation(sv.top(cur));
         if (op == Kind::UNDEFINED_KIND)
         {
