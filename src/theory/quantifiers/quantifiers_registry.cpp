@@ -67,27 +67,35 @@ std::string QuantifiersRegistry::identify() const
 QuantifiersModule* QuantifiersRegistry::getOwner(Node q) const
 {
   std::map<Node, QuantifiersModule*>::const_iterator it = d_owner.find(q);
-  if (it == d_owner.end()
-      || (d_ignoredOwners != nullptr && d_ignoredOwners->count(it->second) > 0))
+  if (it == d_owner.end())
   {
     return nullptr;
   }
   return it->second;
 }
 
-void QuantifiersRegistry::setIgnoredOwners(
-    const std::unordered_set<QuantifiersModule*>* s)
+void QuantifiersRegistry::setChosen(
+    QuantifiersModule* m, const std::unordered_set<QuantifiersModule*>* ladder)
 {
-  d_ignoredOwners = s;
+  d_chosen = m;
+  d_ladder = ladder;
+}
+
+bool QuantifiersRegistry::mayProcess(Node q, QuantifiersModule* m) const
+{
+  if (hasOwnership(q, m))
+  {
+    return true;
+  }
+  return m != nullptr && m == d_chosen && d_ladder != nullptr
+         && d_ladder->count(getOwner(q)) > 0;
 }
 
 void QuantifiersRegistry::setOwner(Node q,
                                    QuantifiersModule* m,
                                    int32_t priority)
 {
-  // the recorded owner, whether or not its ownership is ignored
-  std::map<Node, QuantifiersModule*>::const_iterator it = d_owner.find(q);
-  QuantifiersModule* mo = it == d_owner.end() ? nullptr : it->second;
+  QuantifiersModule* mo = getOwner(q);
   if (mo == m)
   {
     return;

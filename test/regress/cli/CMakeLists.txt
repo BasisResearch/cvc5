@@ -1768,6 +1768,7 @@ set(regress_0_tests
   regress0/quantifiers/matching-loops-ite.smt2
   regress0/quantifiers/matching-loops-multi-pattern-graph.smt2
   regress0/quantifiers/matching-loops-multi-trigger.smt2
+  regress0/quantifiers/quant-strategy-alongside-schedule.smt2
   regress0/quantifiers/quant-strategy-alongside.smt2
   regress0/quantifiers/quant-strategy-ladder-no-ematch.smt2
   regress0/quantifiers/quant-strategy-ladder.smt2

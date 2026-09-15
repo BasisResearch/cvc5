@@ -629,7 +629,7 @@ name   = "Quantifiers"
   long       = "quant-strategy-alone"
   type       = "bool"
   default    = "true"
-  help       = "run the strategy quant-strategy chooses alone; when false, run it alongside the strategies the other options enable, and a ladder strategy's ownership of a formula does not keep the others from it; may be set after initialization"
+  help       = "run the strategy quant-strategy chooses alone; when false, run it alongside the strategies the other options enable, where it alone may instantiate a formula that another ladder strategy owns; may be set after initialization"
 
 [[option]]
   name       = "matchingLoopsMax"

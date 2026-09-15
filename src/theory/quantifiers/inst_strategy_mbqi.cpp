@@ -136,7 +136,7 @@ void InstStrategyMbqi::check(Theory::Effort e, QEffort quant_e)
   for (size_t i = 0, nquant = fm->getNumAssertedQuantifiers(); i < nquant; i++)
   {
     Node q = fm->getAssertedQuantifier(i);
-    if (!d_qreg.hasOwnership(q, this))
+    if (!d_qreg.mayProcess(q, this))
     {
       continue;
     }

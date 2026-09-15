@@ -290,15 +290,18 @@ class QuantifiersEngine : protected EnvObj
    */
   std::unordered_set<quantifiers::QuantifiersModule*> d_switchedOff;
   /**
-   * The modules whose ownership of a formula is ignored this check-sat (see
-   * QuantifiersRegistry::setIgnoredOwners): the switched-off ones, and
-   * alongside, every ladder strategy.
+   * The ladder strategies' modules, whose ownership of a formula does not
+   * keep the chosen one from it (see QuantifiersRegistry::setChosen).
    */
-  std::unordered_set<quantifiers::QuantifiersModule*> d_ignoredOwners;
+  std::unordered_set<quantifiers::QuantifiersModule*> d_ladderModules;
+  /** The module --quant-strategy chose this check-sat, or null. */
+  quantifiers::QuantifiersModule* d_chosen = nullptr;
   bool isSwitchedOff(quantifiers::QuantifiersModule* m) const
   {
     return d_switchedOff.count(m) > 0;
   }
+  /** Whether m exists only because of --quant-ladder. */
+  bool isLadderOnly(quantifiers::QuantifiersModule* m) const;
 }; /* class QuantifiersEngine */
 
 }  // namespace theory

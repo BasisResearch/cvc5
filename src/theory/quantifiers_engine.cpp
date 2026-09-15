@@ -181,10 +181,9 @@ void QuantifiersEngine::presolve()
   d_strategy = options().quantifiers.quantStrategy;
   d_strategyAlone = options().quantifiers.quantStrategyAlone;
   d_switchedOff.clear();
-  d_ignoredOwners.clear();
+  d_ladderModules.clear();
   const std::vector<QuantifiersModule*>& idle = d_qmodules->getLadderOnly();
   QuantifiersModule* chosen = d_qmodules->getStrategyModule(d_strategy);
-  std::vector<QuantifiersModule*> ladder;
   for (options::QuantStrategyMode s : {options::QuantStrategyMode::EMATCH,
                                        options::QuantStrategyMode::CONFLICT,
                                        options::QuantStrategyMode::POOL,
@@ -194,7 +193,7 @@ void QuantifiersEngine::presolve()
     QuantifiersModule* m = d_qmodules->getStrategyModule(s);
     if (m != nullptr)
     {
-      ladder.push_back(m);
+      d_ladderModules.insert(m);
     }
   }
   if (d_strategy == options::QuantStrategyMode::ALL)
@@ -203,7 +202,7 @@ void QuantifiersEngine::presolve()
   }
   else if (d_strategyAlone)
   {
-    for (QuantifiersModule* m : ladder)
+    for (QuantifiersModule* m : d_ladderModules)
     {
       if (m != chosen)
       {
@@ -214,8 +213,7 @@ void QuantifiersEngine::presolve()
   else
   {
     // Alongside the configured schedule: only the idle strategies not chosen
-    // stay off, and no ladder strategy's ownership keeps the others from a
-    // formula, so the chosen one may instantiate what E-matching owns.
+    // stay off.
     for (QuantifiersModule* m : idle)
     {
       if (m != chosen)
@@ -223,11 +221,12 @@ void QuantifiersEngine::presolve()
         d_switchedOff.insert(m);
       }
     }
-    d_ignoredOwners.insert(ladder.begin(), ladder.end());
   }
-  // A module that does not run owns nothing this check-sat.
-  d_ignoredOwners.insert(d_switchedOff.begin(), d_switchedOff.end());
-  d_qreg.setIgnoredOwners(d_ignoredOwners.empty() ? nullptr : &d_ignoredOwners);
+  // Only the chosen strategy may process a formula that another ladder
+  // strategy owns; every other module keeps to ownership as recorded, so
+  // alongside a strategy the schedule already runs is that schedule.
+  d_chosen = chosen;
+  d_qreg.setChosen(d_chosen, &d_ladderModules);
   d_numInstRoundsLemma = 0;
   d_incompleteCulprits.clear();
   d_incompleteCulpritsId = IncompleteId::NONE;
@@ -667,7 +666,17 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
                   QuantifiersModule* qmd = d_qreg.getOwner(q);
                   if (qmd != nullptr)
                   {
-                    hasCompleteM = qmd->checkCompleteFor(q);
+                    // a switched-off owner has not processed q
+                    hasCompleteM =
+                        !isSwitchedOff(qmd) && qmd->checkCompleteFor(q);
+                    // the chosen strategy may have processed it instead
+                    if (!hasCompleteM && d_chosen != nullptr && d_chosen != qmd
+                        && d_qreg.mayProcess(q, d_chosen)
+                        && d_chosen->checkCompleteFor(q))
+                    {
+                      qmd = d_chosen;
+                      hasCompleteM = true;
+                    }
                   }
                   else
                   {
@@ -781,6 +790,12 @@ bool QuantifiersEngine::reduceQuantifier(Node q)
   return (*it).second;
 }
 
+bool QuantifiersEngine::isLadderOnly(QuantifiersModule* m) const
+{
+  const std::vector<QuantifiersModule*>& idle = d_qmodules->getLadderOnly();
+  return std::find(idle.begin(), idle.end(), m) != idle.end();
+}
+
 void QuantifiersEngine::registerQuantifierInternal(Node f)
 {
   std::map<Node, bool>::iterator it = d_quants.find(f);
@@ -799,6 +814,12 @@ void QuantifiersEngine::registerQuantifierInternal(Node f)
 
     for (QuantifiersModule*& mdl : d_modules)
     {
+      // A module created only for --quant-ladder takes no ownership, so that
+      // formulas are owned as they would be without --quant-ladder.
+      if (isLadderOnly(mdl))
+      {
+        continue;
+      }
       Trace("quant-debug") << "check ownership with " << mdl->identify()
                            << "..." << std::endl;
       mdl->checkOwnership(f);

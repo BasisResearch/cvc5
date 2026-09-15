@@ -128,8 +128,7 @@ void InstStrategyEnum::check(CVC5_UNUSED Theory::Effort e, QEffort quant_e)
       for (unsigned i = 0; i < nquant; i++)
       {
         Node q = fm->getAssertedQuantifier(i, true);
-        bool doProcess = d_qreg.hasOwnership(q, this)
-                         && fm->isQuantifierActive(q)
+        bool doProcess = d_qreg.mayProcess(q, this) && fm->isQuantifierActive(q)
                          && alreadyProc.find(q) == alreadyProc.end();
         if (doProcess)
         {

@@ -51,18 +51,8 @@ class QuantifiersRegistry : public QuantifiersUtil
   /** identify */
   std::string identify() const override;
   //----------------------------- ownership
-  /**
-   * get the owner of quantified formula q, or null if it has none or its
-   * owner's ownership is ignored (see setIgnoredOwners)
-   */
+  /** get the owner of quantified formula q */
   QuantifiersModule* getOwner(Node q) const;
-  /**
-   * Ignore the ownership of the modules in s for this check-sat, as
-   * --quant-strategy asks: a formula one of them owns is treated as
-   * unowned, so any module that runs may process it. Ownership is kept for
-   * the next check-sat. s must stay alive while set; null ignores nothing.
-   */
-  void setIgnoredOwners(const std::unordered_set<QuantifiersModule*>* s);
   /**
    * Set owner of quantified formula q to module m with given priority. If
    * the quantified formula has previously been assigned an owner with
@@ -74,6 +64,19 @@ class QuantifiersRegistry : public QuantifiersUtil
    * is m.
    */
   bool hasOwnership(Node q, QuantifiersModule* m) const;
+  /**
+   * Whether module m may process q in an instantiation round: m has
+   * ownership of q, or m is the strategy --quant-strategy chose and q's
+   * owner is one of the ladder strategies (see setChosen).
+   */
+  bool mayProcess(Node q, QuantifiersModule* m) const;
+  /**
+   * For this check-sat, let m, the module --quant-strategy chose (or null),
+   * process a formula that any module in ladder owns. Ownership itself is
+   * unchanged. ladder must stay alive while set.
+   */
+  void setChosen(QuantifiersModule* m,
+                 const std::unordered_set<QuantifiersModule*>* ladder);
   //----------------------------- end ownership
   //----------------------------- instantiation constants
   /** get the i^th instantiation constant of q */
@@ -125,8 +128,10 @@ class QuantifiersRegistry : public QuantifiersUtil
    * precendence.
    */
   std::map<Node, int32_t> d_owner_priority;
-  /** See setIgnoredOwners. */
-  const std::unordered_set<QuantifiersModule*>* d_ignoredOwners = nullptr;
+  /** See setChosen. */
+  QuantifiersModule* d_chosen = nullptr;
+  /** See setChosen. */
+  const std::unordered_set<QuantifiersModule*>* d_ladder = nullptr;
   /** map from universal quantifiers to the list of variables */
   std::map<Node, std::vector<Node> > d_vars;
   /** map from universal quantifiers to their inst constant body */

@@ -54,8 +54,13 @@ class InstantiationEngine : public QuantifiersModule
  private:
   /** do instantiation round */
   void doInstantiationRound(Theory::Effort effort);
-  /** Return true if this module should process quantified formula q */
-  bool shouldProcess(Node q);
+  /**
+   * Return true if this module should process quantified formula q. inCheck
+   * is whether this is for an instantiation round, where the module may also
+   * process a formula another ladder strategy owns when --quant-strategy
+   * chooses it (see QuantifiersRegistry::mayProcess).
+   */
+  bool shouldProcess(Node q, bool inCheck = false);
   /** instantiation strategies */
   std::vector<InstStrategy*> d_instStrategies;
   /** user-pattern instantiation strategy */

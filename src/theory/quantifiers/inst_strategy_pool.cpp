@@ -168,7 +168,7 @@ void InstStrategyPool::check(CVC5_UNUSED Theory::Effort e,
       // no user pools for this
       continue;
     }
-    if (!d_qreg.hasOwnership(q, this))
+    if (!d_qreg.mayProcess(q, this))
     {
       // quantified formula is not owned by this
       continue;
