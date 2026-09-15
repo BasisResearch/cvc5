@@ -613,9 +613,15 @@ class Instantiate : public QuantifiersUtil
    * lemmas have been sent. A round interrupted part way through resumes here.
    */
   context::CDHashMap<Node, size_t> d_replayProgress;
-  /** The pressure on each quantified formula, cleared on presolve. */
+  /**
+   * The pressure on each quantified formula, cleared before each check-sat
+   * and on presolve.
+   */
   std::map<Node, Pressure> d_pressure;
-  /** The rounds this check-sat that sent lemmas, cleared on presolve. */
+  /**
+   * The rounds this check-sat that sent lemmas, cleared before each check-sat
+   * and on presolve.
+   */
   uint64_t d_pressureRounds = 0;
   /** The replay record for q under key's current vectors, null if none. */
   Node replayRecord(const std::string& key, const Node& q) const;

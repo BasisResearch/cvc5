@@ -1075,9 +1075,6 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
     clearNlFrontier(d_smtSolver->getTheoryEngine());
   }
 
-  // Call the SMT solver driver to check for satisfiability. Note that in the
-  // case of options like e.g. deep restarts, this may invokve multiple calls
-  // to check satisfiability in the underlying SMT solver
   // Clear the instantiation pressure first. Presolve clears it again, but a
   // check the driver refuses before presolve (the cumulative resource or time
   // limit already spent, or preprocess-only) would otherwise leave the
@@ -1087,11 +1084,15 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
     qe->getInstantiate()->clearPressure();
   }
   uint64_t resourcesBefore = getResourceManager()->getResourceUsage();
+
+  // Call the SMT solver driver to check for satisfiability. Note that in the
+  // case of options like e.g. deep restarts, this may invokve multiple calls
+  // to check satisfiability in the underlying SMT solver
   Result r = d_smtDriver->checkSat(assumptions);
   // record what this check cost for (get-info :check-effort). The pressure
-  // is this check's, cleared above. It is summed
-  // now rather than when asked for, so that a later check-synth, which also
-  // presolves, or the absence of a quantifiers engine cannot change the reply.
+  // is this check's, cleared above. It is summed now rather than when asked
+  // for, so that a later check-synth, which also presolves, or the absence of
+  // a quantifiers engine cannot change the reply.
   d_lastCheckResources =
       getResourceManager()->getResourceUsage() - resourcesBefore;
   d_lastCheckInstantiations = 0;

@@ -1273,9 +1273,14 @@ class CVC5_EXPORT SolverEngine
    * What the last check-sat or check-sat-assuming cost, the
    * (get-info :check-effort) reply: the resource units it spent (in the
    * units of reproducible-resource-limit, the resource manager's cumulative
-   * usage read around the check, preprocessing included), the
-   * instantiations it added and the instantiation rounds that sent lemmas
-   * (the sums of its :inst-pressure rows, read as the check returns). All
+   * usage read around the check), the instantiations it added and the
+   * instantiation rounds that sent lemmas (the sums of its :inst-pressure
+   * rows, read as the check returns). The units include the preprocessing of
+   * the assertions made since the last push or check only: a push
+   * preprocesses and asserts the pending assertions before its level opens,
+   * so an assertion made before the last push costs the check nothing to
+   * preprocess. They also leave out the work of subsolvers, which have
+   * resource managers of their own. All
    * three are 0 before the first check, and the last two are 0 after a
    * quantifier-free check or one refused before it starts (the cumulative
    * resource or time limit already spent). The reply stands until the next
