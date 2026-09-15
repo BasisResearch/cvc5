@@ -2752,6 +2752,132 @@ void ImportInstantiationsCommand::toStream(std::ostream& out) const
 }
 
 /* -------------------------------------------------------------------------- */
+/* class SpeculateCommand */
+/* -------------------------------------------------------------------------- */
+
+SpeculateCommand::SpeculateCommand(const std::string& kind,
+                                   const std::string& qid,
+                                   const std::vector<std::string>& names,
+                                   const std::vector<cvc5::Term>& terms,
+                                   const std::vector<cvc5::Term>& vars,
+                                   const std::vector<cvc5::Term>& pattern,
+                                   const std::vector<std::string>& texts,
+                                   const std::string& fingerprint,
+                                   uint32_t loopThreshold,
+                                   const std::string& error)
+    : d_kind(kind),
+      d_qid(qid),
+      d_names(names),
+      d_terms(terms),
+      d_vars(vars),
+      d_pattern(pattern),
+      d_texts(texts),
+      d_fingerprint(fingerprint),
+      d_loopThreshold(loopThreshold),
+      d_error(error)
+{
+}
+
+void SpeculateCommand::invoke(cvc5::Solver* solver, CVC5_UNUSED SymManager* sm)
+{
+  if (!d_error.empty())
+  {
+    d_commandStatus = new CommandRecoverableFailure(d_error);
+    return;
+  }
+  try
+  {
+    if (d_kind == ":instantiate")
+    {
+      solver->speculateInstantiation(d_qid, d_names, d_terms, d_loopThreshold);
+    }
+    else if (d_kind == ":trigger")
+    {
+      solver->speculateTrigger(d_qid, d_vars, d_pattern, d_loopThreshold);
+    }
+    else if (d_kind == ":block")
+    {
+      solver->speculateBlock(d_qid, d_fingerprint, d_loopThreshold);
+    }
+    else
+    {
+      solver->speculateObserve(d_loopThreshold);
+    }
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.what());
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+std::string SpeculateCommand::getCommandName() const { return "speculate"; }
+
+void SpeculateCommand::toStream(std::ostream& out) const
+{
+  auto flat = [](const cvc5::Term& t) {
+    std::stringstream ss;
+    ss << t;
+    return quoteString(ss.str());
+  };
+  out << "(speculate " << d_kind;
+  if (d_kind != ":observe")
+  {
+    out << " " << cvc5::internal::quoteSymbol(d_qid);
+  }
+  if (d_kind == ":instantiate")
+  {
+    out << " (";
+    for (size_t i = 0, n = d_names.size(); i < n; i++)
+    {
+      out << (i == 0 ? "" : " ") << "("
+          << cvc5::internal::quoteSymbol(d_names[i]) << " "
+          << (i < d_texts.size() ? quoteString(d_texts[i]) : flat(d_terms[i]))
+          << ")";
+    }
+    out << ")";
+  }
+  else if (d_kind == ":trigger")
+  {
+    out << " (";
+    for (size_t i = 0, n = d_vars.size(); i < n; i++)
+    {
+      out << (i == 0 ? "" : " ") << "(" << d_vars[i] << " "
+          << d_vars[i].getSort() << ")";
+    }
+    out << ") (";
+    if (!d_texts.empty())
+    {
+      for (size_t i = 0, n = d_texts.size(); i < n; i++)
+      {
+        out << (i == 0 ? "" : " ") << quoteString(d_texts[i]);
+      }
+    }
+    else
+    {
+      for (size_t i = 0, n = d_pattern.size(); i < n; i++)
+      {
+        out << (i == 0 ? "" : " ") << flat(d_pattern[i]);
+      }
+    }
+    out << ")";
+  }
+  else if (d_kind == ":block")
+  {
+    out << " " << quoteString(d_fingerprint);
+  }
+  if (d_loopThreshold != 0)
+  {
+    out << " :loop-threshold " << d_loopThreshold;
+  }
+  out << ")";
+}
+
+/* -------------------------------------------------------------------------- */
 /* class GetDifficultyCommand */
 /* -------------------------------------------------------------------------- */
 

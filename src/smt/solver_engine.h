@@ -83,6 +83,9 @@ class TimeoutCoreManager;
 namespace theory {
 class TheoryModel;
 class QuantifiersEngine;
+namespace quantifiers {
+struct SpeculationRequest;
+}
 enum class IncompleteId;
 }  // namespace theory
 
@@ -751,6 +754,12 @@ class CVC5_EXPORT SolverEngine
    * instantiation happens in this user context.
    */
   void restoreInstantiations(const std::string& key, bool only);
+  /**
+   * Add a speculative hypothesis to the current user context (see
+   * theory::quantifiers::Speculation): it holds until that context is
+   * popped. (get-info :speculation) reports what it did.
+   */
+  void speculate(const theory::quantifiers::SpeculationRequest& r);
   /**
    * Print the instantiation graph of the last check (see
    * Instantiate::printInstantiationGraph). Requires --inst-graph.

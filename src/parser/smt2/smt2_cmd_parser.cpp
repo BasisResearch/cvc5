@@ -22,6 +22,69 @@
 namespace cvc5 {
 namespace parser {
 
+namespace {
+
+/** The contents of a string literal token: unquoted, "" read as ". */
+std::string unquoteString(std::string s)
+{
+  if (s.size() >= 2 && s.front() == '"' && s.back() == '"')
+  {
+    s = s.substr(1, s.size() - 2);
+  }
+  std::string out;
+  for (size_t i = 0; i < s.size(); i++)
+  {
+    out += s[i];
+    if (s[i] == '"' && i + 1 < s.size() && s[i + 1] == '"')
+    {
+      i++;
+    }
+  }
+  return out;
+}
+
+/**
+ * Parse text on its own with parse, against state's symbols. A failure
+ * unwinds any scope it left open. Returns the empty string on success, else
+ * why it failed.
+ */
+template <typename Parse>
+std::string tryParseString(Smt2State& state,
+                           const std::string& text,
+                           const std::string& name,
+                           Parse parse)
+{
+  std::unique_ptr<Input> input = Input::mkStringInput(text);
+  Smt2Lexer lex(false, false);
+  lex.initialize(input.get(), name);
+  Smt2TermParser tparser(lex, state);
+  size_t level = state.scopeLevel();
+  try
+  {
+    parse(lex, tparser);
+    return "";
+  }
+  catch (std::exception& e)
+  {
+    while (state.scopeLevel() > level)
+    {
+      state.popScope();
+    }
+    std::string why = e.what();
+    return why.empty() ? "parse error" : why;
+  }
+}
+
+/** One term, and nothing after it. */
+Term parseOneTerm(Smt2Lexer& lex, Smt2TermParser& tparser)
+{
+  Term t = tparser.parseTerm();
+  lex.eatToken(Token::EOF_TOK);
+  return t;
+}
+
+}  // namespace
+
 Smt2CmdParser::Smt2CmdParser(Smt2Lexer& lex,
                              Smt2State& state,
                              Smt2TermParser& tparser)
@@ -83,6 +146,7 @@ Smt2CmdParser::Smt2CmdParser(Smt2Lexer& lex,
     d_table["restore-instantiations"] = Token::RESTORE_INSTANTIATIONS_TOK;
     d_table["export-instantiations"] = Token::EXPORT_INSTANTIATIONS_TOK;
     d_table["import-instantiations"] = Token::IMPORT_INSTANTIATIONS_TOK;
+    d_table["speculate"] = Token::SPECULATE_TOK;
     d_table["get-instantiation-graph"] = Token::GET_INSTANTIATION_GRAPH_TOK;
     d_table["get-difficulty"] = Token::GET_DIFFICULTY_TOK;
     d_table["get-interpolant-next"] = Token::GET_INTERPOL_NEXT_TOK;
@@ -731,43 +795,11 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
     {
       d_state.checkThatLogicIsSet();
       std::string key = d_tparser.parseSymbol(CHECK_NONE, SYM_VARIABLE);
-      // The contents of a string literal token: unquoted, "" read as ".
-      auto unquote = [](std::string s) {
-        if (s.size() >= 2 && s.front() == '"' && s.back() == '"')
-        {
-          s = s.substr(1, s.size() - 2);
-        }
-        std::string out;
-        for (size_t i = 0; i < s.size(); i++)
-        {
-          out += s[i];
-          if (s[i] == '"' && i + 1 < s.size() && s[i + 1] == '"')
-          {
-            i++;
-          }
-        }
-        return out;
-      };
-      // Parse text with parse, unwinding any scope a failure leaves open.
+      auto unquote = unquoteString;
+      // A failure only skips the entry.
       auto tryParse = [this](const std::string& text, auto parse) {
-        std::unique_ptr<Input> input = Input::mkStringInput(text);
-        Smt2Lexer lex(false, false);
-        lex.initialize(input.get(), "import-instantiations");
-        Smt2TermParser tparser(lex, d_state);
-        size_t level = d_state.scopeLevel();
-        try
-        {
-          parse(lex, tparser);
-          return true;
-        }
-        catch (std::exception&)
-        {
-          while (d_state.scopeLevel() > level)
-          {
-            d_state.popScope();
-          }
-          return false;
-        }
+        return tryParseString(d_state, text, "import-instantiations", parse)
+            .empty();
       };
       // Named skolems are bound only while this command's terms are parsed.
       // Malformed outer syntax throws, so close the scope on that path too.
@@ -844,6 +876,131 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
       }
       d_state.popScope();
       cmd.reset(new ImportInstantiationsCommand(key, insts));
+    }
+    break;
+    // (speculate :observe [:loop-threshold <numeral>])
+    // (speculate :instantiate <symbol> ((<symbol> <string>)+) [...])
+    // (speculate :trigger <symbol> ((<symbol> <sort>)+) (<string>+) [...])
+    // (speculate :block <symbol> <string> [...])
+    // Each term is a string, parsed on its own: one that fails, for instance
+    // because it names a symbol this solver has not declared, fails the
+    // command with an error that names it, and the session goes on.
+    case Token::SPECULATE_TOK:
+    {
+      d_state.checkThatLogicIsSet();
+      d_lex.eatToken(Token::KEYWORD);
+      std::string kind = d_lex.tokenStr();
+      std::string qid;
+      std::vector<std::string> names;
+      std::vector<Term> terms;
+      std::vector<Term> vars;
+      std::vector<Term> pattern;
+      std::vector<std::string> texts;
+      std::string fingerprint;
+      std::string error;
+      // Parse one term from a string token just eaten; on a failure, keep
+      // the first error, naming what the term was for.
+      auto termFromString = [&](const std::string& what, Term& out) {
+        std::string text = unquoteString(d_lex.tokenStr());
+        std::string why =
+            tryParseString(d_state,
+                           text,
+                           "speculate",
+                           [&](Smt2Lexer& lex, Smt2TermParser& tp) {
+                             out = parseOneTerm(lex, tp);
+                           });
+        if (!why.empty() && error.empty())
+        {
+          error = "speculate: cannot parse " + what + " " + text + ": " + why;
+        }
+        return why.empty();
+      };
+      if (kind == ":instantiate" || kind == ":trigger" || kind == ":block")
+      {
+        qid = d_tparser.parseSymbol(CHECK_NONE, SYM_VARIABLE);
+      }
+      else if (kind != ":observe")
+      {
+        d_lex.parseError("Unknown speculate kind " + kind);
+      }
+      if (kind == ":instantiate")
+      {
+        d_lex.eatToken(Token::LPAREN_TOK);
+        while (d_lex.peekToken() == Token::LPAREN_TOK)
+        {
+          d_lex.eatToken(Token::LPAREN_TOK);
+          std::string name = d_tparser.parseSymbol(CHECK_NONE, SYM_VARIABLE);
+          d_lex.eatToken(Token::STRING_LITERAL);
+          texts.push_back(unquoteString(d_lex.tokenStr()));
+          // a term that fails leaves a null term; the command then fails
+          // without using its terms
+          Term t;
+          termFromString("the term for " + name, t);
+          names.push_back(name);
+          terms.push_back(t);
+          d_lex.eatToken(Token::RPAREN_TOK);
+        }
+        d_lex.eatToken(Token::RPAREN_TOK);
+      }
+      else if (kind == ":trigger")
+      {
+        std::vector<std::pair<std::string, Sort>> sorted =
+            d_tparser.parseSortedVarList();
+        // The variables are bound only while the pattern is parsed.
+        size_t level = d_state.scopeLevel();
+        d_state.pushScope();
+        try
+        {
+          vars = d_state.bindBoundVars(sorted);
+          d_lex.eatToken(Token::LPAREN_TOK);
+          while (d_lex.peekToken() == Token::STRING_LITERAL)
+          {
+            d_lex.eatToken(Token::STRING_LITERAL);
+            texts.push_back(unquoteString(d_lex.tokenStr()));
+            Term p;
+            if (termFromString("the pattern term", p))
+            {
+              pattern.push_back(p);
+            }
+          }
+          d_lex.eatToken(Token::RPAREN_TOK);
+        }
+        catch (...)
+        {
+          while (d_state.scopeLevel() > level)
+          {
+            d_state.popScope();
+          }
+          throw;
+        }
+        d_state.popScope();
+      }
+      else if (kind == ":block")
+      {
+        d_lex.eatToken(Token::STRING_LITERAL);
+        fingerprint = unquoteString(d_lex.tokenStr());
+      }
+      uint32_t loopThreshold = 0;
+      if (d_lex.peekToken() == Token::KEYWORD)
+      {
+        d_lex.eatToken(Token::KEYWORD);
+        if (d_lex.tokenStr() != std::string(":loop-threshold"))
+        {
+          d_lex.parseError("Unknown speculate option "
+                           + std::string(d_lex.tokenStr()));
+        }
+        loopThreshold = d_tparser.parseIntegerNumeral();
+      }
+      cmd.reset(new SpeculateCommand(kind,
+                                     qid,
+                                     names,
+                                     terms,
+                                     vars,
+                                     pattern,
+                                     texts,
+                                     fingerprint,
+                                     loopThreshold,
+                                     error));
     }
     break;
     // (get-difficulty)

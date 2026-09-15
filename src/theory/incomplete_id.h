@@ -56,6 +56,9 @@ enum class IncompleteId
   QUANTIFIERS_MAX_INST_ROUNDS,
   // restored instantiations were the only instantiations allowed
   QUANTIFIERS_REPLAY_ONLY,
+  // a speculative block (see quantifiers::Speculation) refused an
+  // instantiation, so a model need not satisfy the quantified formulas
+  QUANTIFIERS_SPECULATIVE_BLOCK,
   // we solved a negated synthesis conjecture and will terminate as a subsolver
   // with unknown
   QUANTIFIERS_SYGUS_SOLVED,

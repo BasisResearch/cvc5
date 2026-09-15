@@ -184,7 +184,7 @@ uint64_t Trigger::addInstantiations()
 
 bool Trigger::sendInstantiation(std::vector<Node>& m)
 {
-  InferenceId id = d_mg->getInferenceId();
+  InferenceId id = d_id != InferenceId::UNKNOWN ? d_id : d_mg->getInferenceId();
   Instantiate* inst = d_qim.getInstantiate();
   // --matching-loops reads the same record as --inst-graph
   if (options().quantifiers.instGraph || options().quantifiers.matchingLoops)

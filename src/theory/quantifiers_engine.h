@@ -45,6 +45,7 @@ class QuantifiersModules;
 class QuantifiersState;
 class QuantifiersRegistry;
 class Skolemize;
+struct SpeculationRequest;
 class TermDb;
 class TermDbSygus;
 class TermEnumeration;
@@ -157,6 +158,10 @@ class QuantifiersEngine : protected EnvObj
   void getSavedInstantiations(
       const std::string& key,
       std::map<Node, std::vector<std::vector<Node>>>& out);
+  /** Add a speculative hypothesis to this user context. */
+  void speculate(const quantifiers::SpeculationRequest& r);
+  /** Print (get-info :speculation) for the last check-sat. */
+  void printSpeculation(std::ostream& out);
   /** Print the instantiation graph of the last check (--inst-graph). */
   void printInstantiationGraph(std::ostream& out);
   /** get instantiation term vectors */
@@ -207,6 +212,11 @@ class QuantifiersEngine : protected EnvObj
    * answer "unknown" instead of "sat".
    */
   void checkInternal(Theory::Effort e, IncompleteId& setModelUnsoundId);
+  /**
+   * Apply the speculative hypotheses of this user context to the asserted
+   * quantified formulas, leaving their lemmas pending.
+   */
+  void applySpeculation();
   /**
    * Return true if we should recheck
    * @param e the effort level

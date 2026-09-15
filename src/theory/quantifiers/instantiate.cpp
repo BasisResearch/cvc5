@@ -30,6 +30,7 @@
 #include "theory/quantifiers/matching_loops.h"
 #include "theory/quantifiers/quantifiers_attributes.h"
 #include "theory/quantifiers/quantifiers_preprocess.h"
+#include "theory/quantifiers/speculation.h"
 #include "theory/quantifiers/term_database.h"
 #include "theory/quantifiers/term_enumeration.h"
 #include "theory/quantifiers/term_registry.h"
@@ -76,6 +77,7 @@ Instantiate::Instantiate(Env& env,
   }
   d_graphOn =
       options().quantifiers.instGraph || options().quantifiers.matchingLoops;
+  d_speculation = std::make_unique<Speculation>(env, qs, qim, qr, tr);
 }
 
 Instantiate::~Instantiate() {}
@@ -107,6 +109,7 @@ void Instantiate::presolve()
   d_pressureRounds = d_pressureCarry.d_rounds;
   d_strategyCounts = d_pressureCarry.d_strategyCounts;
   d_pressureCarry = PressureCarry();
+  d_speculation->presolve();
 }
 
 void Instantiate::clearPressure()
@@ -161,6 +164,13 @@ bool Instantiate::checkComplete(IncompleteId& incId)
     Trace("quant-engine-debug")
         << "Set incomplete due to recorded instantiations." << std::endl;
     incId = IncompleteId::QUANTIFIERS_RECORDED_INST;
+    return false;
+  }
+  if (d_speculation->hasBlocked())
+  {
+    Trace("quant-engine-debug")
+        << "Set incomplete due to a speculative block." << std::endl;
+    incId = IncompleteId::QUANTIFIERS_SPECULATIVE_BLOCK;
     return false;
   }
   return true;
@@ -270,6 +280,12 @@ bool Instantiate::addInstantiationInternal(
     }
   }
 #endif
+  // a speculative block refuses it as if it were a duplicate
+  if (d_speculation->isBlocked(q, terms, pfArg))
+  {
+    Trace("inst-add-debug") << " --> Blocked by a speculation." << std::endl;
+    return false;
+  }
   bool isLocal = false;
   if (options().quantifiers.instLocal)
   {
@@ -290,10 +306,13 @@ bool Instantiate::addInstantiationInternal(
   // lead to very small gains).
 
   // check for positive entailment. Entailment holds in the current SAT
-  // context only, and a replayed instantiation is offered once per user
-  // context, so skipping one now would lose it after a backtrack.
+  // context only, and a replayed or directed instantiation is offered once
+  // per user context, so skipping one now would lose it after a backtrack.
+  // A speculative trigger's matches come back every round, like any
+  // trigger's, and are checked.
   if (options().quantifiers.instNoEntail
-      && id != InferenceId::QUANTIFIERS_INST_REPLAY)
+      && id != InferenceId::QUANTIFIERS_INST_REPLAY
+      && !d_speculation->isDirecting())
   {
     EntailmentCheck* ec = d_treg.getEntailmentCheck();
     // should check consistency of equality engine
@@ -489,6 +508,7 @@ bool Instantiate::addInstantiationInternal(
     // e-matching passes the trigger that matched as pfArg
     recordGraphNode(q, terms, id, pfArg, lem);
   }
+  d_speculation->notifyAdded(q, terms, id, d_graphRound);
   Trace("inst-add-debug") << " --> Success." << std::endl;
   ++(d_statistics.d_instantiations);
   ++d_strategyCounts[static_cast<size_t>(strategyOf(id))];
@@ -1334,6 +1354,11 @@ void Instantiate::getSaved(
   {
     out = it->second;
   }
+}
+
+void Instantiate::printSpeculation(std::ostream& out) const
+{
+  d_speculation->print(out, d_graphRound);
 }
 
 bool Instantiate::isProofEnabled() const

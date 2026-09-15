@@ -41,6 +41,8 @@ const char* toString(IncompleteId i)
       return "QUANTIFIERS_MAX_INST_ROUNDS";
     case IncompleteId::QUANTIFIERS_REPLAY_ONLY:
       return "QUANTIFIERS_REPLAY_ONLY";
+    case IncompleteId::QUANTIFIERS_SPECULATIVE_BLOCK:
+      return "QUANTIFIERS_SPECULATIVE_BLOCK";
     case IncompleteId::QUANTIFIERS_SYGUS_SOLVED:
       return "QUANTIFIERS_SYGUS_SOLVED";
     case IncompleteId::QUANTIFIERS_SYGUS_NO_WF_GRAMMAR:

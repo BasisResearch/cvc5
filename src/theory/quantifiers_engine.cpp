@@ -33,6 +33,7 @@
 #include "theory/quantifiers/quantifiers_statistics.h"
 #include "theory/quantifiers/relevant_domain.h"
 #include "theory/quantifiers/skolemize.h"
+#include "theory/quantifiers/speculation.h"
 #include "theory/quantifiers/term_registry.h"
 #include "theory/theory_engine.h"
 
@@ -560,10 +561,24 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
         return;
       }
     }
+    // Speculative hypotheses of this user context (see applySpeculation)
+    quantifiers::Speculation* spec = inst->getSpeculation();
     if (inst->replayOnly())
     {
       // Answer from the restored instances alone. No strategy runs, so a
-      // model found now says nothing about the quantified formulas.
+      // model found now says nothing about the quantified formulas. The
+      // hypotheses still apply, each round counted as a strategy's would be.
+      if (spec->isActive())
+      {
+        applySpeculation();
+        d_qim.doPending();
+        if (d_qim.hasSentLemma())
+        {
+          inst->notifyEndRound();
+          d_numInstRoundsLemma++;
+          return;
+        }
+      }
       setModelUnsoundId = IncompleteId::QUANTIFIERS_REPLAY_ONLY;
       return;
     }
@@ -598,6 +613,13 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
       }
       if (!d_qim.hasSentLemma())
       {
+        // The hypotheses go first at the effort e-matching runs at. Their
+        // lemmas stay pending while the strategies run, as another trigger's
+        // would, and are sent with theirs.
+        if (quant_e == QuantifiersModule::QEFFORT_STANDARD && spec->isActive())
+        {
+          applySpeculation();
+        }
         // check each module
         for (QuantifiersModule*& mdl : qm)
         {
@@ -969,6 +991,27 @@ void QuantifiersEngine::getSavedInstantiations(
     const std::string& key, std::map<Node, std::vector<std::vector<Node>>>& out)
 {
   d_qim.getInstantiate()->getSaved(key, out);
+}
+
+void QuantifiersEngine::speculate(const quantifiers::SpeculationRequest& r)
+{
+  d_qim.getInstantiate()->getSpeculation()->add(r);
+}
+
+void QuantifiersEngine::printSpeculation(std::ostream& out)
+{
+  d_qim.getInstantiate()->printSpeculation(out);
+}
+
+void QuantifiersEngine::applySpeculation()
+{
+  std::vector<Node> asserted;
+  for (size_t i = 0, n = d_model->getNumAssertedQuantifiers(); i < n; i++)
+  {
+    asserted.push_back(d_model->getAssertedQuantifier(i));
+  }
+  quantifiers::Instantiate* inst = d_qim.getInstantiate();
+  inst->getSpeculation()->apply(*inst, asserted);
 }
 
 void QuantifiersEngine::printInstantiationGraph(std::ostream& out)
