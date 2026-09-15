@@ -67,18 +67,27 @@ std::string QuantifiersRegistry::identify() const
 QuantifiersModule* QuantifiersRegistry::getOwner(Node q) const
 {
   std::map<Node, QuantifiersModule*>::const_iterator it = d_owner.find(q);
-  if (it == d_owner.end())
+  if (it == d_owner.end()
+      || (d_switchedOff != nullptr && d_switchedOff->count(it->second) > 0))
   {
     return nullptr;
   }
   return it->second;
 }
 
+void QuantifiersRegistry::setSwitchedOff(
+    const std::unordered_set<QuantifiersModule*>* s)
+{
+  d_switchedOff = s;
+}
+
 void QuantifiersRegistry::setOwner(Node q,
                                    QuantifiersModule* m,
                                    int32_t priority)
 {
-  QuantifiersModule* mo = getOwner(q);
+  // the recorded owner, whether or not it is switched off
+  std::map<Node, QuantifiersModule*>::const_iterator it = d_owner.find(q);
+  QuantifiersModule* mo = it == d_owner.end() ? nullptr : it->second;
   if (mo == m)
   {
     return;

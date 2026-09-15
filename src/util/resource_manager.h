@@ -138,6 +138,8 @@ class ResourceManager
 
   /** Retrieves amount of resources used overall. */
   uint64_t getResourceUsage() const;
+  /** Retrieves amount of resources used since the current call began. */
+  uint64_t getCallResourceUsage() const { return d_thisCallResourceUsed; }
   /** Retrieves time used over all calls. */
   uint64_t getTimeUsage() const;
   /** Retrieves the remaining time until the time limit is reached. */

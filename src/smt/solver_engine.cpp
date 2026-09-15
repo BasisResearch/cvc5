@@ -518,6 +518,67 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
   ss << "))";
   return ss.str();
 }
+
+/** The --quant-strategy name of s. */
+const char* quantStrategyName(options::QuantStrategyMode s)
+{
+  switch (s)
+  {
+    case options::QuantStrategyMode::EMATCH: return "ematch";
+    case options::QuantStrategyMode::CONFLICT: return "conflict";
+    case options::QuantStrategyMode::POOL: return "pool";
+    case options::QuantStrategyMode::ENUM: return "enum";
+    case options::QuantStrategyMode::MBQI: return "mbqi";
+    default: return "all";
+  }
+}
+
+/**
+ * The (get-info :strategy-rung) reply: the --quant-strategy the last
+ * check-sat ran with, the ladder strategies this solver has a module for,
+ * that check-sat's instantiation rounds that sent lemmas, the resources it
+ * spent (preprocessing included), and the instantiations it added per
+ * strategy. qe is
+ * null before the first check-sat and without quantifiers; the strategy is
+ * then the option's value and every count is 0.
+ */
+std::string strategyRungInfo(QuantifiersEngine* qe,
+                             options::QuantStrategyMode option,
+                             uint64_t resources)
+{
+  using Kind = theory::quantifiers::Instantiate::StrategyKind;
+  const options::QuantStrategyMode ladder[] = {
+      options::QuantStrategyMode::EMATCH,
+      options::QuantStrategyMode::CONFLICT,
+      options::QuantStrategyMode::POOL,
+      options::QuantStrategyMode::ENUM,
+      options::QuantStrategyMode::MBQI};
+  std::stringstream ss;
+  ss << "(:strategy "
+     << quantStrategyName(qe == nullptr ? option : qe->getStrategy())
+     << " :available (";
+  bool first = true;
+  for (options::QuantStrategyMode s : ladder)
+  {
+    if (qe != nullptr && qe->hasStrategy(s))
+    {
+      ss << (first ? "" : " ") << quantStrategyName(s);
+      first = false;
+    }
+  }
+  const theory::quantifiers::Instantiate* inst =
+      qe == nullptr ? nullptr : qe->getInstantiate();
+  ss << ") :rounds " << (inst == nullptr ? 0 : inst->getPressureRounds())
+     << " :resource-units " << resources << " :instantiations (";
+  const char* names[] = {"ematch", "conflict", "pool", "enum", "mbqi", "other"};
+  for (size_t k = 0; k < static_cast<size_t>(Kind::COUNT); k++)
+  {
+    ss << (k == 0 ? ":" : " :") << names[k] << " "
+       << (inst == nullptr ? 0 : inst->getStrategyCounts()[k]);
+  }
+  ss << "))";
+  return ss.str();
+}
 }  // namespace
 
 bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
@@ -528,7 +589,8 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
       || key == "incomplete-id" || key == "incomplete-ids"
       || key == "incomplete-culprits" || key == "inst-pressure"
       || key == "matching-loops" || key == "assertion-stack-levels"
-      || key == "all-options" || key == "difficulty-gradient")
+      || key == "all-options" || key == "difficulty-gradient"
+      || key == "strategy-rung")
   {
     return true;
   }
@@ -653,6 +715,14 @@ std::string SolverEngine::getInfo(const std::string& key) const
       d_ucManager->getRelevantQuantTermVectors(used, sks, false);
     }
     return instPressureInfo(inst, refuted ? &used : nullptr);
+  }
+  if (key == "strategy-rung")
+  {
+    QuantifiersEngine* qe = d_smtSolver == nullptr || !d_state->isFullyInited()
+                                ? nullptr
+                                : d_smtSolver->getQuantifiersEngine();
+    return strategyRungInfo(
+        qe, options().quantifiers.quantStrategy, d_lastCheckResources);
   }
   if (key == "matching-loops")
   {
@@ -1019,6 +1089,7 @@ Result SolverEngine::checkSat()
 {
   beginCall(true);
   Result res = checkSatInternal({});
+  d_lastCheckResources = getResourceManager()->getCallResourceUsage();
   endCall();
   return res;
 }
@@ -1032,6 +1103,7 @@ Result SolverEngine::checkSat(const Node& assumption)
     assump.push_back(assumption);
   }
   Result res = checkSatInternal(assump);
+  d_lastCheckResources = getResourceManager()->getCallResourceUsage();
   endCall();
   return res;
 }
@@ -1040,6 +1112,7 @@ Result SolverEngine::checkSat(const std::vector<Node>& assumptions)
 {
   beginCall(true);
   Result res = checkSatInternal(assumptions);
+  d_lastCheckResources = getResourceManager()->getCallResourceUsage();
   endCall();
   return res;
 }

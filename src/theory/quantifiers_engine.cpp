@@ -157,9 +157,38 @@ void QuantifiersEngine::printMatchingLoops(std::ostream& out,
   d_qim.getInstantiate()->printMatchingLoops(out, hitMaxRounds);
 }
 
+bool QuantifiersEngine::hasStrategy(options::QuantStrategyMode s) const
+{
+  return d_qmodules->getStrategyModule(s) != nullptr;
+}
+
 void QuantifiersEngine::presolve()
 {
   Trace("quant-engine-proc") << "QuantifiersEngine : presolve " << std::endl;
+  // The strategy holds for the whole check-sat, so the option is read here.
+  d_strategy = options().quantifiers.quantStrategy;
+  d_switchedOff.clear();
+  if (d_strategy == options::QuantStrategyMode::ALL)
+  {
+    const std::vector<QuantifiersModule*>& idle = d_qmodules->getLadderOnly();
+    d_switchedOff.insert(idle.begin(), idle.end());
+  }
+  else
+  {
+    for (options::QuantStrategyMode s : {options::QuantStrategyMode::EMATCH,
+                                         options::QuantStrategyMode::CONFLICT,
+                                         options::QuantStrategyMode::POOL,
+                                         options::QuantStrategyMode::ENUM,
+                                         options::QuantStrategyMode::MBQI})
+    {
+      QuantifiersModule* m = d_qmodules->getStrategyModule(s);
+      if (m != nullptr && s != d_strategy)
+      {
+        d_switchedOff.insert(m);
+      }
+    }
+  }
+  d_qreg.setSwitchedOff(d_switchedOff.empty() ? nullptr : &d_switchedOff);
   d_numInstRoundsLemma = 0;
   d_incompleteCulprits.clear();
   d_incompleteCulpritsId = IncompleteId::NONE;
@@ -327,7 +356,7 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
                                                       // or above last call
     for (QuantifiersModule*& mdl : d_modules)
     {
-      if (mdl->needsCheck(e))
+      if (!isSwitchedOff(mdl) && mdl->needsCheck(e))
       {
         qm.push_back(mdl);
         needsCheck = true;
@@ -447,6 +476,10 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
     Trace("quant-engine-debug") << "Resetting all modules..." << std::endl;
     for (QuantifiersModule*& mdl : d_modules)
     {
+      if (isSwitchedOff(mdl))
+      {
+        continue;
+      }
       Trace("quant-engine-debug2")
           << "Reset " << mdl->identify().c_str() << std::endl;
       mdl->reset_round(e);
@@ -573,7 +606,8 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
               // check if we should set the incomplete flag
               for (QuantifiersModule*& mdl : d_modules)
               {
-                if (!mdl->checkComplete(setModelUnsoundId))
+                if (!isSwitchedOff(mdl)
+                    && !mdl->checkComplete(setModelUnsoundId))
                 {
                   Trace("quant-engine-debug")
                       << "Set incomplete because module "
@@ -600,7 +634,8 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
                   {
                     for (unsigned j = 0; j < d_modules.size(); j++)
                     {
-                      if (d_modules[j]->checkCompleteFor(q))
+                      if (!isSwitchedOff(d_modules[j])
+                          && d_modules[j]->checkCompleteFor(q))
                       {
                         qmd = d_modules[j];
                         hasCompleteM = true;

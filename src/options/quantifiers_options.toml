@@ -589,6 +589,41 @@ name   = "Quantifiers"
   help       = "record each instantiation's round, terms and the earlier instantiations that introduced them, for (get-info :matching-loops)"
 
 [[option]]
+  name       = "quantLadder"
+  category   = "expert"
+  long       = "quant-ladder"
+  type       = "bool"
+  default    = "false"
+  help       = "also create the E-matching, conflict-based, pool-based, enumerative and model-based instantiation modules that the options leave off, each idle until quant-strategy selects it"
+
+[[option]]
+  name       = "quantStrategy"
+  category   = "expert"
+  long       = "quant-strategy=MODE"
+  type       = "QuantStrategyMode"
+  default    = "ALL"
+  help       = "which quantifier instantiation strategies each check-sat runs; may be set after initialization, and stays set until set again"
+  help_mode  = "Which of the five ladder strategies (E-matching, conflict-based, pool-based, enumerative, model-based) a check-sat runs. A strategy chosen alone runs without the other four, and may instantiate a quantified formula that one of them owns. Modules outside the five run as the other options configure them."
+[[option.mode.ALL]]
+  name = "all"
+  help = "Run the strategies the other options enable, as if this option were not given."
+[[option.mode.EMATCH]]
+  name = "ematch"
+  help = "Run E-matching alone."
+[[option.mode.CONFLICT]]
+  name = "conflict"
+  help = "Run conflict-based instantiation alone."
+[[option.mode.POOL]]
+  name = "pool"
+  help = "Run pool-based instantiation alone."
+[[option.mode.ENUM]]
+  name = "enum"
+  help = "Run enumerative instantiation alone."
+[[option.mode.MBQI]]
+  name = "mbqi"
+  help = "Run model-based quantifier instantiation alone."
+
+[[option]]
   name       = "matchingLoopsMax"
   category   = "expert"
   long       = "matching-loops-max=N"

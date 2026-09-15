@@ -39,6 +39,13 @@ void InstStrategyEnum::presolve()
 {
   d_enumInstLimit = options().quantifiers.enumInstLimit;
 }
+bool InstStrategyEnum::runsAtFullEffort() const
+{
+  // selected alone, it runs as --enum-inst would have it
+  return options().quantifiers.enumInst
+         || options().quantifiers.quantStrategy
+                == options::QuantStrategyMode::ENUM;
+}
 bool InstStrategyEnum::needsCheck(Theory::Effort e)
 {
   if (d_enumInstLimit == 0)
@@ -53,7 +60,7 @@ bool InstStrategyEnum::needsCheck(Theory::Effort e)
       return true;
     }
   }
-  if (options().quantifiers.enumInst)
+  if (runsAtFullEffort())
   {
     if (e >= Theory::EFFORT_LAST_CALL)
     {
@@ -75,7 +82,7 @@ void InstStrategyEnum::check(CVC5_UNUSED Theory::Effort e, QEffort quant_e)
       // we only add when interleaved with other strategies
       doCheck = quant_e == QEFFORT_STANDARD && d_qim.hasPendingLemma();
     }
-    if (options().quantifiers.enumInst && !doCheck)
+    if (runsAtFullEffort() && !doCheck)
     {
       if (!d_qstate.getValuation().needCheck())
       {

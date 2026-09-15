@@ -103,6 +103,30 @@ void Instantiate::presolve()
   d_lemmaRound = 1;
   d_pressure.clear();
   d_pressureRounds = 0;
+  d_strategyCounts.fill(0);
+}
+
+Instantiate::StrategyKind Instantiate::strategyOf(InferenceId id)
+{
+  switch (id)
+  {
+    case InferenceId::QUANTIFIERS_INST_E_MATCHING:
+    case InferenceId::QUANTIFIERS_INST_E_MATCHING_SIMPLE:
+    case InferenceId::QUANTIFIERS_INST_E_MATCHING_MT:
+    case InferenceId::QUANTIFIERS_INST_E_MATCHING_MTL:
+    case InferenceId::QUANTIFIERS_INST_E_MATCHING_HO:
+    case InferenceId::QUANTIFIERS_INST_E_MATCHING_VAR_GEN:
+    case InferenceId::QUANTIFIERS_INST_E_MATCHING_RELATIONAL:
+      return StrategyKind::EMATCH;
+    case InferenceId::QUANTIFIERS_INST_CBQI_CONFLICT:
+    case InferenceId::QUANTIFIERS_INST_CBQI_PROP: return StrategyKind::CONFLICT;
+    case InferenceId::QUANTIFIERS_INST_POOL:
+    case InferenceId::QUANTIFIERS_INST_POOL_TUPLE: return StrategyKind::POOL;
+    case InferenceId::QUANTIFIERS_INST_ENUM: return StrategyKind::ENUM;
+    case InferenceId::QUANTIFIERS_INST_MBQI:
+    case InferenceId::QUANTIFIERS_INST_MBQI_ENUM: return StrategyKind::MBQI;
+    default: return StrategyKind::OTHER;
+  }
 }
 
 void Instantiate::registerQuantifier(CVC5_UNUSED Node q) {}
@@ -443,6 +467,7 @@ bool Instantiate::addInstantiationInternal(
   }
   Trace("inst-add-debug") << " --> Success." << std::endl;
   ++(d_statistics.d_instantiations);
+  ++d_strategyCounts[static_cast<size_t>(strategyOf(id))];
   Pressure& pressure = d_pressure[q];
   if (pressure.d_added++ == 0)
   {

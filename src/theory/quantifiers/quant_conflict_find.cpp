@@ -2519,7 +2519,11 @@ QuantConflictFind::QuantConflictFind(Env& env,
 
 void QuantConflictFind::registerQuantifier(Node q)
 {
-  if (!d_qreg.hasOwnership(q, this))
+  // Under --quant-ladder, a formula another module owns is registered too:
+  // when --quant-strategy=conflict switches that owner off, the check below
+  // processes it. Otherwise the check skips it, as it skips every formula
+  // this module does not own.
+  if (!d_qreg.hasOwnership(q, this) && !options().quantifiers.quantLadder)
   {
     return;
   }

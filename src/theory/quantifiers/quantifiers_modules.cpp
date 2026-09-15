@@ -48,10 +48,20 @@ void QuantifiersModules::initialize(Env& env,
 {
   // add quantifiers modules
   const Options& options = env.getOptions();
-  if (options.quantifiers.conflictBasedInst)
+  // With --quant-ladder, a ladder strategy the options leave off is created
+  // anyway, in its usual place, and recorded as ladder-only.
+  const bool ladder = options.quantifiers.quantLadder;
+  auto addStrategy = [&](bool enabled, QuantifiersModule* m) {
+    modules.push_back(m);
+    if (!enabled)
+    {
+      d_ladderOnly.push_back(m);
+    }
+  };
+  if (options.quantifiers.conflictBasedInst || ladder)
   {
     d_qcf.reset(new QuantConflictFind(env, qs, qim, qr, tr));
-    modules.push_back(d_qcf.get());
+    addStrategy(options.quantifiers.conflictBasedInst, d_qcf.get());
   }
   if (options.quantifiers.quantSubCbqi)
   {
@@ -63,10 +73,10 @@ void QuantifiersModules::initialize(Env& env,
     d_sg_gen.reset(new ConjectureGenerator(env, qs, qim, qr, tr));
     modules.push_back(d_sg_gen.get());
   }
-  if (options.quantifiers.eMatching)
+  if (options.quantifiers.eMatching || ladder)
   {
     d_inst_engine.reset(new InstantiationEngine(env, qs, qim, qr, tr));
-    modules.push_back(d_inst_engine.get());
+    addStrategy(options.quantifiers.eMatching, d_inst_engine.get());
   }
   if (options.quantifiers.cegqi)
   {
@@ -103,31 +113,47 @@ void QuantifiersModules::initialize(Env& env,
     d_alpha_equiv.reset(new AlphaEquivalence(env));
   }
   // full saturation : instantiate from relevant domain, then arbitrary terms
-  if (options.quantifiers.enumInst || options.quantifiers.enumInstInterleave)
+  const bool enumInst =
+      options.quantifiers.enumInst || options.quantifiers.enumInstInterleave;
+  if (enumInst || ladder)
   {
     d_rel_dom.reset(new RelevantDomain(env, qs, qr, tr));
     d_fs.reset(new InstStrategyEnum(env, qs, qim, qr, tr, d_rel_dom.get()));
-    modules.push_back(d_fs.get());
+    addStrategy(enumInst, d_fs.get());
   }
-  if (options.quantifiers.poolInst)
+  if (options.quantifiers.poolInst || ladder)
   {
     d_ipool.reset(new InstStrategyPool(env, qs, qim, qr, tr));
-    modules.push_back(d_ipool.get());
+    addStrategy(options.quantifiers.poolInst, d_ipool.get());
   }
   if (options.quantifiers.sygusInst)
   {
     d_sygus_inst.reset(new SygusInst(env, qs, qim, qr, tr));
     modules.push_back(d_sygus_inst.get());
   }
-  if (options.quantifiers.mbqi)
+  if (options.quantifiers.mbqi || ladder)
   {
     d_mbqi.reset(new InstStrategyMbqi(env, qs, qim, qr, tr));
-    modules.push_back(d_mbqi.get());
+    addStrategy(options.quantifiers.mbqi, d_mbqi.get());
   }
   if (options.quantifiers.oracles)
   {
     d_oracleEngine.reset(new OracleEngine(env, qs, qim, qr, tr));
     modules.push_back(d_oracleEngine.get());
+  }
+}
+
+QuantifiersModule* QuantifiersModules::getStrategyModule(
+    options::QuantStrategyMode s) const
+{
+  switch (s)
+  {
+    case options::QuantStrategyMode::EMATCH: return d_inst_engine.get();
+    case options::QuantStrategyMode::CONFLICT: return d_qcf.get();
+    case options::QuantStrategyMode::POOL: return d_ipool.get();
+    case options::QuantStrategyMode::ENUM: return d_fs.get();
+    case options::QuantStrategyMode::MBQI: return d_mbqi.get();
+    default: return nullptr;
   }
 }
 

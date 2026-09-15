@@ -17,10 +17,12 @@
 
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "context/cdhashmap.h"
 #include "context/cdhashset.h"
 #include "context/cdlist.h"
+#include "options/quantifiers_options.h"
 #include "smt/env_obj.h"
 #include "theory/quantifiers/quant_util.h"
 
@@ -128,6 +130,13 @@ class QuantifiersEngine : protected EnvObj
    * instantiation round limit have caused its answer.
    */
   void printMatchingLoops(std::ostream& out, bool unknown) const;
+  /**
+   * The --quant-strategy value the current or last check-sat runs with: the
+   * option is read once, at presolve.
+   */
+  options::QuantStrategyMode getStrategy() const { return d_strategy; }
+  /** Whether a module for strategy s exists (it may be ladder-only). */
+  bool hasStrategy(options::QuantStrategyMode s) const;
   //----------user interface for instantiations (see quantifiers/instantiate.h)
   /** The instantiation utility, e.g. for its per-check-sat pressure. */
   quantifiers::Instantiate* getInstantiate();
@@ -265,6 +274,17 @@ class QuantifiersEngine : protected EnvObj
   /** See getIncompleteCulprits */
   std::vector<Node> d_incompleteCulprits;
   IncompleteId d_incompleteCulpritsId = IncompleteId::NONE;
+  /** See getStrategy. */
+  options::QuantStrategyMode d_strategy = options::QuantStrategyMode::ALL;
+  /**
+   * The modules --quant-strategy keeps from running this check-sat: under
+   * all, the ladder-only ones; under one strategy, the other strategies'.
+   */
+  std::unordered_set<quantifiers::QuantifiersModule*> d_switchedOff;
+  bool isSwitchedOff(quantifiers::QuantifiersModule* m) const
+  {
+    return d_switchedOff.count(m) > 0;
+  }
 }; /* class QuantifiersEngine */
 
 }  // namespace theory

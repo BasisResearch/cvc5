@@ -81,6 +81,11 @@ class InstStrategyEnum : public QuantifiersModule
   std::string identify() const override;
 
  private:
+  /**
+   * Whether to instantiate at last-call effort before answering unknown:
+   * under --enum-inst, or when --quant-strategy=enum selects this alone.
+   */
+  bool runsAtFullEffort() const;
   /** Pointer to the relevant domain utility of quantifiers engine */
   RelevantDomain* d_rd;
   /** process quantified formula
