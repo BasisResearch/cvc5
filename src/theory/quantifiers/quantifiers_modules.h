@@ -15,6 +15,7 @@
 #ifndef CVC5__THEORY__QUANTIFIERS__QUANTIFIERS_MODULES_H
 #define CVC5__THEORY__QUANTIFIERS__QUANTIFIERS_MODULES_H
 
+#include "options/quantifiers_options.h"
 #include "theory/quantifiers/alpha_equivalence.h"
 #include "theory/quantifiers/conjecture_generator.h"
 #include "theory/quantifiers/ematching/instantiation_engine.h"
@@ -65,8 +66,23 @@ class QuantifiersModules
                   TermRegistry& tr,
                   QModelBuilder* builder,
                   std::vector<QuantifiersModule*>& modules);
+  /**
+   * The module that runs strategy s, or null if s is ALL or its module was
+   * not created.
+   */
+  QuantifiersModule* getStrategyModule(options::QuantStrategyMode s) const;
+  /**
+   * The modules created only because of --quant-ladder, which run only when
+   * --quant-strategy selects them.
+   */
+  const std::vector<QuantifiersModule*>& getLadderOnly() const
+  {
+    return d_ladderOnly;
+  }
 
  private:
+  /** See getLadderOnly. */
+  std::vector<QuantifiersModule*> d_ladderOnly;
   //------------------------------ quantifier utilities
   /** relevant domain */
   std::unique_ptr<RelevantDomain> d_rel_dom;

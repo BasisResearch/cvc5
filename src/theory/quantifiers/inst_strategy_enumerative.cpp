@@ -38,7 +38,14 @@ InstStrategyEnum::InstStrategyEnum(Env& env,
 void InstStrategyEnum::presolve()
 {
   d_enumInstLimit = options().quantifiers.enumInstLimit;
+  // Chosen by --quant-strategy, it runs as --enum-inst would have it. The
+  // option is read here, once per check-sat, as the quantifiers engine reads
+  // it.
+  d_fullEffort = options().quantifiers.enumInst
+                 || options().quantifiers.quantStrategy
+                        == options::QuantStrategyMode::ENUM;
 }
+bool InstStrategyEnum::runsAtFullEffort() const { return d_fullEffort; }
 bool InstStrategyEnum::needsCheck(Theory::Effort e)
 {
   if (d_enumInstLimit == 0)
@@ -53,7 +60,7 @@ bool InstStrategyEnum::needsCheck(Theory::Effort e)
       return true;
     }
   }
-  if (options().quantifiers.enumInst)
+  if (runsAtFullEffort())
   {
     if (e >= Theory::EFFORT_LAST_CALL)
     {
@@ -75,7 +82,7 @@ void InstStrategyEnum::check(CVC5_UNUSED Theory::Effort e, QEffort quant_e)
       // we only add when interleaved with other strategies
       doCheck = quant_e == QEFFORT_STANDARD && d_qim.hasPendingLemma();
     }
-    if (options().quantifiers.enumInst && !doCheck)
+    if (runsAtFullEffort() && !doCheck)
     {
       if (!d_qstate.getValuation().needCheck())
       {
@@ -121,8 +128,7 @@ void InstStrategyEnum::check(CVC5_UNUSED Theory::Effort e, QEffort quant_e)
       for (unsigned i = 0; i < nquant; i++)
       {
         Node q = fm->getAssertedQuantifier(i, true);
-        bool doProcess = d_qreg.hasOwnership(q, this)
-                         && fm->isQuantifierActive(q)
+        bool doProcess = d_qreg.mayProcess(q, this) && fm->isQuantifierActive(q)
                          && alreadyProc.find(q) == alreadyProc.end();
         if (doProcess)
         {

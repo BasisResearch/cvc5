@@ -157,9 +157,76 @@ void QuantifiersEngine::printMatchingLoops(std::ostream& out,
   d_qim.getInstantiate()->printMatchingLoops(out, hitMaxRounds);
 }
 
+bool QuantifiersEngine::hasStrategy(options::QuantStrategyMode s) const
+{
+  return d_qmodules->getStrategyModule(s) != nullptr;
+}
+
+options::QuantStrategyMode QuantifiersEngine::getStrategy() const
+{
+  return d_strategyRead ? d_strategy : options().quantifiers.quantStrategy;
+}
+
+bool QuantifiersEngine::isStrategyAlone() const
+{
+  return d_strategyRead ? d_strategyAlone
+                        : options().quantifiers.quantStrategyAlone;
+}
+
 void QuantifiersEngine::presolve()
 {
   Trace("quant-engine-proc") << "QuantifiersEngine : presolve " << std::endl;
+  // The strategy holds for the whole check-sat, so the options are read here.
+  d_strategyRead = true;
+  d_strategy = options().quantifiers.quantStrategy;
+  d_strategyAlone = options().quantifiers.quantStrategyAlone;
+  d_switchedOff.clear();
+  d_ladderModules.clear();
+  const std::vector<QuantifiersModule*>& idle = d_qmodules->getLadderOnly();
+  QuantifiersModule* chosen = d_qmodules->getStrategyModule(d_strategy);
+  for (options::QuantStrategyMode s : {options::QuantStrategyMode::EMATCH,
+                                       options::QuantStrategyMode::CONFLICT,
+                                       options::QuantStrategyMode::POOL,
+                                       options::QuantStrategyMode::ENUM,
+                                       options::QuantStrategyMode::MBQI})
+  {
+    QuantifiersModule* m = d_qmodules->getStrategyModule(s);
+    if (m != nullptr)
+    {
+      d_ladderModules.insert(m);
+    }
+  }
+  if (d_strategy == options::QuantStrategyMode::ALL)
+  {
+    d_switchedOff.insert(idle.begin(), idle.end());
+  }
+  else if (d_strategyAlone)
+  {
+    for (QuantifiersModule* m : d_ladderModules)
+    {
+      if (m != chosen)
+      {
+        d_switchedOff.insert(m);
+      }
+    }
+  }
+  else
+  {
+    // Alongside the configured schedule: only the idle strategies not chosen
+    // stay off.
+    for (QuantifiersModule* m : idle)
+    {
+      if (m != chosen)
+      {
+        d_switchedOff.insert(m);
+      }
+    }
+  }
+  // Only the chosen strategy may process a formula that another ladder
+  // strategy owns; every other module keeps to ownership as recorded, so
+  // alongside a strategy the schedule already runs is that schedule.
+  d_chosen = chosen;
+  d_qreg.setChosen(d_chosen, &d_ladderModules);
   d_numInstRoundsLemma = 0;
   d_incompleteCulprits.clear();
   d_incompleteCulpritsId = IncompleteId::NONE;
@@ -327,7 +394,7 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
                                                       // or above last call
     for (QuantifiersModule*& mdl : d_modules)
     {
-      if (mdl->needsCheck(e))
+      if (!isSwitchedOff(mdl) && mdl->needsCheck(e))
       {
         qm.push_back(mdl);
         needsCheck = true;
@@ -447,6 +514,10 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
     Trace("quant-engine-debug") << "Resetting all modules..." << std::endl;
     for (QuantifiersModule*& mdl : d_modules)
     {
+      if (isSwitchedOff(mdl))
+      {
+        continue;
+      }
       Trace("quant-engine-debug2")
           << "Reset " << mdl->identify().c_str() << std::endl;
       mdl->reset_round(e);
@@ -573,7 +644,8 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
               // check if we should set the incomplete flag
               for (QuantifiersModule*& mdl : d_modules)
               {
-                if (!mdl->checkComplete(setModelUnsoundId))
+                if (!isSwitchedOff(mdl)
+                    && !mdl->checkComplete(setModelUnsoundId))
                 {
                   Trace("quant-engine-debug")
                       << "Set incomplete because module "
@@ -594,13 +666,24 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
                   QuantifiersModule* qmd = d_qreg.getOwner(q);
                   if (qmd != nullptr)
                   {
-                    hasCompleteM = qmd->checkCompleteFor(q);
+                    // a switched-off owner has not processed q
+                    hasCompleteM =
+                        !isSwitchedOff(qmd) && qmd->checkCompleteFor(q);
+                    // the chosen strategy may have processed it instead
+                    if (!hasCompleteM && d_chosen != nullptr && d_chosen != qmd
+                        && d_qreg.mayProcess(q, d_chosen)
+                        && d_chosen->checkCompleteFor(q))
+                    {
+                      qmd = d_chosen;
+                      hasCompleteM = true;
+                    }
                   }
                   else
                   {
                     for (unsigned j = 0; j < d_modules.size(); j++)
                     {
-                      if (d_modules[j]->checkCompleteFor(q))
+                      if (!isSwitchedOff(d_modules[j])
+                          && d_modules[j]->checkCompleteFor(q))
                       {
                         qmd = d_modules[j];
                         hasCompleteM = true;
@@ -707,6 +790,12 @@ bool QuantifiersEngine::reduceQuantifier(Node q)
   return (*it).second;
 }
 
+bool QuantifiersEngine::isLadderOnly(QuantifiersModule* m) const
+{
+  const std::vector<QuantifiersModule*>& idle = d_qmodules->getLadderOnly();
+  return std::find(idle.begin(), idle.end(), m) != idle.end();
+}
+
 void QuantifiersEngine::registerQuantifierInternal(Node f)
 {
   std::map<Node, bool>::iterator it = d_quants.find(f);
@@ -725,6 +814,12 @@ void QuantifiersEngine::registerQuantifierInternal(Node f)
 
     for (QuantifiersModule*& mdl : d_modules)
     {
+      // A module created only for --quant-ladder takes no ownership, so that
+      // formulas are owned as they would be without --quant-ladder.
+      if (isLadderOnly(mdl))
+      {
+        continue;
+      }
       Trace("quant-debug") << "check ownership with " << mdl->identify()
                            << "..." << std::endl;
       mdl->checkOwnership(f);

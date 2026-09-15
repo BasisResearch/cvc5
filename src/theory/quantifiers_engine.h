@@ -17,10 +17,12 @@
 
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "context/cdhashmap.h"
 #include "context/cdhashset.h"
 #include "context/cdlist.h"
+#include "options/quantifiers_options.h"
 #include "smt/env_obj.h"
 #include "theory/quantifiers/quant_util.h"
 
@@ -128,6 +130,16 @@ class QuantifiersEngine : protected EnvObj
    * instantiation round limit have caused its answer.
    */
   void printMatchingLoops(std::ostream& out, bool unknown) const;
+  /**
+   * The --quant-strategy value the current or last check-sat runs with: the
+   * option is read once, at presolve. Before the first check-sat, the
+   * option's current value.
+   */
+  options::QuantStrategyMode getStrategy() const;
+  /** Likewise --quant-strategy-alone. */
+  bool isStrategyAlone() const;
+  /** Whether a module for strategy s exists (it may be ladder-only). */
+  bool hasStrategy(options::QuantStrategyMode s) const;
   //----------user interface for instantiations (see quantifiers/instantiate.h)
   /** The instantiation utility, e.g. for its per-check-sat pressure. */
   quantifiers::Instantiate* getInstantiate();
@@ -265,6 +277,31 @@ class QuantifiersEngine : protected EnvObj
   /** See getIncompleteCulprits */
   std::vector<Node> d_incompleteCulprits;
   IncompleteId d_incompleteCulpritsId = IncompleteId::NONE;
+  /** Whether presolve has read the strategy options for a check-sat. */
+  bool d_strategyRead = false;
+  /** See getStrategy. */
+  options::QuantStrategyMode d_strategy = options::QuantStrategyMode::ALL;
+  /** See isStrategyAlone. */
+  bool d_strategyAlone = true;
+  /**
+   * The modules --quant-strategy keeps from running this check-sat: under
+   * all, the ladder-only ones; under one strategy alone, the other
+   * strategies'; alongside, the ladder-only ones it did not choose.
+   */
+  std::unordered_set<quantifiers::QuantifiersModule*> d_switchedOff;
+  /**
+   * The ladder strategies' modules, whose ownership of a formula does not
+   * keep the chosen one from it (see QuantifiersRegistry::setChosen).
+   */
+  std::unordered_set<quantifiers::QuantifiersModule*> d_ladderModules;
+  /** The module --quant-strategy chose this check-sat, or null. */
+  quantifiers::QuantifiersModule* d_chosen = nullptr;
+  bool isSwitchedOff(quantifiers::QuantifiersModule* m) const
+  {
+    return d_switchedOff.count(m) > 0;
+  }
+  /** Whether m exists only because of --quant-ladder. */
+  bool isLadderOnly(quantifiers::QuantifiersModule* m) const;
 }; /* class QuantifiersEngine */
 
 }  // namespace theory
