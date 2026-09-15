@@ -397,6 +397,38 @@ std::string quantIdName(const Node& q)
 }
 
 /**
+ * Assigns rows to quantified formulas as the get-info replies below report
+ * them: formulas with the same :qid share a row, and each formula without
+ * one has a row of its own.
+ */
+class QuantRows
+{
+ public:
+  /**
+   * The row of q, whose :qid is name (empty for none), and whether the row
+   * is new. A new row's index is next, the number of rows so far.
+   */
+  std::pair<size_t, bool> rowOf(const Node& q,
+                                const std::string& name,
+                                size_t next)
+  {
+    if (name.empty())
+    {
+      auto [it, isNew] = d_byNode.emplace(q, next);
+      return {it->second, isNew};
+    }
+    auto [it, isNew] = d_byName.emplace(name, next);
+    return {it->second, isNew};
+  }
+
+ private:
+  /** The row of each :qid. */
+  std::map<std::string, size_t> d_byName;
+  /** The row of each formula without a :qid. */
+  std::map<Node, size_t> d_byNode;
+};
+
+/**
  * The (get-info :inst-pressure) reply for the last check-sat: its
  * instantiation rounds, whether refutation counts are present, and one row
  * per quantified formula it tried to instantiate, most instantiated first.
@@ -417,26 +449,15 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
     uint64_t d_refuted = 0;
   };
   std::vector<Row> rows;
-  std::map<std::string, size_t> byName;
-  std::map<Node, size_t> byNode;
+  QuantRows keys;
   auto rowFor = [&](const Node& q) -> Row& {
     std::string name = quantIdName(q);
-    std::pair<size_t, bool> slot(rows.size(), false);
-    if (name.empty())
-    {
-      auto [it, isNew] = byNode.emplace(q, rows.size());
-      slot = {it->second, isNew};
-    }
-    else
-    {
-      auto [it, isNew] = byName.emplace(name, rows.size());
-      slot = {it->second, isNew};
-    }
-    if (slot.second)
+    auto [i, isNew] = keys.rowOf(q, name, rows.size());
+    if (isNew)
     {
       rows.push_back(Row{name, Pressure(), {}});
     }
-    return rows[slot.first];
+    return rows[i];
   };
   if (inst != nullptr)
   {
@@ -525,8 +546,10 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
  * its instantiation rounds, and one row per quantified formula it
  * instantiated, keyed and ordered as (get-info :inst-pressure) keys and
  * orders them, with its instances split by the inference that sent them.
- * Two checks of related queries can then be compared row by row and
- * inference by inference.
+ * Formulas whose every attempt was rejected have no row; since they sort
+ * last there, a formula without a :qid gets the same synthetic name in both
+ * replies. Two checks of related queries can then be compared row by row
+ * and inference by inference.
  */
 std::string branchProfileInfo(const theory::quantifiers::Instantiate* inst,
                               uint64_t resources,
@@ -539,8 +562,7 @@ std::string branchProfileInfo(const theory::quantifiers::Instantiate* inst,
     std::map<theory::InferenceId, uint64_t> d_byInference;
   };
   std::vector<Row> rows;
-  std::map<std::string, size_t> byName;
-  std::map<Node, size_t> byNode;
+  QuantRows keys;
   if (inst != nullptr)
   {
     for (const auto& [q, p] : inst->getPressure())
@@ -550,23 +572,12 @@ std::string branchProfileInfo(const theory::quantifiers::Instantiate* inst,
         continue;
       }
       std::string name = quantIdName(q);
-      // the maps have different key types, so each branch emplaces its own
-      std::pair<size_t, bool> slot;
-      if (name.empty())
-      {
-        auto [it, isNew] = byNode.emplace(q, rows.size());
-        slot = {it->second, isNew};
-      }
-      else
-      {
-        auto [it, isNew] = byName.emplace(name, rows.size());
-        slot = {it->second, isNew};
-      }
-      if (slot.second)
+      auto [i, isNew] = keys.rowOf(q, name, rows.size());
+      if (isNew)
       {
         rows.push_back(Row{name, 0, {}});
       }
-      Row& row = rows[slot.first];
+      Row& row = rows[i];
       row.d_added += p.d_added;
       for (const auto& [id, n] : p.d_byInference)
       {
@@ -783,7 +794,7 @@ std::string SolverEngine::getInfo(const std::string& key) const
                                 : d_smtSolver->getQuantifiersEngine();
     return branchProfileInfo(qe == nullptr ? nullptr : qe->getInstantiate(),
                              d_lastCheckResources,
-                             d_env->getOptions().base.perCallResourceLimit);
+                             d_lastCheckResourceLimit);
   }
   if (key == "assertion-stack-levels")
   {
@@ -1159,6 +1170,7 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
   Result r = d_smtDriver->checkSat(assumptions);
   d_lastCheckResources =
       getResourceManager()->getResourceUsage() - resourcesBefore;
+  d_lastCheckResourceLimit = d_env->getOptions().base.perCallResourceLimit;
 
   Trace("smt") << "SolverEngine::checkSat(" << assumptions << ") => " << r
                << endl;

@@ -1263,9 +1263,14 @@ class CVC5_EXPORT SolverEngine
   /**
    * The resource units the last check-sat spent, for (get-info
    * :branch-profile): the growth of the cumulative count across it, so it
-   * includes preprocessing and every round of the search.
+   * includes preprocessing and every round of the search. The per-check
+   * resource limit that check ran under is kept with it, since the option
+   * may change before the reply is read. Both describe the last check-sat or
+   * check-sat-assuming; get-timeout-core runs in a subsolver and leaves
+   * them, like the quantifiers engine's pressure, untouched.
    */
   uint64_t d_lastCheckResources = 0;
+  uint64_t d_lastCheckResourceLimit = 0;
 
   /** The solver for sygus queries */
   std::unique_ptr<smt::SygusSolver> d_sygusSolver;
