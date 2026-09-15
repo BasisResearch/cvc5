@@ -1812,6 +1812,10 @@ set(regress_0_tests
   regress0/quantifiers/get-egraph-equalities-internal.smt2
   regress0/quantifiers/get-egraph-equalities-terms.smt2
   regress0/quantifiers/global_negate.smt2
+  regress0/quantifiers/speculate-block.smt2
+  regress0/quantifiers/speculate-errors.smt2
+  regress0/quantifiers/speculate-instantiate.smt2
+  regress0/quantifiers/speculate-trigger.smt2
   regress0/quantifiers/horn-ground-pre-post.smt2
   regress0/quantifiers/inst-pressure-proof.smt2
   regress0/quantifiers/inst-pressure-refutation.smt2

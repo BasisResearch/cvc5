@@ -78,6 +78,7 @@
 #include "theory/quantifiers/quantifiers_state.h"
 #include "theory/quantifiers/query_generator.h"
 #include "theory/quantifiers/rewrite_verifier.h"
+#include "theory/quantifiers/speculation.h"
 #include "theory/quantifiers/sygus/sygus_enumerator.h"
 #include "theory/quantifiers/sygus_sampler.h"
 #include "theory/quantifiers_engine.h"
@@ -527,8 +528,9 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
       || key == "status" || key == "time" || key == "reason-unknown"
       || key == "incomplete-id" || key == "incomplete-ids"
       || key == "incomplete-culprits" || key == "inst-pressure"
-      || key == "matching-loops" || key == "assertion-stack-levels"
-      || key == "all-options" || key == "difficulty-gradient")
+      || key == "matching-loops" || key == "speculation"
+      || key == "assertion-stack-levels" || key == "all-options"
+      || key == "difficulty-gradient")
   {
     return true;
   }
@@ -684,6 +686,25 @@ std::string SolverEngine::getInfo(const std::string& key) const
   if (key == "difficulty-gradient")
   {
     return getDifficultyGradient();
+  }
+  if (key == "speculation")
+  {
+    // Before the first check there may be no quantifiers engine, and
+    // nothing to report.
+    QuantifiersEngine* qe = d_smtSolver == nullptr || !d_state->isFullyInited()
+                                ? nullptr
+                                : d_smtSolver->getQuantifiersEngine();
+    std::stringstream ss;
+    if (qe == nullptr)
+    {
+      ss << "(:active false :rounds 0 :loop-threshold 0 :hypotheses () "
+            ":loops ())";
+    }
+    else
+    {
+      qe->printSpeculation(ss);
+    }
+    return ss.str();
   }
   if (key == "assertion-stack-levels")
   {
@@ -2556,6 +2577,13 @@ void SolverEngine::restoreInstantiations(const std::string& key, bool only)
   beginCall();
   getAvailableQuantifiersEngine("restoreInstantiations")
       ->restoreInstantiations(key, only);
+}
+
+void SolverEngine::speculate(const theory::quantifiers::SpeculationRequest& r)
+{
+  // Also user-context state, so pending pops go first here too.
+  beginCall();
+  getAvailableQuantifiersEngine("speculate")->speculate(r);
 }
 
 void SolverEngine::getInstantiationTermVectors(

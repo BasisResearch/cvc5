@@ -42,6 +42,7 @@ class QuantifiersInferenceManager;
 class QuantifiersRegistry;
 class FirstOrderModel;
 class MatchingLoops;
+class Speculation;
 
 /** Instantiation rewriter
  *
@@ -451,6 +452,11 @@ class Instantiate : public QuantifiersUtil
    */
   void printMatchingLoops(std::ostream& out, bool maxInstRounds) const;
 
+  /** The speculative hypotheses of the current user context */
+  Speculation* getSpeculation() { return d_speculation.get(); }
+  /** Print (get-info :speculation) for the last check-sat */
+  void printSpeculation(std::ostream& out) const;
+
   /** Are proofs enabled for this object? */
   bool isProofEnabled() const;
 
@@ -615,6 +621,8 @@ class Instantiate : public QuantifiersUtil
   Node replayRecord(const std::string& key, const Node& q) const;
   /** The instantiations of this check-sat, if --matching-loops */
   std::unique_ptr<MatchingLoops> d_matchingLoops;
+  /** Speculative hypotheses, each scoped to a user context */
+  std::unique_ptr<Speculation> d_speculation;
 };
 
 }  // namespace quantifiers

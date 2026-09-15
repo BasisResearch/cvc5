@@ -6294,6 +6294,118 @@ class CVC5_EXPORT Solver
   void restoreInstantiations(const std::string& key, bool only = false) const;
 
   /**
+   * Observe the checks of the current user context for matching loops,
+   * changing nothing. Until the context is popped, each check-sat tracks, per
+   * quantified formula, the rounds in which its deepest instantiating term
+   * got deeper; `(get-info :speculation)` reports the formulas that did so in
+   * at least loopThreshold rounds after their first.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (speculate :observe [:loop-threshold <numeral>])
+   * \endverbatim
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param loopThreshold The rises that make a loop; 0 keeps the current
+   *                      threshold (5 by default).
+   */
+  void speculateObserve(uint32_t loopThreshold = 0) const;
+
+  /**
+   * Speculate, in the current user context, that each asserted quantified
+   * formula named qid is instantiated with the given terms, each for the
+   * variable of that name. The instance is made once per formula, through
+   * the ordinary instantiation path, before any strategy runs, with inference
+   * id QUANTIFIERS_INST_LLM_DIRECTED. It is an instance of an asserted
+   * formula, so the checks of this context stay sound; a pop discards it.
+   * Also observes, as speculateObserve does.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (speculate :instantiate <symbol> ((<symbol> <string>)+)
+   *                [:loop-threshold <numeral>])
+   * \endverbatim
+   *
+   * where each string is one term.
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param qid The :qid of the formulas.
+   * @param vars The names of their variables.
+   * @param terms A term for each variable.
+   * @param loopThreshold As for speculateObserve.
+   */
+  void speculateInstantiation(const std::string& qid,
+                              const std::vector<std::string>& vars,
+                              const std::vector<Term>& terms,
+                              uint32_t loopThreshold = 0) const;
+
+  /**
+   * Speculate, in the current user context, that each asserted quantified
+   * formula named qid has one more trigger, pattern, over its variables.
+   * Every round, before any strategy runs, the trigger is matched against
+   * the ground terms, and its instances are made with inference id
+   * QUANTIFIERS_INST_LLM_DIRECTED. A pop discards the trigger. Also
+   * observes, as speculateObserve does.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (speculate :trigger <symbol> ((<symbol> <sort>)+) (<string>+)
+   *                [:loop-threshold <numeral>])
+   * \endverbatim
+   *
+   * where each string is one term over the variables listed.
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param qid The :qid of the formulas.
+   * @param vars Bound variables named and sorted as those of the formulas.
+   * @param pattern The trigger's terms, over vars.
+   * @param loopThreshold As for speculateObserve.
+   */
+  void speculateTrigger(const std::string& qid,
+                        const std::vector<Term>& vars,
+                        const std::vector<Term>& pattern,
+                        uint32_t loopThreshold = 0) const;
+
+  /**
+   * Speculate, in the current user context, that no asserted quantified
+   * formula named qid is instantiated where one of its instantiating terms,
+   * or the instance of the trigger that matched, is an instance of
+   * fingerprint. Such an instantiation is refused as a duplicate would be.
+   * A pop lifts the block. Also observes, as speculateObserve does.
+   *
+   * SMT-LIB:
+   *
+   * \verbatim embed:rst:leading-asterisk
+   * .. code:: smtlib
+   *
+   *     (speculate :block <symbol> <string> [:loop-threshold <numeral>])
+   * \endverbatim
+   *
+   * @warning This function is experimental and may change in future versions.
+   *
+   * @param qid The :qid of the formulas.
+   * @param fingerprint A term in SMT-LIB syntax whose holes, the symbols _,
+   *                    _<n> and #<n>, match any term (repeated names match
+   *                    equal terms), as the :step of a matching loop report.
+   * @param loopThreshold As for speculateObserve.
+   */
+  void speculateBlock(const std::string& qid,
+                      const std::string& fingerprint,
+                      uint32_t loopThreshold = 0) const;
+
+  /**
    * What saveInstantiations stored under a key, in a form another process
    * can parse: each quantified formula with its term vectors, in original
    * form. Skolemization skolems are named by variables, each listed with the

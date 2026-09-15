@@ -360,6 +360,10 @@ enum class InferenceId
   QUANTIFIERS_INST_E_MATCHING_MTL,
   // instantiation replayed from a saved term vector
   QUANTIFIERS_INST_REPLAY,
+  // instantiation a caller asked for speculatively (see
+  // quantifiers::Speculation): a directed instance, or a match of a
+  // speculative trigger
+  QUANTIFIERS_INST_LLM_DIRECTED,
   // instantiation due to higher-order matching on top of e-matching
   QUANTIFIERS_INST_E_MATCHING_HO,
   // E-matching based on variable triggers

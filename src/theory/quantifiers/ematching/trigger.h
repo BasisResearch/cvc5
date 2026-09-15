@@ -159,6 +159,11 @@ class Trigger : protected EnvObj
   int getActiveScore();
   /** print debug information for the trigger */
   void debugPrint(const char* c) const;
+  /**
+   * Send every instantiation of this trigger with inference id id, instead of
+   * the id its match generator gives (see quantifiers::Speculation).
+   */
+  void setInferenceId(InferenceId id) { d_id = id; }
 
  protected:
   /** add an instantiation (called by InstMatchGenerator)
@@ -227,6 +232,8 @@ class Trigger : protected EnvObj
    * incremental entailment checking.
    */
   InstMatch d_instMatch;
+  /** The id instantiations are sent with, if set; see setInferenceId */
+  InferenceId d_id = InferenceId::UNKNOWN;
 }; /* class Trigger */
 
 }  // namespace inst

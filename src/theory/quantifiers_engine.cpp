@@ -33,6 +33,7 @@
 #include "theory/quantifiers/quantifiers_statistics.h"
 #include "theory/quantifiers/relevant_domain.h"
 #include "theory/quantifiers/skolemize.h"
+#include "theory/quantifiers/speculation.h"
 #include "theory/quantifiers/term_registry.h"
 #include "theory/theory_engine.h"
 
@@ -474,6 +475,23 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
         return;
       }
     }
+    // Speculative hypotheses of this user context: directed instances once,
+    // speculative triggers every round, both before any strategy runs.
+    quantifiers::Speculation* spec = inst->getSpeculation();
+    if (spec->isActive())
+    {
+      std::vector<Node> asserted;
+      for (size_t i = 0, n = d_model->getNumAssertedQuantifiers(); i < n; i++)
+      {
+        asserted.push_back(d_model->getAssertedQuantifier(i));
+      }
+      spec->apply(*inst, asserted);
+      d_qim.doPending();
+      if (d_qim.hasSentLemma())
+      {
+        return;
+      }
+    }
     if (inst->replayOnly())
     {
       // Answer from the restored instances alone. No strategy runs, so a
@@ -859,6 +877,16 @@ void QuantifiersEngine::getSavedInstantiations(
     const std::string& key, std::map<Node, std::vector<std::vector<Node>>>& out)
 {
   d_qim.getInstantiate()->getSaved(key, out);
+}
+
+void QuantifiersEngine::speculate(const quantifiers::SpeculationRequest& r)
+{
+  d_qim.getInstantiate()->getSpeculation()->add(r);
+}
+
+void QuantifiersEngine::printSpeculation(std::ostream& out)
+{
+  d_qim.getInstantiate()->printSpeculation(out);
 }
 
 void QuantifiersEngine::printInstantiationGraph(std::ostream& out)

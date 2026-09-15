@@ -30,6 +30,7 @@
 #include "theory/quantifiers/matching_loops.h"
 #include "theory/quantifiers/quantifiers_attributes.h"
 #include "theory/quantifiers/quantifiers_preprocess.h"
+#include "theory/quantifiers/speculation.h"
 #include "theory/quantifiers/term_database.h"
 #include "theory/quantifiers/term_enumeration.h"
 #include "theory/quantifiers/term_registry.h"
@@ -76,6 +77,7 @@ Instantiate::Instantiate(Env& env,
   }
   d_graphOn =
       options().quantifiers.instGraph || options().quantifiers.matchingLoops;
+  d_speculation = std::make_unique<Speculation>(env, qs, qim, qr, tr);
 }
 
 Instantiate::~Instantiate() {}
@@ -103,6 +105,7 @@ void Instantiate::presolve()
   d_lemmaRound = 1;
   d_pressure.clear();
   d_pressureRounds = 0;
+  d_speculation->presolve();
 }
 
 void Instantiate::registerQuantifier(CVC5_UNUSED Node q) {}
@@ -222,6 +225,12 @@ bool Instantiate::addInstantiationInternal(
     }
   }
 #endif
+  // a speculative block refuses it as if it were a duplicate
+  if (d_speculation->isBlocked(q, terms, id, pfArg))
+  {
+    Trace("inst-add-debug") << " --> Blocked by a speculation." << std::endl;
+    return false;
+  }
   bool isLocal = false;
   if (options().quantifiers.instLocal)
   {
@@ -242,10 +251,11 @@ bool Instantiate::addInstantiationInternal(
   // lead to very small gains).
 
   // check for positive entailment. Entailment holds in the current SAT
-  // context only, and a replayed instantiation is offered once per user
-  // context, so skipping one now would lose it after a backtrack.
+  // context only, and a replayed or directed instantiation is offered once
+  // per user context, so skipping one now would lose it after a backtrack.
   if (options().quantifiers.instNoEntail
-      && id != InferenceId::QUANTIFIERS_INST_REPLAY)
+      && id != InferenceId::QUANTIFIERS_INST_REPLAY
+      && id != InferenceId::QUANTIFIERS_INST_LLM_DIRECTED)
   {
     EntailmentCheck* ec = d_treg.getEntailmentCheck();
     // should check consistency of equality engine
@@ -441,6 +451,7 @@ bool Instantiate::addInstantiationInternal(
     // e-matching passes the trigger that matched as pfArg
     recordGraphNode(q, terms, id, pfArg, lem);
   }
+  d_speculation->notifyAdded(q, terms, id, d_graphRound);
   Trace("inst-add-debug") << " --> Success." << std::endl;
   ++(d_statistics.d_instantiations);
   Pressure& pressure = d_pressure[q];
@@ -1284,6 +1295,11 @@ void Instantiate::getSaved(
   {
     out = it->second;
   }
+}
+
+void Instantiate::printSpeculation(std::ostream& out) const
+{
+  d_speculation->print(out, d_graphRound);
 }
 
 bool Instantiate::isProofEnabled() const

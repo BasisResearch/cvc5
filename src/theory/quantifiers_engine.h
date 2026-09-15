@@ -43,6 +43,7 @@ class QuantifiersModules;
 class QuantifiersState;
 class QuantifiersRegistry;
 class Skolemize;
+struct SpeculationRequest;
 class TermDb;
 class TermDbSygus;
 class TermEnumeration;
@@ -145,6 +146,10 @@ class QuantifiersEngine : protected EnvObj
   void getSavedInstantiations(
       const std::string& key,
       std::map<Node, std::vector<std::vector<Node>>>& out);
+  /** Add a speculative hypothesis to this user context. */
+  void speculate(const quantifiers::SpeculationRequest& r);
+  /** Print (get-info :speculation) for the last check-sat. */
+  void printSpeculation(std::ostream& out);
   /** Print the instantiation graph of the last check (--inst-graph). */
   void printInstantiationGraph(std::ostream& out);
   /** get instantiation term vectors */

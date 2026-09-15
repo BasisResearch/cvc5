@@ -71,6 +71,7 @@
 #include "theory/arith/nl/poly_conversion.h"
 #include "theory/datatypes/project_op.h"
 #include "theory/logic_info.h"
+#include "theory/quantifiers/speculation.h"
 #include "theory/theory_model.h"
 #include "util/bitvector.h"
 #include "util/divisible.h"
@@ -8199,6 +8200,73 @@ void Solver::restoreInstantiations(const std::string& key, bool only) const
   CVC5_API_TRY_CATCH_BEGIN;
   //////// all checks before this line
   d_slv->restoreInstantiations(key, only);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+void Solver::speculateObserve(uint32_t loopThreshold) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  //////// all checks before this line
+  internal::theory::quantifiers::SpeculationRequest r;
+  r.d_loopThreshold = loopThreshold;
+  d_slv->speculate(r);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+void Solver::speculateInstantiation(const std::string& qid,
+                                    const std::vector<std::string>& vars,
+                                    const std::vector<Term>& terms,
+                                    uint32_t loopThreshold) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_SOLVER_CHECK_TERMS(terms);
+  //////// all checks before this line
+  internal::theory::quantifiers::SpeculationRequest r;
+  r.d_kind =
+      internal::theory::quantifiers::SpeculationRequest::Kind::INSTANTIATE;
+  r.d_qid = qid;
+  r.d_names = vars;
+  r.d_terms = Term::termVectorToNodes(terms);
+  r.d_loopThreshold = loopThreshold;
+  d_slv->speculate(r);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+void Solver::speculateTrigger(const std::string& qid,
+                              const std::vector<Term>& vars,
+                              const std::vector<Term>& pattern,
+                              uint32_t loopThreshold) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_SOLVER_CHECK_TERMS(vars);
+  CVC5_API_SOLVER_CHECK_TERMS(pattern);
+  //////// all checks before this line
+  internal::theory::quantifiers::SpeculationRequest r;
+  r.d_kind = internal::theory::quantifiers::SpeculationRequest::Kind::TRIGGER;
+  r.d_qid = qid;
+  r.d_vars = Term::termVectorToNodes(vars);
+  r.d_pattern = Term::termVectorToNodes(pattern);
+  r.d_loopThreshold = loopThreshold;
+  d_slv->speculate(r);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+void Solver::speculateBlock(const std::string& qid,
+                            const std::string& fingerprint,
+                            uint32_t loopThreshold) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  //////// all checks before this line
+  internal::theory::quantifiers::SpeculationRequest r;
+  r.d_kind = internal::theory::quantifiers::SpeculationRequest::Kind::BLOCK;
+  r.d_qid = qid;
+  r.d_fingerprint = fingerprint;
+  r.d_loopThreshold = loopThreshold;
+  d_slv->speculate(r);
   ////////
   CVC5_API_TRY_CATCH_END;
 }

@@ -1171,6 +1171,50 @@ class CVC5_EXPORT RestoreInstantiationsCommand : public Cmd
 };
 
 /**
+ * (speculate :observe ...), (speculate :instantiate ...),
+ * (speculate :trigger ...) or (speculate :block ...), see
+ * Solver::speculateObserve and the three after it. A term the parser could
+ * not read fails the command with an error naming it, and the session goes
+ * on.
+ */
+class CVC5_EXPORT SpeculateCommand : public Cmd
+{
+ public:
+  SpeculateCommand(const std::string& kind,
+                   const std::string& qid,
+                   const std::vector<std::string>& names,
+                   const std::vector<cvc5::Term>& terms,
+                   const std::vector<cvc5::Term>& vars,
+                   const std::vector<cvc5::Term>& pattern,
+                   const std::string& fingerprint,
+                   uint32_t loopThreshold,
+                   const std::string& error);
+
+  void invoke(cvc5::Solver* solver, parser::SymManager* sm) override;
+
+  std::string getCommandName() const override;
+  void toStream(std::ostream& out) const override;
+
+ protected:
+  /** :observe, :instantiate, :trigger or :block */
+  std::string d_kind;
+  /** The :qid of the formulas the hypothesis is about */
+  std::string d_qid;
+  /** :instantiate: variable names, and a term for each */
+  std::vector<std::string> d_names;
+  std::vector<cvc5::Term> d_terms;
+  /** :trigger: the variables, and the pattern over them */
+  std::vector<cvc5::Term> d_vars;
+  std::vector<cvc5::Term> d_pattern;
+  /** :block: the fingerprint */
+  std::string d_fingerprint;
+  /** 0 keeps the current threshold */
+  uint32_t d_loopThreshold;
+  /** Why the parser could not read a term, if it could not */
+  std::string d_error;
+};
+
+/**
  * (export-instantiations <symbol>), see Solver::exportInstantiations. The
  * reply is an import-instantiations command for the same key, preceded by a
  * comment counting the vectors left out.
