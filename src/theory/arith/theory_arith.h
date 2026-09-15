@@ -119,10 +119,6 @@ class TheoryArith : public Theory
   InferenceManager& getInferenceManager() { return d_im; }
 
   /** The nonlinear extension, or nullptr when nonlinear reasoning is off. */
-  const nl::NonlinearExtension* getNonlinearExtension() const
-  {
-    return d_nonlinearExtension.get();
-  }
   nl::NonlinearExtension* getNonlinearExtension()
   {
     return d_nonlinearExtension.get();

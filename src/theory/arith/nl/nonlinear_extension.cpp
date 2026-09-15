@@ -90,6 +90,12 @@ void NonlinearExtension::processSideEffect(const NlLemma& se)
   d_trSlv.processSideEffect(se);
 }
 
+bool NonlinearExtension::recordsFrontier() const
+{
+  return options().arith.nlExt == options::NlExtMode::FULL
+         || options().arith.nlExt == options::NlExtMode::LIGHT;
+}
+
 void NonlinearExtension::presolve()
 {
   d_frontier.reset();

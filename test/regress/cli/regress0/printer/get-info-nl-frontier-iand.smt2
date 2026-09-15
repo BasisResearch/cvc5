@@ -6,7 +6,8 @@
 ; The bit width of an iand is part of the operation, so ((_ iand 2) a b) and
 ; ((_ iand 3) a b) over the same operands host each other no more than a
 ; product and a division do: each reports only the term the input wrote at
-; its own width. A wrapper carries no width, and still hosts either.
+; its own width. A wrapper takes the width its definition applied, so it
+; hosts one of them alone; get-info-nl-frontier-hosts.smt2 has that case.
 (set-logic ALL)
 (declare-const a Int)
 (declare-const b Int)

@@ -1519,6 +1519,7 @@ set(regress_0_tests
   regress0/printer/get-info-nl-frontier-iand.smt2
   regress0/printer/get-info-nl-frontier-omitted.smt2
   regress0/printer/get-info-nl-frontier-punt.smt2
+  regress0/printer/get-info-nl-frontier-truncated.smt2
   regress0/printer/get-info-nl-frontier.smt2
   regress0/printer/inst-sources-output.smt2
   regress0/printer/learned-lit-output.smt2

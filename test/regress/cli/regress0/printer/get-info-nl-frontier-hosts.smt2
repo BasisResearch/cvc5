@@ -22,6 +22,10 @@
 ; EXPECT: (:nl-frontier (:result unsat :reason none :enabled true :checks 15 :rounds 14 :punts 0 :last lemma :atoms ((:atom (* b (div (* a b) b)) :kind division :current true :rounds 14 :value 5 :from-args 8 :lower (:value 2 :strict false :fixed false) :args ((:term b :value 4 :lower (:value 3 :strict false :fixed true) :hosts ()) (:term (div (* a b) b) :value 2 :lower (:value 2 :strict false :fixed false) :hosts ((:in input :term (EucMod (* a b) b) :tags (query)) (:in instance :term (EucMod (* a b) b) :qid prelude_eucmod :count 1)))) :hosts ((:in input :term (EucMod (* a b) b) :tags (query)) (:in instance :term (EucMod (* a b) b) :qid prelude_eucmod :count 1))) (:atom (* a b) :kind product :current true :rounds 5 :value 8 :from-args 12 :lower (:value 1 :strict false :fixed false) :args ((:term a :value 3 :lower (:value 0 :strict false :fixed true) :hosts ()) (:term b :value 4 :lower (:value 3 :strict false :fixed true) :hosts ())) :hosts ((:in input :term (* a b) :tags (query)))) (:atom (* b (div a b)) :kind division :current false :rounds 4 :value -2 :from-args 0 :args ((:term b :value 3 :lower (:value 3 :strict false :fixed true) :hosts ()) (:term (div a b) :value 0 :upper (:value 0 :strict false :fixed false) :hosts ((:in input :term (div a b) :tags (hyp_div))))) :hosts ((:in input :term (div a b) :tags (hyp_div))))) :omitted 0 :truncated false))
 ; EXPECT: unsat
 ; EXPECT: (:nl-frontier (:result unsat :reason none :enabled true :checks 3 :rounds 2 :punts 0 :last lemma :atoms ((:atom (* a b) :kind product :current true :rounds 2 :value -1 :from-args 3 :args ((:term a :value 1 :lower (:value 0 :strict false :fixed true) :hosts ()) (:term b :value 3 :lower (:value 3 :strict false :fixed true) :hosts ())) :hosts ((:in input :term (MulB a b) :tags (query)) (:in input :term (MulA a b) :tags (query)) (:in instance :term (MulA a b) :qid none :count 1) (:in instance :term (MulB a b) :qid none :count 1)))) :omitted 0 :truncated false))
+; EXPECT: unsat
+; EXPECT: (:nl-frontier (:result unsat :reason none :enabled true :checks 2 :rounds 2 :punts 0 :last lemma :atoms ((:atom ((_ iand 8) c d) :kind iand :current true :rounds 2 :value -1 :from-args 0 :upper (:value -1 :strict false :fixed false) :args ((:term c :value 2 :lower (:value 0 :strict false :fixed false) :upper (:value 15 :strict false :fixed false) :hosts ()) (:term d :value 1 :lower (:value 0 :strict false :fixed false) :upper (:value 15 :strict false :fixed false) :hosts ())) :hosts ((:in input :term ((_ iand 8) c d) :tags (query)))) (:atom ((_ iand 4) c d) :kind iand :current true :rounds 1 :value 101 :from-args 0 :args ((:term c :value 2 :lower (:value 0 :strict false :fixed false) :upper (:value 15 :strict false :fixed false) :hosts ()) (:term d :value 1 :lower (:value 0 :strict false :fixed false) :upper (:value 15 :strict false :fixed false) :hosts ())) :hosts ((:in input :term (IandW c d) :tags (force)) (:in instance :term (IandW c d) :qid prelude_iand4 :count 1)))) :omitted 0 :truncated false))
+; EXPECT: unsat
+; EXPECT: (:nl-frontier (:result unsat :reason none :enabled true :checks 4 :rounds 2 :punts 0 :last lemma :atoms ((:atom (* a b) :kind product :current true :rounds 2 :value -1 :from-args 3 :args ((:term a :value 1 :lower (:value 0 :strict false :fixed true) :hosts ()) (:term b :value 3 :lower (:value 3 :strict false :fixed true) :hosts ())) :hosts ((:in input :term (Mul a b) :tags (ax_ground)) (:in instance :term (Mul a b) :qid prelude_mul :count 1)))) :omitted 0 :truncated false))
 ; Look-alike applications are not hosts of a product: Add, Sub and P wrap no
 ; nonlinear operation, and a plain div is not a product. The wrapped division
 ; and the division it purifies each find their div and EucDiv hosts, and one
@@ -46,6 +50,13 @@
 ; The check after that writes a modulus. Operator elimination rewrites
 ; (mod n d) as n - d * (div n d), so the atom is the division, and the EucMod
 ; the input wrote hosts it alongside the div of hyp_div.
+; The check after that writes a wrapper of ((_ iand 4) x y). A definition pins
+; the index as it pins the operation, so IandW hosts no atom of ((_ iand 8)),
+; which reports only the term the input wrote at its own width.
+; The last check writes the product inside the body of a quantifier, where it
+; is ground and so mentions none of the variables. No instantiation reports
+; such a term, and the body is searched for it instead: the host carries the
+; :assert-id of the assertion whose body holds it.
 (set-logic ALL)
 (declare-fun Mul (Int Int) Int)
 (declare-fun Add (Int Int) Int)
@@ -122,6 +133,23 @@
 (assert (! (forall ((x Int) (y Int)) (! (= (MulA x y) (* x y)) :pattern ((MulA x y)))) :assert-id ax_mul_a))
 (assert (! (forall ((x Int) (y Int)) (! (= (MulB x y) (* x y)) :pattern ((MulB x y)))) :assert-id ax_mul_b))
 (assert (! (not (>= (+ (MulA a b) (MulB a b)) 0)) :assert-id query))
+(check-sat)
+(get-info :nl-frontier)
+(pop 1)
+(push 1)
+(declare-fun IandW (Int Int) Int)
+(assert (! (forall ((x Int) (y Int)) (! (= (IandW x y) ((_ iand 4) x y)) :pattern ((IandW x y)) :qid prelude_iand4)) :assert-id ax_prelude_iand4))
+(assert (! (and (>= c 0) (< c 16)) :assert-id hyp_c))
+(assert (! (and (>= d 0) (< d 16)) :assert-id hyp_d))
+(assert (! (> (IandW c d) 100) :assert-id force))
+(assert (! (not (>= ((_ iand 8) c d) 0)) :assert-id query))
+(check-sat)
+(get-info :nl-frontier)
+(pop 1)
+(push 1)
+(declare-fun Q (Int) Bool)
+(assert (! (forall ((z Int)) (! (=> (Q z) (< (Mul a b) z)) :pattern ((Q z)) :qid lemma_ground)) :assert-id ax_ground))
+(assert (! (Q 0) :assert-id trig))
 (check-sat)
 (get-info :nl-frontier)
 (pop 1)

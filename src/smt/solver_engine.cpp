@@ -2836,7 +2836,7 @@ std::string SolverEngine::getNlFrontier() const
   if (!checked)
   {
     // The extension exists once the solver is initialised, and the reply
-    // then says whether it is enabled, with no record.
+    // then says whether it records a frontier, with none to report yet.
     bool inited = d_smtSolver != nullptr && d_state->isFullyInited();
     return getNlFrontierInfo(inited ? d_smtSolver->getTheoryEngine() : nullptr,
                              nullptr,

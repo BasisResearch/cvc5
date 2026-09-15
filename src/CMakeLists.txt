@@ -348,6 +348,8 @@ libcvc5_add_sources(
   smt/model_blocker.h
   smt/quant_elim_solver.cpp
   smt/quant_elim_solver.h
+  smt/nl_frontier_info.cpp
+  smt/nl_frontier_info.h
   smt/preprocessor.cpp
   smt/preprocessor.h
   smt/preprocess_proof_generator.cpp
@@ -356,8 +358,6 @@ libcvc5_add_sources(
   smt/print_benchmark.h
   smt/process_assertions.cpp
   smt/process_assertions.h
-  smt/nl_frontier_info.cpp
-  smt/nl_frontier_info.h
   smt/proof_manager.cpp
   smt/proof_manager.h
   smt/proof_final_callback.cpp

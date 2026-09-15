@@ -410,6 +410,19 @@ bool overBoundVars(TNode f)
   return true;
 }
 
+/** The operation an uninterpreted function is defined as. */
+struct Wrapper
+{
+  Kind d_op = Kind::UNDEFINED_KIND;
+  /**
+   * The index the definition gave that operation, the bit width of an iand,
+   * or null when it carries none. A definition pins the index as it pins the
+   * operation, so a wrapper of (_ iand 4) hosts an atom of (_ iand 8) no more
+   * than the application itself does.
+   */
+  Node d_index;
+};
+
 /**
  * The uninterpreted functions the input defines as an operation that can
  * host an atom, mapped to it: f wraps op when a quantifier body holds
@@ -419,9 +432,9 @@ bool overBoundVars(TNode f)
  * A ground equation such as (= (g a b) (* a b)) defines g at one point only,
  * so it makes no wrapper.
  */
-std::unordered_map<Node, Kind> findWrappers(const std::vector<Node>& input)
+std::unordered_map<Node, Wrapper> findWrappers(const std::vector<Node>& input)
 {
-  std::unordered_map<Node, Kind> wrappers;
+  std::unordered_map<Node, Wrapper> wrappers;
   std::vector<std::pair<Node, Node>> links;
   std::unordered_set<TNode> visited;
   std::vector<TNode> visit(input.begin(), input.end());
@@ -461,7 +474,12 @@ std::unordered_map<Node, Kind> findWrappers(const std::vector<Node>& input)
       Kind op = operationOf(partialKind(g.getKind()));
       if (op != Kind::UNDEFINED_KIND)
       {
-        wrappers.emplace(f.getOperator(), op);
+        Node index;
+        if (g.getMetaKind() == kind::metakind::PARAMETERIZED)
+        {
+          index = g.getOperator();
+        }
+        wrappers.emplace(f.getOperator(), Wrapper{op, index});
       }
     }
   }
@@ -488,9 +506,10 @@ struct AtomKey
   /**
    * The index of an indexed operation, the bit width of an iand, which is
    * part of the operation: (_ iand 4) and (_ iand 8) over the same operands
-   * host each other no more than a product and a division do. Null for an
-   * operation that carries no index, and for a wrapper, which carries none
-   * either and so hosts an atom of any index.
+   * host each other no more than a product and a division do. A wrapper
+   * takes the index its definition applied, so one defined as (_ iand 4)
+   * hosts an atom of that width alone. Null for an operation that carries no
+   * index.
    */
   TNode d_index;
   std::vector<TNode> d_args;
@@ -499,7 +518,7 @@ struct AtomKey
 class HostMatcher
 {
  public:
-  HostMatcher(SourceView& sv, std::unordered_map<Node, Kind> wrappers)
+  HostMatcher(SourceView& sv, std::unordered_map<Node, Wrapper> wrappers)
       : d_sv(sv), d_wrappers(std::move(wrappers))
   {
   }
@@ -515,7 +534,7 @@ class HostMatcher
     if (k == Kind::APPLY_UF)
     {
       auto it = d_wrappers.find(t.getOperator());
-      return it == d_wrappers.end() ? Kind::UNDEFINED_KIND : it->second;
+      return it == d_wrappers.end() ? Kind::UNDEFINED_KIND : it->second.d_op;
     }
     return operationOf(k);
   }
@@ -533,7 +552,16 @@ class HostMatcher
     AtomKey k;
     k.d_op = op;
     TNode x = d_sv.top(t);
-    if (d_sv.kind(x) != Kind::APPLY_UF && d_sv.hasOperator(x))
+    if (d_sv.kind(x) == Kind::APPLY_UF)
+    {
+      // a wrapper is indexed by what its definition applied
+      auto it = d_wrappers.find(x.getOperator());
+      if (it != d_wrappers.end())
+      {
+        k.d_index = it->second.d_index;
+      }
+    }
+    else if (d_sv.hasOperator(x))
     {
       k.d_index = x.getOperator();
     }
@@ -581,8 +609,9 @@ class HostMatcher
       return false;
     }
     // Two indexed applications are the same operation only under the same
-    // index. A wrapper has none to compare, so it still hosts either. The
-    // bucket in index() ignores this, which it must for the two to meet.
+    // index, whether the index is written at the application or comes from
+    // the definition of a wrapper. The bucket in index() ignores it, which it
+    // must for two spellings of one operation to meet.
     if (!a.d_index.isNull() && !b.d_index.isNull() && a.d_index != b.d_index)
     {
       return false;
@@ -636,7 +665,7 @@ class HostMatcher
   }
 
   SourceView& d_sv;
-  std::unordered_map<Node, Kind> d_wrappers;
+  std::unordered_map<Node, Wrapper> d_wrappers;
 };
 
 /**
@@ -850,11 +879,17 @@ std::string getNlFrontierInfo(TheoryEngine* te,
                               const std::string& reason)
 {
   const NonlinearExtension* nl = nonlinearExtension(te);
+  // The extension records atoms only where it computes the model values the
+  // recorder reads, which its NL_INIT step does under --nl-ext=full and
+  // --nl-ext=light alone. Under --nl-ext=none the atom list is empty whatever
+  // the search did, and saying so keeps a consumer from reading that as
+  // nothing having gone wrong. The counters still describe what ran.
+  bool enabled = nl != nullptr && nl->recordsFrontier();
   std::stringstream ss;
   // whole terms, without let-bindings for shared subterms
   options::ioutils::applyDagThresh(ss, 0);
   ss << "(:result " << result << " :reason " << reason << " :enabled "
-     << (nl != nullptr ? "true" : "false");
+     << (enabled ? "true" : "false");
   // With no result to report there is no record either: after a push the
   // extension still holds the last check's atoms, but the reply would have
   // no assertions or instantiations to find their hosts in.
@@ -990,11 +1025,17 @@ std::string getNlFrontierInfo(TheoryEngine* te,
   // Set by anything the reply had to leave out: a host list cut to
   // kMaxHosts, or the instantiation search stopping at kMaxInstanceWork.
   bool truncated = false;
+  // Set only by that budget, which is the one reason to stop looking. A host
+  // list filling up says nothing about the terms still to be searched, so it
+  // leaves the reply short without ending the search for every other term.
+  bool outOfWork = false;
 
   // Hosts in the input: ground terms of the input assertions applying an
   // atom's operation, or a wrapper of it, to exactly its operands, with the
-  // tags of every assertion holding them. Quantifier bodies are skipped
-  // here; their terms are found instantiated below.
+  // tags of every assertion holding them. Quantifier bodies are searched too,
+  // for the ground terms the input wrote there, which no instantiation
+  // reports since they mention no variable; the terms of a body that do
+  // mention one are found instantiated below, and match nothing here.
   if (!byKey.empty())
   {
     for (const Node& a : input)
@@ -1007,8 +1048,13 @@ std::string getNlFrontierInfo(TheoryEngine* te,
       {
         TNode cur = visit.back();
         visit.pop_back();
-        if (!visited.insert(cur).second || cur.isClosure())
+        if (!visited.insert(cur).second)
         {
+          continue;
+        }
+        if (cur.isClosure())
+        {
+          visit.push_back(cur[1]);
           continue;
         }
         visit.insert(visit.end(), cur.begin(), cur.end());
@@ -1061,7 +1107,7 @@ std::string getNlFrontierInfo(TheoryEngine* te,
     size_t work = 0;
     for (const Node& q : qs)
     {
-      if (truncated)
+      if (outOfWork)
       {
         break;
       }
@@ -1111,6 +1157,7 @@ std::string getNlFrontierInfo(TheoryEngine* te,
         if (work > kMaxInstanceWork)
         {
           truncated = true;
+          outOfWork = true;
           break;
         }
         sv.bind(vars, tv);

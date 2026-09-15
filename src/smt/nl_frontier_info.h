@@ -36,12 +36,14 @@ class Assertions;
  * its hosts: the terms that apply that term's operation, or an
  * uninterpreted function a quantifier defines as it, to exactly its operands
  * (flattening nested products, and dropping the constant factors of builtin
- * ones, and under the same index where the operation carries one, so that
- * an (_ iand 4) hosts no atom of (_ iand 8)), found in the tagged input
- * assertions (with their :assert-id tags)
- * and in the instantiations of each quantified formula (with its :qid and
- * how many of its instantiations produced a host). A host is where the term
- * entered the problem: a product the input wrote through an uninterpreted
+ * ones, and under the same index where the operation carries one, whether
+ * the application or the definition of a wrapper gave it, so that an
+ * (_ iand 4) hosts no atom of (_ iand 8)), found in the tagged input
+ * assertions (with their :assert-id tags), quantifier bodies included, since
+ * a body can hold a ground term the input wrote that no instantiation
+ * reports, and in the instantiations of each quantified formula (with its
+ * :qid and how many of its instantiations produced a host). A host is where the
+ * term entered the problem: a product the input wrote through an uninterpreted
  * wrapper such as Verus's Mul, whose defining axiom (= (Mul x y) (* x y))
  * brings it to arithmetic, say. Arguments carry hosts of their own because
  * the rewriter can leave an atom no input term applies around an argument
@@ -52,7 +54,10 @@ class Assertions;
  * A quantifier is told apart by its formula, not by its :qid, which is empty
  * for every unnamed one. Whatever the reply leaves out it says: atoms past
  * the cap in :omitted, and a cut host list or a stopped instantiation search
- * in :truncated.
+ * in :truncated. A cut list does not stop the search, only the work budget
+ * does, so one term whose hosts overflow costs no other term its own.
+ * :enabled is false where the extension records no atom, under --nl-ext=none
+ * as well as where there is no extension.
  *
  * te, qe and as are null before the first check. result is the answer of the
  * last check-sat (sat, unsat or unknown), or none when there is none to

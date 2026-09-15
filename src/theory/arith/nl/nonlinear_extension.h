@@ -133,6 +133,14 @@ class NonlinearExtension : EnvObj
   const NlFrontier& getFrontier() const { return d_frontier; }
 
   /**
+   * Whether that record can hold atoms at all. recordFrontier reads the model
+   * values the strategy's NL_INIT step computed, and that step is scheduled
+   * under --nl-ext=full and --nl-ext=light alone, so under --nl-ext=none the
+   * extension still runs and still punts but records no atom.
+   */
+  bool recordsFrontier() const;
+
+  /**
    * Drop the frontier, so that the record describes the check-sat that is
    * beginning. presolve cannot be relied on for this: TheoryEngine::presolve
    * stops at the first theory that finds a conflict, so on an assertion set
