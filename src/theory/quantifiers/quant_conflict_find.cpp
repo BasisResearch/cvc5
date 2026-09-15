@@ -2520,9 +2520,9 @@ QuantConflictFind::QuantConflictFind(Env& env,
 void QuantConflictFind::registerQuantifier(Node q)
 {
   // Under --quant-ladder, a formula another module owns is registered too:
-  // when --quant-strategy=conflict has that ownership ignored, the check
-  // below processes it. Otherwise the check skips it, as it skips every
-  // formula this module does not own.
+  // when --quant-strategy has that ownership ignored, the check below
+  // processes it. Without --quant-ladder it is not registered, and the check
+  // skips it even if that ownership is ignored later.
   if (!d_qreg.hasOwnership(q, this) && !options().quantifiers.quantLadder)
   {
     return;
@@ -2686,9 +2686,12 @@ void QuantConflictFind::check(Theory::Effort level, QEffort quant_e)
     for (size_t i = 0; i < nquant; i++)
     {
       Node q = fm->getAssertedQuantifier(i, true);
+      // A formula registered without --quant-ladder while another module
+      // owned it has no QuantInfo; it is skipped even when --quant-strategy
+      // now ignores that ownership.
       if (d_qreg.hasOwnership(q, this)
           && d_irr_quant.find(q) == d_irr_quant.end()
-          && fm->isQuantifierActive(q))
+          && fm->isQuantifierActive(q) && d_qinfo.find(q) != d_qinfo.end())
       {
         // check this quantified formula
         checkQuantifiedFormula(q, isConflict, addedLemmas);
