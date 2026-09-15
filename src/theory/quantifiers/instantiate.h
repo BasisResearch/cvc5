@@ -200,6 +200,29 @@ class Instantiate : public QuantifiersUtil
   {
     return d_strategyCounts;
   }
+  /**
+   * The pressure rows, round count and per-strategy counts of the current
+   * check-sat so far, as a deep restart hands them from the quantifiers
+   * engine it replaces to the next.
+   */
+  struct PressureCarry
+  {
+    std::map<Node, Pressure> d_pressure;
+    uint64_t d_rounds = 0;
+    std::array<uint64_t, static_cast<size_t>(StrategyKind::COUNT)>
+        d_strategyCounts{};
+  };
+  /** This check-sat's pressure so far. */
+  PressureCarry getPressureCarry() const;
+  /**
+   * Start the next presolve from carry instead of from nothing. A deep
+   * restart replaces the theory engine, and so this object, within one
+   * check-sat, and its presolve would otherwise drop the earlier restarts'
+   * instances while the check's resource units still count them. Rounds
+   * continue from the carried count. clearPressure drops a carry not yet
+   * taken.
+   */
+  void setPressureCarry(PressureCarry carry);
   /** register quantifier */
   void registerQuantifier(Node q) override;
   /** identify */
@@ -654,6 +677,8 @@ class Instantiate : public QuantifiersUtil
   /** See getStrategyCounts; cleared before each check-sat and on presolve. */
   std::array<uint64_t, static_cast<size_t>(StrategyKind::COUNT)>
       d_strategyCounts{};
+  /** See setPressureCarry; taken by the next presolve. */
+  PressureCarry d_pressureCarry;
   /** The replay record for q under key's current vectors, null if none. */
   Node replayRecord(const std::string& key, const Node& q) const;
   /** The instantiations of this check-sat, if --matching-loops */

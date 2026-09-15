@@ -10,8 +10,8 @@
 ; EXPECT: unknown
 ; EXPECT: (:branch-profile (:resource-units R :resource-limit 0 :rounds 4 :quantifiers ((loop :instantiations 4 :inferences ((QUANTIFIERS_INST_E_MATCHING_SIMPLE 4))))))
 ; EXPECT: unknown
-; EXPECT: (:branch-profile (:resource-units R :resource-limit 1000000 :rounds 4 :quantifiers ((loop :instantiations 4 :inferences ((QUANTIFIERS_INST_E_MATCHING_SIMPLE 4))))))
-; EXPECT: (:branch-profile (:resource-units R :resource-limit 1000000 :rounds 4 :quantifiers ((loop :instantiations 4 :inferences ((QUANTIFIERS_INST_E_MATCHING_SIMPLE 4))))))
+; EXPECT: (:branch-profile (:resource-units R :resource-limit 1000000 :resource-budget 1000000 :rounds 4 :quantifiers ((loop :instantiations 4 :inferences ((QUANTIFIERS_INST_E_MATCHING_SIMPLE 4))))))
+; EXPECT: (:branch-profile (:resource-units R :resource-limit 1000000 :resource-budget 1000000 :rounds 4 :quantifiers ((loop :instantiations 4 :inferences ((QUANTIFIERS_INST_E_MATCHING_SIMPLE 4))))))
 ; The resource units, resource limit, rounds and per-inference instance
 ; counts of the last check-sat, for comparing two checks of related queries
 ; (a query and its edited twin). Rows are keyed and ordered as in

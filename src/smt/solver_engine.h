@@ -19,6 +19,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -1287,21 +1288,27 @@ class CVC5_EXPORT SolverEngine
    * resource or time limit already spent). The reply stands until the next
    * check: push, pop, assertions and reset-assertions leave it, as do the
    * queries that check outside checkSatInternal (get-timeout-core,
-   * get-abduct, get-interpolant, check-synth). Under deep restarts the
-   * instantiation counts are the last restart's while the units cover the
-   * whole check. A check repeated on a warm engine spends fewer units than
-   * it first did (rewriter and term caches carry across pop), so between
-   * checks the instantiation counts compare more steadily than the units.
+   * get-abduct, get-interpolant, check-synth). Under deep restarts all three
+   * cover every restart of the check, since each restart's quantifiers
+   * engine starts from the pressure of the one it replaces. A check repeated
+   * on a warm engine spends fewer units than it first did (rewriter and term
+   * caches carry across pop), so between checks the instantiation counts
+   * compare more steadily than the units.
    */
   uint64_t d_lastCheckResources = 0;
   uint64_t d_lastCheckInstantiations = 0;
   uint64_t d_lastCheckInstRounds = 0;
   /**
-   * The per-check resource limit the last check-sat or check-sat-assuming
-   * ran under, for (get-info :branch-profile), kept with its resource units
-   * since the option may change before the reply is read.
+   * The resource limits the last check-sat or check-sat-assuming ran under,
+   * for (get-info :branch-profile), read as it began, since the options may
+   * change and what the cumulative limit leaves shrinks before the reply is
+   * read: the per-check limit (reproducible-resource-limit, 0 for none), and,
+   * when that or the cumulative limit (rlimit) is set, the units the check
+   * could spend before reaching either. Like the costs above, they stand
+   * until the next check.
    */
   uint64_t d_lastCheckResourceLimit = 0;
+  std::optional<uint64_t> d_lastCheckResourceBudget;
 
   /** The solver for sygus queries */
   std::unique_ptr<smt::SygusSolver> d_sygusSolver;

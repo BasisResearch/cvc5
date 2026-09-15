@@ -545,18 +545,24 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
 
 /**
  * The (get-info :branch-profile) reply for the last check-sat: the resource
- * units it spent, the per-check resource limit it ran under (0 for none),
- * its instantiation rounds, and one row per quantified formula it
- * instantiated, keyed and ordered as (get-info :inst-pressure) keys and
- * orders them, with its instances split by the inference that sent them.
- * Formulas whose every attempt was rejected have no row; since they sort
- * last there, a formula without a :qid gets the same synthetic name in both
+ * units it spent (see SolverEngine::d_lastCheckResources), the per-check
+ * resource limit it ran under (0 for none), the resource budget it began
+ * with when any resource limit applied, its instantiation rounds, and one
+ * row per quantified formula it instantiated, with its instances split by
+ * the inference that sent them. The budget is the smaller of the per-check
+ * limit and what the cumulative limit (rlimit) had left, so a check that ran
+ * out of either spends units reaching it; it is left out when neither limit
+ * is set. Rows are keyed and ordered as (get-info :inst-pressure) keys and
+ * orders them: they are assigned and sorted as there, and only then are the
+ * formulas whose every attempt was rejected, which sort last, left out. A
+ * formula without a :qid therefore gets the same synthetic name in both
  * replies. Two checks of related queries can then be compared row by row
  * and inference by inference.
  */
 std::string branchProfileInfo(const theory::quantifiers::Instantiate* inst,
                               uint64_t resources,
-                              uint64_t limit)
+                              uint64_t limit,
+                              std::optional<uint64_t> budget)
 {
   struct Row
   {
@@ -570,10 +576,6 @@ std::string branchProfileInfo(const theory::quantifiers::Instantiate* inst,
   {
     for (const auto& [q, p] : inst->getPressure())
     {
-      if (p.d_added == 0)
-      {
-        continue;
-      }
       std::string name = quantIdName(q);
       auto [i, isNew] = keys.rowOf(q, name, rows.size());
       if (isNew)
@@ -592,11 +594,15 @@ std::string branchProfileInfo(const theory::quantifiers::Instantiate* inst,
     return a.d_added > b.d_added;
   });
   std::stringstream ss;
-  ss << "(:resource-units " << resources << " :resource-limit " << limit
-     << " :rounds " << (inst == nullptr ? 0 : inst->getPressureRounds())
+  ss << "(:resource-units " << resources << " :resource-limit " << limit;
+  if (budget.has_value())
+  {
+    ss << " :resource-budget " << *budget;
+  }
+  ss << " :rounds " << (inst == nullptr ? 0 : inst->getPressureRounds())
      << " :quantifiers (";
   size_t unnamed = 0;
-  for (size_t i = 0; i < rows.size(); i++)
+  for (size_t i = 0; i < rows.size() && rows[i].d_added > 0; i++)
   {
     const Row& r = rows[i];
     ss << (i > 0 ? " " : "") << "(";
@@ -881,7 +887,8 @@ std::string SolverEngine::getInfo(const std::string& key) const
                                 : d_smtSolver->getQuantifiersEngine();
     return branchProfileInfo(qe == nullptr ? nullptr : qe->getInstantiate(),
                              d_lastCheckResources,
-                             d_lastCheckResourceLimit);
+                             d_lastCheckResourceLimit,
+                             d_lastCheckResourceBudget);
   }
   if (key == "check-effort")
   {
@@ -1273,6 +1280,21 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
   {
     qe->getInstantiate()->clearPressure();
   }
+  // The resource limits this check runs under, for (get-info
+  // :branch-profile), read as it begins: the options may change before the
+  // reply is read, and what the cumulative limit leaves shrinks.
+  d_lastCheckResourceLimit = options().base.perCallResourceLimit;
+  d_lastCheckResourceBudget.reset();
+  if (d_lastCheckResourceLimit > 0)
+  {
+    d_lastCheckResourceBudget = d_lastCheckResourceLimit;
+  }
+  if (options().base.cumulativeResourceLimit > 0)
+  {
+    uint64_t left = getResourceManager()->getResourceRemaining();
+    d_lastCheckResourceBudget =
+        std::min(d_lastCheckResourceBudget.value_or(left), left);
+  }
 
   // Call the SMT solver driver to check for satisfiability. Note that in the
   // case of options like e.g. deep restarts, this may invokve multiple calls
@@ -1285,7 +1307,6 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
   // a quantifiers engine cannot change the reply.
   d_lastCheckResources =
       getResourceManager()->getResourceUsage() - resourcesBefore;
-  d_lastCheckResourceLimit = d_env->getOptions().base.perCallResourceLimit;
   d_lastCheckInstantiations = 0;
   d_lastCheckInstRounds = 0;
   if (QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine())
