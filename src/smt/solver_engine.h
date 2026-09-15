@@ -1277,14 +1277,15 @@ class CVC5_EXPORT SolverEngine
    * instantiations it added and the instantiation rounds that sent lemmas
    * (the sums of its :inst-pressure rows, read as the check returns). All
    * three are 0 before the first check, and the last two are 0 after a
-   * quantifier-free check. The reply stands until the next check: push, pop,
-   * assertions and reset-assertions leave it, as do the queries that
-   * check outside checkSatInternal (get-timeout-core, get-abduct,
-   * get-interpolant, check-synth). Under deep restarts the instantiation
-   * counts are the last restart's while the units cover the whole check. A
-   * check repeated on a warm engine spends fewer units than it first did
-   * (rewriter and term caches carry across pop), so between checks the
-   * instantiation counts compare more steadily than the units.
+   * quantifier-free check or one refused before it starts (the cumulative
+   * resource or time limit already spent). The reply stands until the next
+   * check: push, pop, assertions and reset-assertions leave it, as do the
+   * queries that check outside checkSatInternal (get-timeout-core,
+   * get-abduct, get-interpolant, check-synth). Under deep restarts the
+   * instantiation counts are the last restart's while the units cover the
+   * whole check. A check repeated on a warm engine spends fewer units than
+   * it first did (rewriter and term caches carry across pop), so between
+   * checks the instantiation counts compare more steadily than the units.
    */
   uint64_t d_lastCheckResources = 0;
   uint64_t d_lastCheckInstantiations = 0;

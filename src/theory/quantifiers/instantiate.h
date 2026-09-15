@@ -166,6 +166,12 @@ class Instantiate : public QuantifiersUtil
    * instantiation made in round k (from 0) records k.
    */
   uint64_t getPressureRounds() const { return d_pressureRounds; }
+  /**
+   * Clear the pressure rows and the round count, as presolve does. Called
+   * before each check-sat too, since a check refused before presolve would
+   * otherwise keep the previous check's pressure.
+   */
+  void clearPressure();
   /** register quantifier */
   void registerQuantifier(Node q) override;
   /** identify */
