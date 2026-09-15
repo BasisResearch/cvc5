@@ -1744,6 +1744,10 @@ set(regress_0_tests
   regress0/quantifiers/ari056.smt2
   regress0/quantifiers/ari-syqi.smt2
   regress0/quantifiers/ARI176e1.smt2
+  regress0/quantifiers/branch-profile.smt2
+  regress0/quantifiers/branch-profile-assuming.smt2
+  regress0/quantifiers/branch-profile-enum.smt2
+  regress0/quantifiers/branch-profile-mbqi.smt2
   regress0/quantifiers/bug269.smt2
   regress0/quantifiers/bug290.smt2
   regress0/quantifiers/bug291.smt2
@@ -1811,7 +1815,6 @@ set(regress_0_tests
   regress0/quantifiers/get-egraph-equalities-assuming.smt2
   regress0/quantifiers/get-egraph-equalities-internal.smt2
   regress0/quantifiers/get-egraph-equalities-terms.smt2
-  regress0/quantifiers/branch-profile.smt2
   regress0/quantifiers/global_negate.smt2
   regress0/quantifiers/horn-ground-pre-post.smt2
   regress0/quantifiers/inst-pressure-proof.smt2
