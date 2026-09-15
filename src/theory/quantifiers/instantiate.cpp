@@ -226,7 +226,7 @@ bool Instantiate::addInstantiationInternal(
   }
 #endif
   // a speculative block refuses it as if it were a duplicate
-  if (d_speculation->isBlocked(q, terms, id, pfArg))
+  if (d_speculation->isBlocked(q, terms, pfArg))
   {
     Trace("inst-add-debug") << " --> Blocked by a speculation." << std::endl;
     return false;
@@ -253,9 +253,11 @@ bool Instantiate::addInstantiationInternal(
   // check for positive entailment. Entailment holds in the current SAT
   // context only, and a replayed or directed instantiation is offered once
   // per user context, so skipping one now would lose it after a backtrack.
+  // A speculative trigger's matches come back every round, like any
+  // trigger's, and are checked.
   if (options().quantifiers.instNoEntail
       && id != InferenceId::QUANTIFIERS_INST_REPLAY
-      && id != InferenceId::QUANTIFIERS_INST_LLM_DIRECTED)
+      && !d_speculation->isDirecting())
   {
     EntailmentCheck* ec = d_treg.getEntailmentCheck();
     // should check consistency of equality engine

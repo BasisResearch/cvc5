@@ -472,7 +472,11 @@ void Speculation::instantiate(Instantiate& inst, Hypothesis& h, const Node& q)
     before = pit->second;
   }
   std::vector<Node> vec = terms;
-  if (inst.addInstantiation(q, vec, InferenceId::QUANTIFIERS_INST_LLM_DIRECTED))
+  d_directing = true;
+  bool added =
+      inst.addInstantiation(q, vec, InferenceId::QUANTIFIERS_INST_LLM_DIRECTED);
+  d_directing = false;
+  if (added)
   {
     h.d_added++;
     h.d_status = "applied";
@@ -584,10 +588,9 @@ void Speculation::installTrigger(size_t i, Hypothesis& h, const Node& q)
 
 bool Speculation::isBlocked(const Node& q,
                             const std::vector<Node>& terms,
-                            InferenceId id,
                             const Node& trigger)
 {
-  if (id == InferenceId::QUANTIFIERS_INST_LLM_DIRECTED || d_hyps.size() == 0)
+  if (d_directing || d_hyps.size() == 0)
   {
     return false;
   }

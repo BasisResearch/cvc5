@@ -126,12 +126,20 @@ class Speculation : protected EnvObj
   /**
    * Whether a block refuses instantiating q with terms. trigger is the
    * trigger that matched, as an SEXPR over the variables of q, or null.
-   * Directed instantiations are never refused.
+   * The directed instance of an INSTANTIATE hypothesis is never refused; a
+   * speculative trigger's matches are, like any other trigger's.
    */
   bool isBlocked(const Node& q,
                  const std::vector<Node>& terms,
-                 InferenceId id,
                  const Node& trigger);
+  /**
+   * Whether the instantiation being added now is the directed instance of
+   * an INSTANTIATE hypothesis. It is offered once per user context, so the
+   * funnel neither refuses it for a block nor skips it as entailed in the
+   * current SAT context. A speculative trigger's matches are offered every
+   * round, and get no such exemption.
+   */
+  bool isDirecting() const { return d_directing; }
   /** Called for each instantiation added, in the given round */
   void notifyAdded(const Node& q,
                    const std::vector<Node>& terms,
@@ -248,6 +256,8 @@ class Speculation : protected EnvObj
   context::CDList<std::pair<size_t, std::shared_ptr<inst::Trigger>>> d_triggers;
   /** The hypothesis whose trigger is matching now, if any */
   std::shared_ptr<Hypothesis> d_current;
+  /** Whether a directed instance is being added now; see isDirecting */
+  bool d_directing = false;
   /** The :qid of each formula looked up since the last pop */
   mutable std::map<Node, std::string> d_qids;
   /** Per formula, for the loop report; cleared by presolve and by a pop */
