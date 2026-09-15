@@ -8222,6 +8222,12 @@ void Solver::speculateInstantiation(const std::string& qid,
 {
   CVC5_API_TRY_CATCH_BEGIN;
   CVC5_API_SOLVER_CHECK_TERMS(terms);
+  for (size_t i = 0, n = terms.size(); i < n; i++)
+  {
+    CVC5_API_ARG_AT_INDEX_CHECK_EXPECTED(
+        !internal::expr::hasFreeVar(*terms[i].d_node), "term", terms, i)
+        << "a term with no free variables";
+  }
   //////// all checks before this line
   internal::theory::quantifiers::SpeculationRequest r;
   r.d_kind =
@@ -8241,8 +8247,25 @@ void Solver::speculateTrigger(const std::string& qid,
                               uint32_t loopThreshold) const
 {
   CVC5_API_TRY_CATCH_BEGIN;
-  CVC5_API_SOLVER_CHECK_TERMS(vars);
+  CVC5_API_SOLVER_CHECK_BOUND_VARS(vars);
   CVC5_API_SOLVER_CHECK_TERMS(pattern);
+  std::vector<internal::Node> bound = Term::termVectorToNodes(vars);
+  for (size_t i = 0, n = pattern.size(); i < n; i++)
+  {
+    std::unordered_set<internal::Node> fvs;
+    internal::expr::getFreeVariables(*pattern[i].d_node, fvs);
+    CVC5_API_ARG_AT_INDEX_CHECK_EXPECTED(
+        std::all_of(fvs.begin(),
+                    fvs.end(),
+                    [&](const internal::Node& v) {
+                      return std::find(bound.begin(), bound.end(), v)
+                             != bound.end();
+                    }),
+        "term",
+        pattern,
+        i)
+        << "a term whose free variables are among vars";
+  }
   //////// all checks before this line
   internal::theory::quantifiers::SpeculationRequest r;
   r.d_kind = internal::theory::quantifiers::SpeculationRequest::Kind::TRIGGER;

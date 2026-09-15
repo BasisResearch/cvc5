@@ -213,6 +213,11 @@ class QuantifiersEngine : protected EnvObj
    */
   void checkInternal(Theory::Effort e, IncompleteId& setModelUnsoundId);
   /**
+   * Apply the speculative hypotheses of this user context to the asserted
+   * quantified formulas, leaving their lemmas pending.
+   */
+  void applySpeculation();
+  /**
    * Return true if we should recheck
    * @param e the effort level
    * @param setModelUnsoundId the incomplete id indicating why we are currently

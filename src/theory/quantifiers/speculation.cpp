@@ -57,21 +57,6 @@ std::string printTerm(const Node& n)
   return ss.str().size() <= kMaxTermChars ? ss.str() : "...";
 }
 
-/** s as an SMT-LIB string literal: quoted, with each " doubled */
-std::string quoteString(const std::string& s)
-{
-  std::string out = "\"";
-  for (char c : s)
-  {
-    out += c;
-    if (c == '"')
-    {
-      out += '"';
-    }
-  }
-  return out + "\"";
-}
-
 /** s without the bars that quote an SMT-LIB symbol */
 std::string stripBars(const std::string& s)
 {
@@ -437,6 +422,7 @@ void Speculation::apply(Instantiate& inst, const std::vector<Node>& asserted)
         case SpeculationRequest::Kind::OBSERVE: break;
       }
     }
+    h->d_considered = true;
   }
   // The speculative triggers match every round, before any strategy, so
   // their instances count as theirs rather than as a strategy's duplicates.
@@ -736,7 +722,7 @@ void Speculation::print(std::ostream& out, uint64_t rounds) const
       continue;
     }
     std::string status = h.d_status;
-    if (status == "pending" && h.d_quants.empty() && rounds > 0)
+    if (status == "pending" && h.d_quants.empty() && h.d_considered)
     {
       status = "no-quantifier";
     }

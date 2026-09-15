@@ -6319,8 +6319,10 @@ class CVC5_EXPORT Solver
    * Speculate, in the current user context, that each asserted quantified
    * formula named qid is instantiated with the given terms, each for the
    * variable of that name. The instance is made once per formula, through
-   * the ordinary instantiation path, before any strategy runs, with inference
-   * id QUANTIFIERS_INST_LLM_DIRECTED. It is an instance of an asserted
+   * the ordinary instantiation path, in the first round that reaches
+   * e-matching, ahead of the strategies of that round, with inference id
+   * QUANTIFIERS_INST_LLM_DIRECTED. The terms must be closed. It is an
+   * instance of an asserted
    * formula, so the checks of this context stay sound; a pop discards it.
    * Also observes, as speculateObserve does.
    *
@@ -6350,9 +6352,11 @@ class CVC5_EXPORT Solver
   /**
    * Speculate, in the current user context, that each asserted quantified
    * formula named qid has one more trigger, pattern, over its variables.
-   * Every round, before any strategy runs, the trigger is matched against
-   * the ground terms, and its instances are made with inference id
-   * QUANTIFIERS_INST_LLM_DIRECTED. A pop discards the trigger. Also
+   * Every round, when e-matching runs, the trigger is matched against the
+   * ground terms just before the strategies, which run in the same round,
+   * and its instances are made with inference id
+   * QUANTIFIERS_INST_LLM_DIRECTED. The pattern's free variables must be
+   * among vars. A pop discards the trigger. Also
    * observes, as speculateObserve does.
    *
    * SMT-LIB:

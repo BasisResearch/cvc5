@@ -1908,7 +1908,7 @@ TEST_F(TestApiBlackSolver, speculate)
 {
   d_solver->setOption("incremental", "true");
   Term f = d_solver->declareFun("f", {d_int}, d_int);
-  Term a = d_solver->mkConst(d_int, "a");
+  Term a = d_tm.mkConst(d_int, "a");
   Term x = d_tm.mkVar(d_int, "x");
   Term fx = d_tm.mkTerm(Kind::APPLY_UF, {f, x});
   Term fa = d_tm.mkTerm(Kind::APPLY_UF, {f, a});
@@ -1949,6 +1949,13 @@ TEST_F(TestApiBlackSolver, speculate)
   ASSERT_THROW(d_solver->speculateTrigger("q", {x}, {}), CVC5ApiException);
   ASSERT_THROW(d_solver->speculateBlock("q", "(f"), CVC5ApiException);
   ASSERT_THROW(d_solver->speculateBlock("q", "(_0 a)"), CVC5ApiException);
+  // a directed term must be closed, and a pattern may only use vars
+  Term y = d_tm.mkVar(d_int, "y");
+  Term fy = d_tm.mkTerm(Kind::APPLY_UF, {f, y});
+  ASSERT_THROW(d_solver->speculateInstantiation("q", {"x"}, {fy}),
+               CVC5ApiException);
+  ASSERT_THROW(d_solver->speculateTrigger("q", {x}, {fy}), CVC5ApiException);
+  ASSERT_THROW(d_solver->speculateTrigger("q", {a}, {fa}), CVC5ApiException);
 
   TermManager tm;
   Solver slv(tm);

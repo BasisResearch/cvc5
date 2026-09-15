@@ -120,7 +120,9 @@ class Speculation : protected EnvObj
   /**
    * Apply the hypotheses to the asserted quantified formulas: each directed
    * instantiation once per formula and user context, each speculative
-   * trigger once per round. Lemmas are left pending for the caller.
+   * trigger once per round. Lemmas are left pending for the caller, which
+   * calls this at the start of the standard effort, so the strategies of
+   * the round run too and the lemmas are sent with theirs.
    */
   void apply(Instantiate& inst, const std::vector<Node>& asserted);
   /**
@@ -179,9 +181,11 @@ class Speculation : protected EnvObj
    *
    * The status is applied; rejected (the instantiation funnel refused the
    * directed instance); mismatch (the formula's variables do not fit the
-   * request); unusable (the pattern cannot be a trigger); no-quantifier (a
-   * round ran and no asserted formula has the qid); or pending (no round
-   * ran). Terms are printed in original form and flat; one larger than a
+   * request); unusable (the pattern cannot be a trigger); no-quantifier (it
+   * was applied and no asserted formula has the qid); or pending (no round
+   * has reached e-matching yet, for instance because conflict-based
+   * instantiation closed every check first). Terms are printed in original
+   * form and flat; one larger than a
    * size limit prints as the symbol ...
    *
    * A hypothesis's counts and lists cover every check of its user context
@@ -216,6 +220,8 @@ class Speculation : protected EnvObj
     Fingerprint d_fp;
     std::string d_status = "pending";
     std::string d_reason;
+    /** Whether a round has applied it to every asserted formula */
+    bool d_considered = false;
     /** The formulas the hypothesis has been applied to */
     std::vector<Node> d_quants;
     uint64_t d_added = 0;
