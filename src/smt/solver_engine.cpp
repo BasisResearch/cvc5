@@ -12,6 +12,8 @@
 
 #include "smt/solver_engine.h"
 
+#include <algorithm>
+#include <cctype>
 #include <functional>
 
 #include "base/check.h"
@@ -57,6 +59,7 @@
 #include "smt/model.h"
 #include "smt/model_blocker.h"
 #include "smt/model_core_builder.h"
+#include "smt/nl_frontier_info.h"
 #include "smt/preprocessor.h"
 #include "smt/proof_manager.h"
 #include "smt/quant_elim_solver.h"
@@ -519,6 +522,69 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
   ss << "))";
   return ss.str();
 }
+
+/** The --quant-strategy name of s. */
+const char* quantStrategyName(options::QuantStrategyMode s)
+{
+  switch (s)
+  {
+    case options::QuantStrategyMode::EMATCH: return "ematch";
+    case options::QuantStrategyMode::CONFLICT: return "conflict";
+    case options::QuantStrategyMode::POOL: return "pool";
+    case options::QuantStrategyMode::ENUM: return "enum";
+    case options::QuantStrategyMode::MBQI: return "mbqi";
+    default: return "all";
+  }
+}
+
+/**
+ * The (get-info :strategy-rung) reply: the --quant-strategy the last
+ * check-sat ran with and whether alone, the ladder strategies this solver
+ * has a module for, that check-sat's instantiation rounds that sent lemmas,
+ * the resources it spent (preprocessing included), and the instantiations it
+ * added per strategy. qe is null before the solver is initialized and
+ * without quantifiers; before the first check-sat the strategy is the
+ * option's value, and every count is 0.
+ */
+std::string strategyRungInfo(QuantifiersEngine* qe,
+                             options::QuantStrategyMode option,
+                             bool optionAlone,
+                             uint64_t resources)
+{
+  using Kind = theory::quantifiers::Instantiate::StrategyKind;
+  const options::QuantStrategyMode ladder[] = {
+      options::QuantStrategyMode::EMATCH,
+      options::QuantStrategyMode::CONFLICT,
+      options::QuantStrategyMode::POOL,
+      options::QuantStrategyMode::ENUM,
+      options::QuantStrategyMode::MBQI};
+  std::stringstream ss;
+  bool alone = qe == nullptr ? optionAlone : qe->isStrategyAlone();
+  ss << "(:strategy "
+     << quantStrategyName(qe == nullptr ? option : qe->getStrategy())
+     << " :alone " << (alone ? "true" : "false") << " :available (";
+  bool first = true;
+  for (options::QuantStrategyMode s : ladder)
+  {
+    if (qe != nullptr && qe->hasStrategy(s))
+    {
+      ss << (first ? "" : " ") << quantStrategyName(s);
+      first = false;
+    }
+  }
+  const theory::quantifiers::Instantiate* inst =
+      qe == nullptr ? nullptr : qe->getInstantiate();
+  ss << ") :rounds " << (inst == nullptr ? 0 : inst->getPressureRounds())
+     << " :resource-units " << resources << " :instantiations (";
+  const char* names[] = {"ematch", "conflict", "pool", "enum", "mbqi", "other"};
+  for (size_t k = 0; k < static_cast<size_t>(Kind::COUNT); k++)
+  {
+    ss << (k == 0 ? ":" : " :") << names[k] << " "
+       << (inst == nullptr ? 0 : inst->getStrategyCounts()[k]);
+  }
+  ss << "))";
+  return ss.str();
+}
 }  // namespace
 
 bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
@@ -530,7 +596,8 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
       || key == "incomplete-culprits" || key == "inst-pressure"
       || key == "matching-loops" || key == "speculation"
       || key == "assertion-stack-levels" || key == "all-options"
-      || key == "difficulty-gradient")
+      || key == "difficulty-gradient" || key == "nl-frontier"
+      || key == "check-effort" || key == "strategy-rung")
   {
     return true;
   }
@@ -598,6 +665,10 @@ std::string SolverEngine::getInfo(const std::string& key) const
           "last result wasn't unknown!");
     }
   }
+  if (key == "nl-frontier")
+  {
+    return getNlFrontier();
+  }
   if (key == "incomplete-id")
   {
     return theory::toString(getIncompleteId());
@@ -656,6 +727,22 @@ std::string SolverEngine::getInfo(const std::string& key) const
     }
     return instPressureInfo(inst, refuted ? &used : nullptr);
   }
+  if (key == "strategy-rung")
+  {
+    // recorded as the last check-sat returned; before the first, the reply
+    // carries the options as set
+    if (!d_lastStrategyRung.empty())
+    {
+      return d_lastStrategyRung;
+    }
+    QuantifiersEngine* qe = d_smtSolver == nullptr || !d_state->isFullyInited()
+                                ? nullptr
+                                : d_smtSolver->getQuantifiersEngine();
+    return strategyRungInfo(qe,
+                            options().quantifiers.quantStrategy,
+                            options().quantifiers.quantStrategyAlone,
+                            d_lastCheckResources);
+  }
   if (key == "matching-loops")
   {
     if (!options().quantifiers.matchingLoops)
@@ -705,6 +792,16 @@ std::string SolverEngine::getInfo(const std::string& key) const
     {
       qe->printSpeculation(ss);
     }
+    return ss.str();
+  }
+  if (key == "check-effort")
+  {
+    // What the last check-sat cost, recorded by checkSatInternal (see
+    // d_lastCheckResources).
+    std::stringstream ss;
+    ss << "(:resource-units " << d_lastCheckResources << " :instantiations "
+       << d_lastCheckInstantiations << " :inst-rounds " << d_lastCheckInstRounds
+       << ")";
     return ss.str();
   }
   if (key == "assertion-stack-levels")
@@ -1073,11 +1170,49 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
   Trace("smt") << "SolverEngine::checkSat(" << assumptions << ")" << endl;
   // update the state to indicate we are about to run a check-sat
   d_state->notifyCheckSat();
+  // the nonlinear frontier reports on this check, so drop the last one's
+  if (d_smtSolver != nullptr && d_state->isFullyInited())
+  {
+    clearNlFrontier(d_smtSolver->getTheoryEngine());
+  }
+
+  // Clear the instantiation pressure first. Presolve clears it again, but a
+  // check the driver refuses before presolve (the cumulative resource or time
+  // limit already spent, or preprocess-only) would otherwise leave the
+  // previous check's rows for :inst-pressure and :check-effort.
+  if (QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine())
+  {
+    qe->getInstantiate()->clearPressure();
+  }
+  uint64_t resourcesBefore = getResourceManager()->getResourceUsage();
 
   // Call the SMT solver driver to check for satisfiability. Note that in the
   // case of options like e.g. deep restarts, this may invokve multiple calls
   // to check satisfiability in the underlying SMT solver
   Result r = d_smtDriver->checkSat(assumptions);
+  // record what this check cost for (get-info :check-effort). The pressure
+  // is this check's, cleared above. It is summed now rather than when asked
+  // for, so that a later check-synth, which also presolves, or the absence of
+  // a quantifiers engine cannot change the reply.
+  d_lastCheckResources =
+      getResourceManager()->getResourceUsage() - resourcesBefore;
+  d_lastCheckInstantiations = 0;
+  d_lastCheckInstRounds = 0;
+  if (QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine())
+  {
+    const theory::quantifiers::Instantiate* inst = qe->getInstantiate();
+    for (const auto& qp : inst->getPressure())
+    {
+      d_lastCheckInstantiations += qp.second.d_added;
+    }
+    d_lastCheckInstRounds = inst->getPressureRounds();
+  }
+  // likewise the (get-info :strategy-rung) reply
+  d_lastStrategyRung =
+      strategyRungInfo(d_smtSolver->getQuantifiersEngine(),
+                       options().quantifiers.quantStrategy,
+                       options().quantifiers.quantStrategyAlone,
+                       d_lastCheckResources);
 
   Trace("smt") << "SolverEngine::checkSat(" << assumptions << ") => " << r
                << endl;
@@ -2853,6 +2988,48 @@ std::vector<std::string> SolverEngine::getAssertionSourcesOf(const Node& n)
   std::vector<std::string> tags;
   d_smtSolver->getSourceTags(inputs, tags);
   return tags;
+}
+
+std::string SolverEngine::getNlFrontier() const
+{
+  Trace("smt") << "SMT getNlFrontier()\n";
+  SmtMode mode = d_state->getMode();
+  // Before the first check there is no theory engine to ask.
+  bool checked = d_smtSolver != nullptr && d_state->isFullyInited()
+                 && (mode == SmtMode::SAT || mode == SmtMode::SAT_UNKNOWN
+                     || mode == SmtMode::UNSAT);
+  std::string result = !checked                 ? "none"
+                       : mode == SmtMode::UNSAT ? "unsat"
+                       : mode == SmtMode::SAT   ? "sat"
+                                                : "unknown";
+  std::string reason = "none";
+  Result status = d_state->getStatus();
+  if (checked && !status.isNull() && status.isUnknown())
+  {
+    std::stringstream ss;
+    ss << status.getUnknownExplanation();
+    reason = ss.str();
+    std::transform(
+        reason.begin(), reason.end(), reason.begin(), [](unsigned char c) {
+          return static_cast<char>(std::tolower(c));
+        });
+  }
+  if (!checked)
+  {
+    // The extension exists once the solver is initialised, and the reply
+    // then says whether it records a frontier, with none to report yet.
+    bool inited = d_smtSolver != nullptr && d_state->isFullyInited();
+    return getNlFrontierInfo(inited ? d_smtSolver->getTheoryEngine() : nullptr,
+                             nullptr,
+                             nullptr,
+                             result,
+                             reason);
+  }
+  return getNlFrontierInfo(d_smtSolver->getTheoryEngine(),
+                           d_smtSolver->getQuantifiersEngine(),
+                           &d_smtSolver->getAssertions(),
+                           result,
+                           reason);
 }
 
 void SolverEngine::getEgraphEqualities(const std::vector<Node>& focus,

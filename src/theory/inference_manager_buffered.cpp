@@ -115,13 +115,25 @@ void InferenceManagerBuffered::doPendingLemmas()
     return;
   }
   d_processingPendingLemmas = true;
-  size_t i = 0;
-  while (i < d_pendingLem.size())
+  try
   {
-    // process this lemma, which notice may enqueue more pending lemmas in this
-    // loop, or clear the lemmas.
-    lemmaTheoryInference(d_pendingLem[i].get());
-    i++;
+    size_t i = 0;
+    while (i < d_pendingLem.size())
+    {
+      // process this lemma, which notice may enqueue more pending lemmas in
+      // this loop, or clear the lemmas.
+      lemmaTheoryInference(d_pendingLem[i].get());
+      i++;
+    }
+  }
+  catch (...)
+  {
+    // An exception thrown while a lemma is sent (e.g. a LogicException from
+    // preprocessing it) must not leave the flag set: every later call would
+    // take itself for a nested one and drop its lemmas.
+    d_pendingLem.clear();
+    d_processingPendingLemmas = false;
+    throw;
   }
   d_pendingLem.clear();
   d_processingPendingLemmas = false;

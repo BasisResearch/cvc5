@@ -8972,8 +8972,11 @@ void Solver::setOption(const std::string& option,
   // this list includes options that are prescribed to be changable in any
   // context based on the SMT-LIB standard, as well as options (e.g. tlimit-per)
   // that have no impact on solver initialization or imply other options.
+  // quant-strategy(-alone) is read afresh by each check-sat.
   static constexpr auto mutableOpts = {"diagnostic-output-channel",
                                        "print-success",
+                                       "quant-strategy",
+                                       "quant-strategy-alone",
                                        "regular-output-channel",
                                        "reproducible-resource-limit",
                                        "verbosity",

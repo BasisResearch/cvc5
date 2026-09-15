@@ -348,6 +348,8 @@ libcvc5_add_sources(
   smt/model_blocker.h
   smt/quant_elim_solver.cpp
   smt/quant_elim_solver.h
+  smt/nl_frontier_info.cpp
+  smt/nl_frontier_info.h
   smt/preprocessor.cpp
   smt/preprocessor.h
   smt/preprocess_proof_generator.cpp
@@ -532,6 +534,7 @@ libcvc5_add_sources(
   theory/arith/nl/icp/intersection.h
   theory/arith/nl/iand_utils.cpp
   theory/arith/nl/iand_utils.h
+  theory/arith/nl/nl_frontier.h
   theory/arith/nl/nl_lemma_utils.cpp
   theory/arith/nl/nl_lemma_utils.h
   theory/arith/nl/nl_model.cpp

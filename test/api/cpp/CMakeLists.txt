@@ -50,6 +50,7 @@ macro(cvc5_add_api_test name dir)
 endmacro()
 
 cvc5_add_api_test(boilerplate "")
+cvc5_add_api_test(lemma_after_exception "")
 cvc5_add_api_test(ouroborous "")
 cvc5_add_api_test(reset_assertions "")
 cvc5_add_api_test(smt2_compliance "")

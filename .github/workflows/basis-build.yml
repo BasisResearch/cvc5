@@ -73,7 +73,9 @@ jobs:
           status=0
           for t in test/regress/cli/regress0/quantifiers/get-egraph-equalities*.smt2 \
                    test/regress/cli/regress0/quantifiers/save-restore-instantiations*.smt2 \
-                   test/regress/cli/regress0/printer/get-assertion-sources*.smt2; do
+                   test/regress/cli/regress0/printer/get-assertion-sources*.smt2 \
+                   test/regress/cli/regress0/printer/get-info-nl-frontier*.smt2 \
+                   test/regress/cli/regress0/quantifiers/quant-strategy*.smt2; do
             for tester in base proof model; do
               if ! python3 test/regress/cli/run_regression.py --tester "$tester" \
                   "$PWD/build/bin/cvc5" "$t" > regress.log 2>&1; then

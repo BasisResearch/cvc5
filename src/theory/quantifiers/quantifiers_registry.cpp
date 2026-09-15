@@ -74,6 +74,23 @@ QuantifiersModule* QuantifiersRegistry::getOwner(Node q) const
   return it->second;
 }
 
+void QuantifiersRegistry::setChosen(
+    QuantifiersModule* m, const std::unordered_set<QuantifiersModule*>* ladder)
+{
+  d_chosen = m;
+  d_ladder = ladder;
+}
+
+bool QuantifiersRegistry::mayProcess(Node q, QuantifiersModule* m) const
+{
+  if (hasOwnership(q, m))
+  {
+    return true;
+  }
+  return m != nullptr && m == d_chosen && d_ladder != nullptr
+         && d_ladder->count(getOwner(q)) > 0;
+}
+
 void QuantifiersRegistry::setOwner(Node q,
                                    QuantifiersModule* m,
                                    int32_t priority)
