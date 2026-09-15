@@ -15,6 +15,8 @@
 
 #include "theory/arith/nl/nonlinear_extension.h"
 
+#include <algorithm>
+
 #include "options/arith_options.h"
 #include "options/smt_options.h"
 #include "theory/arith/arith_utilities.h"
@@ -57,7 +59,8 @@ NonlinearExtension::NonlinearExtension(Env& env, TheoryArith& containing)
       d_icpSlv(d_env, d_im),
       d_iandSlv(env, d_im, d_model),
       d_piandSlv(env, d_im, d_model),
-      d_pow2Slv(env, d_im, d_model)
+      d_pow2Slv(env, d_im, d_model),
+      d_frontierPop(userContext(), d_frontier)
 {
   d_extTheory.addFunctionKind(Kind::NONLINEAR_MULT);
   d_extTheory.addFunctionKind(Kind::EXPONENTIAL);
@@ -87,8 +90,15 @@ void NonlinearExtension::processSideEffect(const NlLemma& se)
   d_trSlv.processSideEffect(se);
 }
 
+bool NonlinearExtension::recordsFrontier() const
+{
+  return options().arith.nlExt == options::NlExtMode::FULL
+         || options().arith.nlExt == options::NlExtMode::LIGHT;
+}
+
 void NonlinearExtension::presolve()
 {
+  d_frontier.reset();
   if (!options().arith.nlExtInitialSignLemmas)
   {
     return;
@@ -339,6 +349,13 @@ void NonlinearExtension::checkFullEffort(std::map<Node, Node>& arithModel,
   // run a last call effort check
   Trace("nl-ext") << "interceptModel: do model-based refinement" << std::endl;
   Result::Status res = modelBasedRefinement(termSet);
+  d_frontier.d_last = res == Result::SAT     ? "sat"
+                      : res == Result::UNSAT ? "lemma"
+                                             : "punt";
+  if (res == Result::UNKNOWN)
+  {
+    d_frontier.d_punts++;
+  }
   if (res == Result::SAT)
   {
     Trace("nl-ext") << "interceptModel: do model repair" << std::endl;
@@ -429,6 +446,8 @@ Result::Status NonlinearExtension::modelBasedRefinement(
 {
   ++(d_stats.d_mbrRuns);
   d_checkCounter++;
+  d_frontier.d_checks++;
+  d_frontier.d_lastRound = 0;
 
   // get the assertions
   std::vector<Node> assertions;
@@ -489,6 +508,7 @@ Result::Status NonlinearExtension::modelBasedRefinement(
     {
       completeStatus = CheckCompletion::NEEDS_MODEL_CHECK;
       runStrategy(assertions, false_asserts, xts);
+      recordFrontier(xts);
       if (d_im.hasSentLemma() || d_im.hasPendingLemma())
       {
         d_im.clearWaitingLemmas();
@@ -657,6 +677,232 @@ void NonlinearExtension::runStrategy(const std::vector<Node>& assertions,
                   << " waiting lemmas." << std::endl;
   Trace("nl-ext") << "  ...finished with " << d_im.numPendingLemmas()
                   << " pending lemmas." << std::endl;
+}
+
+namespace {
+
+/** The relation r with its sides swapped. */
+Kind swapSides(Kind r)
+{
+  switch (r)
+  {
+    case Kind::GEQ: return Kind::LEQ;
+    case Kind::GT: return Kind::LT;
+    case Kind::LEQ: return Kind::GEQ;
+    case Kind::LT: return Kind::GT;
+    default: return r;
+  }
+}
+
+/** The negation of inequality r. */
+Kind negateRelation(Kind r)
+{
+  switch (r)
+  {
+    case Kind::GEQ: return Kind::LT;
+    case Kind::GT: return Kind::LEQ;
+    case Kind::LEQ: return Kind::GT;
+    case Kind::LT: return Kind::GEQ;
+    default: return r;
+  }
+}
+
+/** Set r to n's value when n is a rational constant. */
+bool rationalValue(const Node& n, Rational& r)
+{
+  if (n.isNull()
+      || (n.getKind() != Kind::CONST_RATIONAL
+          && n.getKind() != Kind::CONST_INTEGER))
+  {
+    return false;
+  }
+  r = n.getConst<Rational>();
+  return true;
+}
+
+/** Tighten b with the bound v (a lower bound if isLower). */
+void tightenBound(NlFrontierBound& b,
+                  Rational v,
+                  bool strict,
+                  bool fixed,
+                  bool isLower,
+                  const TypeNode& type)
+{
+  if (type.isInteger())
+  {
+    // the integer bound: x > 2.5, x > 2 and x >= 2.5 all read x >= 3
+    if (isLower)
+    {
+      v = strict && v.isIntegral() ? v + 1 : Rational(v.ceiling());
+    }
+    else
+    {
+      v = strict && v.isIntegral() ? v - 1 : Rational(v.floor());
+    }
+    strict = false;
+  }
+  if (b.d_set)
+  {
+    // A bound implied by the assertions beats one that holds only in the
+    // branch explored, however tight: it is what a hint can rely on.
+    if (b.d_fixed && !fixed)
+    {
+      return;
+    }
+    int cmp = isLower ? v.cmp(b.d_value) : b.d_value.cmp(v);
+    if (b.d_fixed == fixed
+        && (cmp < 0 || (cmp == 0 && (b.d_strict || !strict))))
+    {
+      // no tighter
+      return;
+    }
+  }
+  b.d_set = true;
+  b.d_value = v;
+  b.d_strict = strict;
+  b.d_fixed = fixed;
+}
+
+}  // namespace
+
+void NonlinearExtension::recordFrontier(const std::vector<Node>& xts)
+{
+  NlFrontier& f = d_frontier;
+  size_t round = ++f.d_rounds;
+  f.d_lastRound = round;
+  std::vector<size_t> wrong;
+  for (const Node& x : xts)
+  {
+    // Only values the strategy computed this round (its NL_INIT step does
+    // both for every term): computing one here would rewrite, spending
+    // resources the plain search does not.
+    Node abstractValue = d_model.getCachedModelValue(x, false);
+    Node concreteValue = d_model.getCachedModelValue(x, true);
+    if (abstractValue.isNull() || concreteValue.isNull()
+        || abstractValue == concreteValue)
+    {
+      continue;
+    }
+    auto [it, fresh] = f.d_index.emplace(x, f.d_atoms.size());
+    if (fresh)
+    {
+      f.d_atoms.emplace_back();
+    }
+    NlFrontierAtom& a = f.d_atoms[it->second];
+    a.d_rounds++;
+    a.d_lastRound = round;
+    a.d_atom = NlFrontierTerm();
+    a.d_atom.d_term = x;
+    a.d_atom.d_hasValue = rationalValue(abstractValue, a.d_atom.d_value);
+    a.d_hasFromArgs = rationalValue(concreteValue, a.d_fromArgs);
+    a.d_args.clear();
+    for (const Node& arg : x)
+    {
+      if (std::any_of(
+              a.d_args.begin(),
+              a.d_args.end(),
+              [&arg](const NlFrontierTerm& t) { return t.d_term == arg; }))
+      {
+        continue;
+      }
+      NlFrontierTerm t;
+      t.d_term = arg;
+      // cached while computing the atom's value from its arguments
+      t.d_hasValue =
+          rationalValue(d_model.getCachedModelValue(arg, true), t.d_value);
+      a.d_args.push_back(t);
+    }
+    wrong.push_back(it->second);
+  }
+  if (wrong.empty())
+  {
+    return;
+  }
+  // The bounds the asserted literals put on each atom and argument. A literal
+  // bounds term t when it reads t ~ c or (* k t) ~ c for constants k and c,
+  // either way round, possibly negated: arithmetic facts arrive rewritten, so
+  // this reads them as they are.
+  std::unordered_map<Node, std::vector<NlFrontierTerm*>> terms;
+  for (size_t i : wrong)
+  {
+    NlFrontierAtom& a = f.d_atoms[i];
+    terms[a.d_atom.d_term].push_back(&a.d_atom);
+    for (NlFrontierTerm& t : a.d_args)
+    {
+      terms[t.d_term].push_back(&t);
+    }
+  }
+  const Valuation& valuation = d_containing.getValuation();
+  for (auto it = d_containing.facts_begin(); it != d_containing.facts_end();
+       ++it)
+  {
+    const Node& lit = (*it).d_assertion;
+    bool pol = lit.getKind() != Kind::NOT;
+    Node atom = pol ? lit : lit[0];
+    Kind r = atom.getKind();
+    if ((r != Kind::GEQ && r != Kind::GT && r != Kind::LEQ && r != Kind::LT
+         && r != Kind::EQUAL)
+        || !atom[0].getType().isRealOrInt())
+    {
+      continue;
+    }
+    Node t;
+    Node c;
+    if (atom[1].isConst())
+    {
+      t = atom[0];
+      c = atom[1];
+    }
+    else if (atom[0].isConst())
+    {
+      t = atom[1];
+      c = atom[0];
+      r = swapSides(r);
+    }
+    else
+    {
+      continue;
+    }
+    if (!pol)
+    {
+      if (r == Kind::EQUAL)
+      {
+        continue;
+      }
+      r = negateRelation(r);
+    }
+    Rational coef(1);
+    if (t.getKind() == Kind::MULT && t.getNumChildren() == 2 && t[0].isConst())
+    {
+      coef = t[0].getConst<Rational>();
+      t = t[1];
+    }
+    auto tit = terms.find(t);
+    if (tit == terms.end() || coef.sgn() == 0)
+    {
+      continue;
+    }
+    if (coef.sgn() < 0)
+    {
+      r = swapSides(r);
+    }
+    Rational v = c.getConst<Rational>() / coef;
+    bool strict = r == Kind::GT || r == Kind::LT;
+    bool lower = r == Kind::GEQ || r == Kind::GT || r == Kind::EQUAL;
+    bool upper = r == Kind::LEQ || r == Kind::LT || r == Kind::EQUAL;
+    bool fixed = valuation.isFixed(lit);
+    for (NlFrontierTerm* ft : tit->second)
+    {
+      if (lower)
+      {
+        tightenBound(ft->d_lower, v, strict, fixed, true, t.getType());
+      }
+      if (upper)
+      {
+        tightenBound(ft->d_upper, v, strict, fixed, false, t.getType());
+      }
+    }
+  }
 }
 
 }  // namespace nl

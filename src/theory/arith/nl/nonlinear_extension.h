@@ -30,6 +30,7 @@
 #include "theory/arith/nl/ext_theory_callback.h"
 #include "theory/arith/nl/iand_solver.h"
 #include "theory/arith/nl/icp/icp_solver.h"
+#include "theory/arith/nl/nl_frontier.h"
 #include "theory/arith/nl/nl_model.h"
 #include "theory/arith/nl/piand_solver.h"
 #include "theory/arith/nl/pow2_solver.h"
@@ -125,7 +126,39 @@ class NonlinearExtension : EnvObj
   /** Process side effect se */
   void processSideEffect(const NlLemma& se);
 
+  /**
+   * What this extension could not reconcile with the linear model during the
+   * current (or last) check-sat; reset by presolve.
+   */
+  const NlFrontier& getFrontier() const { return d_frontier; }
+
+  /**
+   * Whether that record can hold atoms at all. recordFrontier reads the model
+   * values the strategy's NL_INIT step computed, and that step is scheduled
+   * under --nl-ext=full and --nl-ext=light alone, so under --nl-ext=none the
+   * extension still runs and still punts but records no atom.
+   */
+  bool recordsFrontier() const;
+
+  /**
+   * Drop the frontier, so that the record describes the check-sat that is
+   * beginning. presolve cannot be relied on for this: TheoryEngine::presolve
+   * stops at the first theory that finds a conflict, so on an assertion set
+   * already refuted it never reaches arithmetic and the previous check's
+   * record would be reported under this check's result.
+   */
+  void clearFrontier() { d_frontier.reset(); }
+
  private:
+  /**
+   * Record, after the strategy ran on a round with assertions false in the
+   * candidate model, which extended terms have a linear-model value that
+   * differs from the value of their arguments, with the bounds the asserted
+   * literals put on them. Reads values the strategy computed and the facts;
+   * rewrites nothing.
+   */
+  void recordFrontier(const std::vector<Node>& xts);
+
   /** Model-based refinement
    *
    * This is the main entry point of this class for generating lemmas on the
@@ -272,6 +305,30 @@ class NonlinearExtension : EnvObj
 
   /** The strategy for the nonlinear extension. */
   Strategy d_strategy;
+
+  /** The frontier of the current check-sat, see getFrontier. */
+  NlFrontier d_frontier;
+
+  /**
+   * Drops the frontier when the user context pops: its terms belong to the
+   * popped scope, and holding them would keep nodes alive that the search
+   * frees, shifting the ids of the nodes it creates next.
+   */
+  class FrontierPopListener : public context::ContextNotifyObj
+  {
+   public:
+    FrontierPopListener(context::Context* c, NlFrontier& f)
+        : context::ContextNotifyObj(c), d_frontier(f)
+    {
+    }
+
+   protected:
+    void contextNotifyPop() override { d_frontier.reset(); }
+
+   private:
+    NlFrontier& d_frontier;
+  };
+  FrontierPopListener d_frontierPop;
 }; /* class NonlinearExtension */
 
 }  // namespace nl
