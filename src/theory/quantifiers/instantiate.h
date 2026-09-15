@@ -168,6 +168,12 @@ class Instantiate : public QuantifiersUtil
    */
   uint64_t getPressureRounds() const { return d_pressureRounds; }
   /**
+   * Clear the pressure rows, the round count and the per-strategy counts, as
+   * presolve does. Called before each check-sat too, since a check refused
+   * before presolve would otherwise keep the previous check's pressure.
+   */
+  void clearPressure();
+  /**
    * The ladder strategy (see --quant-strategy) an inference id's
    * instantiations come from, or OTHER.
    */
@@ -629,11 +635,17 @@ class Instantiate : public QuantifiersUtil
    * lemmas have been sent. A round interrupted part way through resumes here.
    */
   context::CDHashMap<Node, size_t> d_replayProgress;
-  /** The pressure on each quantified formula, cleared on presolve. */
+  /**
+   * The pressure on each quantified formula, cleared before each check-sat
+   * and on presolve.
+   */
   std::map<Node, Pressure> d_pressure;
-  /** The rounds this check-sat that sent lemmas, cleared on presolve. */
+  /**
+   * The rounds this check-sat that sent lemmas, cleared before each check-sat
+   * and on presolve.
+   */
   uint64_t d_pressureRounds = 0;
-  /** See getStrategyCounts; cleared on presolve. */
+  /** See getStrategyCounts; cleared before each check-sat and on presolve. */
   std::array<uint64_t, static_cast<size_t>(StrategyKind::COUNT)>
       d_strategyCounts{};
   /** The replay record for q under key's current vectors, null if none. */

@@ -1514,6 +1514,15 @@ set(regress_0_tests
   regress0/printer/get-info-difficulty-gradient-off.smt2
   regress0/printer/get-info-difficulty-gradient-timeout-core.smt2
   regress0/printer/get-info-difficulty-gradient.smt2
+  regress0/printer/get-info-nl-frontier-budget.smt2
+  regress0/printer/get-info-nl-frontier-hosts.smt2
+  regress0/printer/get-info-nl-frontier-iand.smt2
+  regress0/printer/get-info-nl-frontier-omitted.smt2
+  regress0/printer/get-info-nl-frontier-polarity.smt2
+  regress0/printer/get-info-nl-frontier-punt.smt2
+  regress0/printer/get-info-nl-frontier-shared.smt2
+  regress0/printer/get-info-nl-frontier-truncated.smt2
+  regress0/printer/get-info-nl-frontier.smt2
   regress0/printer/inst-sources-output.smt2
   regress0/printer/learned-lit-output.smt2
   regress0/printer/let_shadowing.smt2
@@ -1778,6 +1787,9 @@ set(regress_0_tests
   regress0/quantifiers/quant-strategy-strict-no-ladder.smt2
   regress0/quantifiers/nl-sqrt2-q.smt2
   regress0/quantifiers/cegqi-par-dt-simple.smt2
+  regress0/quantifiers/check-effort.smt2
+  regress0/quantifiers/check-effort-qf.smt2
+  regress0/quantifiers/check-effort-rlimit.smt2
   regress0/quantifiers/clock-10.smt2
   regress0/quantifiers/clock-3.smt2
   regress0/quantifiers/cond-var-elim-binary.smt2

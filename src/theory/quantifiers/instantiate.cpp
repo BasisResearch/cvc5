@@ -101,6 +101,11 @@ void Instantiate::presolve()
   d_graphRound = 0;
   d_graphTotal = 0;
   d_lemmaRound = 1;
+  clearPressure();
+}
+
+void Instantiate::clearPressure()
+{
   d_pressure.clear();
   d_pressureRounds = 0;
   d_strategyCounts.fill(0);
