@@ -38,14 +38,14 @@ InstStrategyEnum::InstStrategyEnum(Env& env,
 void InstStrategyEnum::presolve()
 {
   d_enumInstLimit = options().quantifiers.enumInstLimit;
+  // Chosen by --quant-strategy, it runs as --enum-inst would have it. The
+  // option is read here, once per check-sat, as the quantifiers engine reads
+  // it.
+  d_fullEffort = options().quantifiers.enumInst
+                 || options().quantifiers.quantStrategy
+                        == options::QuantStrategyMode::ENUM;
 }
-bool InstStrategyEnum::runsAtFullEffort() const
-{
-  // selected alone, it runs as --enum-inst would have it
-  return options().quantifiers.enumInst
-         || options().quantifiers.quantStrategy
-                == options::QuantStrategyMode::ENUM;
-}
+bool InstStrategyEnum::runsAtFullEffort() const { return d_fullEffort; }
 bool InstStrategyEnum::needsCheck(Theory::Effort e)
 {
   if (d_enumInstLimit == 0)

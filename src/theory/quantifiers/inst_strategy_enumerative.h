@@ -83,7 +83,7 @@ class InstStrategyEnum : public QuantifiersModule
  private:
   /**
    * Whether to instantiate at last-call effort before answering unknown:
-   * under --enum-inst, or when --quant-strategy=enum selects this alone.
+   * under --enum-inst, or when --quant-strategy=enum chooses this module.
    */
   bool runsAtFullEffort() const;
   /** Pointer to the relevant domain utility of quantifiers engine */
@@ -113,6 +113,8 @@ class InstStrategyEnum : public QuantifiersModule
    * during presolve.
    */
   int32_t d_enumInstLimit;
+  /** See runsAtFullEffort; set during presolve. */
+  bool d_fullEffort = false;
 }; /* class InstStrategyEnum */
 
 }  // namespace quantifiers
