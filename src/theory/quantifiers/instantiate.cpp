@@ -117,9 +117,12 @@ void Instantiate::clearPressure()
   d_pressureCarry = PressureCarry();
 }
 
-Instantiate::PressureCarry Instantiate::getPressureCarry() const
+Instantiate::PressureCarry Instantiate::takePressureCarry()
 {
-  return PressureCarry{d_pressure, d_pressureRounds, d_strategyCounts};
+  PressureCarry carry{
+      std::move(d_pressure), d_pressureRounds, d_strategyCounts};
+  clearPressure();
+  return carry;
 }
 
 void Instantiate::setPressureCarry(PressureCarry carry)

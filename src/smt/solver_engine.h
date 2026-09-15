@@ -1304,8 +1304,8 @@ class CVC5_EXPORT SolverEngine
    * change and what the cumulative limit leaves shrinks before the reply is
    * read: the per-check limit (reproducible-resource-limit, 0 for none), and,
    * when that or the cumulative limit (rlimit) is set, the units the check
-   * could spend before reaching either. Like the costs above, they stand
-   * until the next check.
+   * could spend before reaching either (a check that ran out overshoots it
+   * by a few units). Like the costs above, they stand until the next check.
    */
   uint64_t d_lastCheckResourceLimit = 0;
   std::optional<uint64_t> d_lastCheckResourceBudget;

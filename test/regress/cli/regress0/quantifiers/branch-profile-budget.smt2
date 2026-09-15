@@ -15,9 +15,9 @@
 ; whichever is smaller. At first only the cumulative limit is set, and the
 ; first check runs a matching loop into it, which :resource-limit 0 alone
 ; would hide. The second check begins with nothing left and is refused before
-; presolve: it spends nothing and reports no rows. The third has a per-check
-; limit of 5000 too, but its budget is still the 0 the cumulative limit
-; leaves.
+; presolve: it spends a single unit and reports no rows. The third has a
+; per-check limit of 5000 too, but its budget is still the 0 the cumulative
+; limit leaves.
 (set-logic ALL)
 (set-option :rlimit 20000)
 (declare-fun P (Int) Bool)

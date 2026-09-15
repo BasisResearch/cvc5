@@ -71,7 +71,7 @@ void SmtSolver::finishInit()
   {
     if (theory::QuantifiersEngine* qe = getQuantifiersEngine())
     {
-      carry = qe->getInstantiate()->getPressureCarry();
+      carry = qe->getInstantiate()->takePressureCarry();
     }
   }
   // We have mutual dependency here, so we add the prop engine to the theory

@@ -212,8 +212,11 @@ class Instantiate : public QuantifiersUtil
     std::array<uint64_t, static_cast<size_t>(StrategyKind::COUNT)>
         d_strategyCounts{};
   };
-  /** This check-sat's pressure so far. */
-  PressureCarry getPressureCarry() const;
+  /**
+   * This check-sat's pressure so far, moved out: this object is about to be
+   * replaced, and is left with no pressure.
+   */
+  PressureCarry takePressureCarry();
   /**
    * Start the next presolve from carry instead of from nothing. A deep
    * restart replaces the theory engine, and so this object, within one

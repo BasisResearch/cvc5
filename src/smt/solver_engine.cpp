@@ -550,14 +550,15 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
  * with when any resource limit applied, its instantiation rounds, and one
  * row per quantified formula it instantiated, with its instances split by
  * the inference that sent them. The budget is the smaller of the per-check
- * limit and what the cumulative limit (rlimit) had left, so a check that ran
- * out of either spends units reaching it; it is left out when neither limit
- * is set. Rows are keyed and ordered as (get-info :inst-pressure) keys and
- * orders them: they are assigned and sorted as there, and only then are the
- * formulas whose every attempt was rejected, which sort last, left out. A
- * formula without a :qid therefore gets the same synthetic name in both
- * replies. Two checks of related queries can then be compared row by row
- * and inference by inference.
+ * limit and what the cumulative limit (rlimit) had left; it is left out when
+ * neither limit is set. A check that ran out of either spends at least the
+ * budget, and usually a few units more, since the limits are checked between
+ * steps, so a reader should compare the units with >= rather than ==. Rows are
+ * keyed and ordered as (get-info :inst-pressure) keys and orders them: they are
+ * assigned and sorted as there, and only then are the formulas whose every
+ * attempt was rejected, which sort last, left out. A formula without a :qid
+ * therefore gets the same synthetic name in both replies. Two checks of related
+ * queries can then be compared row by row and inference by inference.
  */
 std::string branchProfileInfo(const theory::quantifiers::Instantiate* inst,
                               uint64_t resources,
@@ -701,8 +702,8 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
       || key == "incomplete-culprits" || key == "inst-pressure"
       || key == "matching-loops" || key == "assertion-stack-levels"
       || key == "all-options" || key == "difficulty-gradient"
-      || key == "nl-frontier" || key == "check-effort"
-      || key == "strategy-rung" || key == "branch-profile")
+      || key == "nl-frontier" || key == "check-effort" || key == "strategy-rung"
+      || key == "branch-profile")
   {
     return true;
   }
