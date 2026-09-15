@@ -123,6 +123,10 @@ class TheoryArith : public Theory
   {
     return d_nonlinearExtension.get();
   }
+  nl::NonlinearExtension* getNonlinearExtension()
+  {
+    return d_nonlinearExtension.get();
+  }
 
  private:
   /**

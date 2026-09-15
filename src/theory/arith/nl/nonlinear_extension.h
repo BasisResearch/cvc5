@@ -132,6 +132,15 @@ class NonlinearExtension : EnvObj
    */
   const NlFrontier& getFrontier() const { return d_frontier; }
 
+  /**
+   * Drop the frontier, so that the record describes the check-sat that is
+   * beginning. presolve cannot be relied on for this: TheoryEngine::presolve
+   * stops at the first theory that finds a conflict, so on an assertion set
+   * already refuted it never reaches arithmetic and the previous check's
+   * record would be reported under this check's result.
+   */
+  void clearFrontier() { d_frontier.reset(); }
+
  private:
   /**
    * Record, after the strategy ran on a round with assertions false in the

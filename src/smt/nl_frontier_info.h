@@ -36,7 +36,9 @@ class Assertions;
  * its hosts: the terms that apply that term's operation, or an
  * uninterpreted function a quantifier defines as it, to exactly its operands
  * (flattening nested products, and dropping the constant factors of builtin
- * ones), found in the tagged input assertions (with their :assert-id tags)
+ * ones, and under the same index where the operation carries one, so that
+ * an (_ iand 4) hosts no atom of (_ iand 8)), found in the tagged input
+ * assertions (with their :assert-id tags)
  * and in the instantiations of each quantified formula (with its :qid and
  * how many of its instantiations produced a host). A host is where the term
  * entered the problem: a product the input wrote through an uninterpreted
@@ -47,6 +49,10 @@ class Assertions;
  * (* (+ 1 b) q) into (+ q (* b q)), whose atom (* b q) is a product nothing
  * hosts, while its argument still finds the EucDiv the input wrote.
  * Read-only, and builds no terms, so asking does not change later checks.
+ * A quantifier is told apart by its formula, not by its :qid, which is empty
+ * for every unnamed one. Whatever the reply leaves out it says: atoms past
+ * the cap in :omitted, and a cut host list or a stopped instantiation search
+ * in :truncated.
  *
  * te, qe and as are null before the first check. result is the answer of the
  * last check-sat (sat, unsat or unknown), or none when there is none to
@@ -59,6 +65,14 @@ std::string getNlFrontierInfo(TheoryEngine* te,
                               const Assertions* as,
                               const std::string& result,
                               const std::string& reason);
+
+/**
+ * Drop the record, so that the reply describes the check-sat that is
+ * beginning. Called where a check-sat is driven rather than left to the
+ * extension's presolve, which TheoryEngine::presolve skips on an assertion
+ * set some earlier theory has already refuted.
+ */
+void clearNlFrontier(TheoryEngine* te);
 
 }  // namespace smt
 }  // namespace cvc5::internal

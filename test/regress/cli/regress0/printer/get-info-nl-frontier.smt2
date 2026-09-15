@@ -9,6 +9,9 @@
 ; EXPECT: (:nl-frontier (:result none :reason none :enabled true :checks 0 :rounds 0 :punts 0 :last none :atoms () :omitted 0 :truncated false))
 ; EXPECT: unknown
 ; EXPECT: (:nl-frontier (:result unknown :reason incomplete :enabled true :checks 3 :rounds 1 :punts 0 :last sat :atoms ((:atom (* a b) :kind product :current false :rounds 1 :value -1 :from-args 0 :args ((:term a :value 0 :lower (:value 0 :strict false :fixed true) :hosts ()) (:term b :value 3 :lower (:value 3 :strict false :fixed true) :hosts ())) :hosts ((:in input :term (area a b) :tags (query)) (:in instance :term (area a b) :qid user_area_def :count 1) (:in instance :term (Mul a b) :qid prelude_mul :count 1)))) :omitted 0 :truncated false))
+; EXPECT: unsat
+; EXPECT: unsat
+; EXPECT: (:nl-frontier (:result unsat :reason none :enabled true :checks 0 :rounds 0 :punts 0 :last none :atoms () :omitted 0 :truncated false))
 ; The nonlinear terms whose linear-model value the nonlinear extension could
 ; not reconcile with the value of their arguments, per check-sat. Products
 ; reach arithmetic through a wrapper and its defining axiom, as in Verus. Each
@@ -22,6 +25,11 @@
 ; round accepted the model) and finds the product through the definition of
 ; area. Nothing is reported before a check or after a push, and a pop drops
 ; the record.
+; The last two checks share an assertion set that is already refuted, so
+; TheoryEngine::presolve stops at the theory that finds the conflict and
+; never reaches arithmetic. The record is dropped where the check begins
+; instead, so the second check reports its own empty record rather than the
+; first check's atoms under its own result.
 ; get-info-nl-frontier-budget.smt2 has checks stopped by a budget.
 (set-logic ALL)
 (declare-fun Mul (Int Int) Int)
@@ -44,6 +52,13 @@
 (get-info :nl-frontier)
 (push 1)
 (assert (! (not (>= (area a b) (* 4 a))) :assert-id query))
+(check-sat)
+(get-info :nl-frontier)
+(pop 1)
+(push 1)
+(assert (! (not (>= (Mul a b) 0)) :assert-id query))
+(check-sat)
+(assert (! (> a 100000) :assert-id query_again))
 (check-sat)
 (get-info :nl-frontier)
 (pop 1)

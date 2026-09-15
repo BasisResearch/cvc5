@@ -39,13 +39,32 @@ namespace {
 
 /** Atoms reported; the rest are counted in :omitted. */
 constexpr size_t kMaxAtoms = 32;
-/** Hosts reported per atom, in the input and in instantiations each. */
+/**
+ * Hosts reported per term, in the input and in instantiations each. A list
+ * cut to this length makes the reply say :truncated true, so that a host
+ * list is never short without saying so.
+ */
 constexpr size_t kMaxHosts = 8;
 /**
- * Instantiated terms examined in total before the instantiation search stops
- * (the reply then says :truncated true).
+ * Instantiated terms examined in total before the instantiation search
+ * stops, which also makes the reply say :truncated true.
  */
 constexpr size_t kMaxInstanceWork = 4000000;
+
+/** The nonlinear extension of te, or null if there is none. */
+NonlinearExtension* nonlinearExtension(TheoryEngine* te)
+{
+  if (te == nullptr)
+  {
+    return nullptr;
+  }
+  theory::Theory* t = te->theoryOf(theory::THEORY_ARITH);
+  if (t == nullptr)
+  {
+    return nullptr;
+  }
+  return static_cast<theory::arith::TheoryArith*>(t)->getNonlinearExtension();
+}
 
 bool isDivisionKind(Kind k)
 {
@@ -466,6 +485,14 @@ std::unordered_map<Node, Kind> findWrappers(const std::vector<Node>& input)
 struct AtomKey
 {
   Kind d_op = Kind::UNDEFINED_KIND;
+  /**
+   * The index of an indexed operation, the bit width of an iand, which is
+   * part of the operation: (_ iand 4) and (_ iand 8) over the same operands
+   * host each other no more than a product and a division do. Null for an
+   * operation that carries no index, and for a wrapper, which carries none
+   * either and so hosts an atom of any index.
+   */
+  TNode d_index;
   std::vector<TNode> d_args;
 };
 
@@ -505,7 +532,12 @@ class HostMatcher
   {
     AtomKey k;
     k.d_op = op;
-    addOperands(d_sv.top(t), op, k.d_args);
+    TNode x = d_sv.top(t);
+    if (d_sv.kind(x) != Kind::APPLY_UF && d_sv.hasOperator(x))
+    {
+      k.d_index = x.getOperator();
+    }
+    addOperands(x, op, k.d_args);
     return k;
   }
 
@@ -545,6 +577,13 @@ class HostMatcher
   {
     size_t n = a.d_args.size();
     if (a.d_op != b.d_op || n != b.d_args.size())
+    {
+      return false;
+    }
+    // Two indexed applications are the same operation only under the same
+    // index. A wrapper has none to compare, so it still hosts either. The
+    // bucket in index() ignores this, which it must for the two to meet.
+    if (!a.d_index.isNull() && !b.d_index.isNull() && a.d_index != b.d_index)
     {
       return false;
     }
@@ -694,9 +733,13 @@ struct Host
   TNode d_node;
   std::vector<std::string> d_tags;
   /**
-   * Instantiation hosts: the quantifier, and how many of its instantiations
-   * produced a host (the last of them, 1-based, in d_lastInstance).
+   * Instantiation hosts: the quantifier, its :qid, and how many of its
+   * instantiations produced a host (the last of them, 1-based, in
+   * d_lastInstance). Quantifiers are told apart by the formula rather than
+   * by the :qid, which is empty for every unnamed one: two of those host
+   * separately, and each counts its own instantiations.
    */
+  TNode d_quant;
   std::string d_qid;
   size_t d_count = 0;
   size_t d_lastInstance = 0;
@@ -806,15 +849,7 @@ std::string getNlFrontierInfo(TheoryEngine* te,
                               const std::string& result,
                               const std::string& reason)
 {
-  const NonlinearExtension* nl = nullptr;
-  if (te != nullptr)
-  {
-    theory::Theory* t = te->theoryOf(theory::THEORY_ARITH);
-    if (t != nullptr)
-    {
-      nl = static_cast<theory::arith::TheoryArith*>(t)->getNonlinearExtension();
-    }
-  }
+  const NonlinearExtension* nl = nonlinearExtension(te);
   std::stringstream ss;
   // whole terms, without let-bindings for shared subterms
   options::ioutils::applyDagThresh(ss, 0);
@@ -952,6 +987,10 @@ std::string getNlFrontierInfo(TheoryEngine* te,
     return ret;
   };
 
+  // Set by anything the reply had to leave out: a host list cut to
+  // kMaxHosts, or the instantiation search stopping at kMaxInstanceWork.
+  bool truncated = false;
+
   // Hosts in the input: ground terms of the input assertions applying an
   // atom's operation, or a wrapper of it, to exactly its operands, with the
   // tags of every assertion holding them. Quantifier bodies are skipped
@@ -988,12 +1027,13 @@ std::string getNlFrontierInfo(TheoryEngine* te,
           {
             if (hs.size() >= kMaxHosts)
             {
+              truncated = true;
               continue;
             }
             std::stringstream ts;
             options::ioutils::applyDagThresh(ts, 0);
             sv.print(ts, cur);
-            hs.push_back(Host{ts.str(), cur, {}, "", 0, 0});
+            hs.push_back(Host{ts.str(), cur, {}, TNode(), "", 0, 0});
             h = hs.end() - 1;
           }
           for (const std::string& tag : tags)
@@ -1014,7 +1054,6 @@ std::string getNlFrontierInfo(TheoryEngine* te,
   // it) to exactly its operands under some instantiation. Wrapper
   // applications are tried first, so a host reads (Mul a b) rather than the
   // (* a b) its definition unfolds to.
-  bool truncated = false;
   if (qe != nullptr && !byKey.empty())
   {
     std::vector<Node> qs;
@@ -1060,6 +1099,7 @@ std::string getNlFrontierInfo(TheoryEngine* te,
       std::vector<std::vector<Node>> tvecs;
       qe->getInstantiationTermVectors(q, tvecs);
       std::string qid;
+      bool haveQid = false;
       for (size_t vi = 0, nv = tvecs.size(); vi < nv; vi++)
       {
         const std::vector<Node>& tv = tvecs[vi];
@@ -1081,26 +1121,28 @@ std::string getNlFrontierInfo(TheoryEngine* te,
           {
             continue;
           }
-          if (qid.empty())
+          if (!haveQid)
           {
             qid = quantName(qe, q);
+            haveQid = true;
           }
           for (size_t ti : ps)
           {
             std::vector<Host>& hs = hosts[ti].d_instance;
             auto h = std::find_if(hs.begin(), hs.end(), [&](const Host& e) {
-              return e.d_qid == qid;
+              return e.d_quant == q;
             });
             if (h == hs.end())
             {
               if (hs.size() >= kMaxHosts)
               {
+                truncated = true;
                 continue;
               }
               std::stringstream ts;
               options::ioutils::applyDagThresh(ts, 0);
               sv.print(ts, cand);
-              hs.push_back(Host{ts.str(), TNode(), {}, qid, 0, 0});
+              hs.push_back(Host{ts.str(), TNode(), {}, q, qid, 0, 0});
               h = hs.end() - 1;
             }
             if (h->d_lastInstance != vi + 1)
@@ -1170,6 +1212,15 @@ std::string getNlFrontierInfo(TheoryEngine* te,
   ss << ") :omitted " << omitted << " :truncated "
      << (truncated ? "true" : "false") << ")";
   return ss.str();
+}
+
+void clearNlFrontier(TheoryEngine* te)
+{
+  NonlinearExtension* nl = nonlinearExtension(te);
+  if (nl != nullptr)
+  {
+    nl->clearFrontier();
+  }
 }
 
 }  // namespace smt
