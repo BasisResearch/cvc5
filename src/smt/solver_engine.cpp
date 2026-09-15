@@ -688,28 +688,12 @@ std::string SolverEngine::getInfo(const std::string& key) const
   }
   if (key == "check-effort")
   {
-    // What the last check-sat cost: the resource units it spent, the
-    // instantiations it added and the instantiation rounds that sent lemmas.
-    // The counts are the sums of that check's :inst-pressure rows, so a
-    // caller comparing two checks compares like with like.
-    QuantifiersEngine* qe = d_smtSolver == nullptr || !d_state->isFullyInited()
-                                ? nullptr
-                                : d_smtSolver->getQuantifiersEngine();
-    const theory::quantifiers::Instantiate* inst =
-        qe == nullptr ? nullptr : qe->getInstantiate();
-    uint64_t instantiations = 0;
-    uint64_t rounds = 0;
-    if (inst != nullptr)
-    {
-      for (const auto& qp : inst->getPressure())
-      {
-        instantiations += qp.second.d_added;
-      }
-      rounds = inst->getPressureRounds();
-    }
+    // What the last check-sat cost, recorded by checkSatInternal (see
+    // d_lastCheckResources).
     std::stringstream ss;
     ss << "(:resource-units " << d_lastCheckResources << " :instantiations "
-       << instantiations << " :inst-rounds " << rounds << ")";
+       << d_lastCheckInstantiations << " :inst-rounds " << d_lastCheckInstRounds
+       << ")";
     return ss.str();
   }
   if (key == "assertion-stack-levels")
@@ -1084,8 +1068,23 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
   // to check satisfiability in the underlying SMT solver
   uint64_t resourcesBefore = getResourceManager()->getResourceUsage();
   Result r = d_smtDriver->checkSat(assumptions);
+  // record what this check cost for (get-info :check-effort). The pressure
+  // is this check's: presolve cleared it as the check began. It is summed
+  // now rather than when asked for, so that a later check-synth, which also
+  // presolves, or the absence of a quantifiers engine cannot change the reply.
   d_lastCheckResources =
       getResourceManager()->getResourceUsage() - resourcesBefore;
+  d_lastCheckInstantiations = 0;
+  d_lastCheckInstRounds = 0;
+  if (QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine())
+  {
+    const theory::quantifiers::Instantiate* inst = qe->getInstantiate();
+    for (const auto& qp : inst->getPressure())
+    {
+      d_lastCheckInstantiations += qp.second.d_added;
+    }
+    d_lastCheckInstRounds = inst->getPressureRounds();
+  }
 
   Trace("smt") << "SolverEngine::checkSat(" << assumptions << ") => " << r
                << endl;
