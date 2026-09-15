@@ -1769,8 +1769,12 @@ set(regress_0_tests
   regress0/quantifiers/matching-loops-multi-pattern-graph.smt2
   regress0/quantifiers/matching-loops-multi-trigger.smt2
   regress0/quantifiers/quant-strategy-alongside.smt2
+  regress0/quantifiers/quant-strategy-ladder-no-ematch.smt2
   regress0/quantifiers/quant-strategy-ladder.smt2
   regress0/quantifiers/quant-strategy-no-ladder.smt2
+  regress0/quantifiers/quant-strategy-rungs-no-ladder.smt2
+  regress0/quantifiers/quant-strategy-sat.smt2
+  regress0/quantifiers/quant-strategy-strict-no-ladder.smt2
   regress0/quantifiers/nl-sqrt2-q.smt2
   regress0/quantifiers/cegqi-par-dt-simple.smt2
   regress0/quantifiers/clock-10.smt2

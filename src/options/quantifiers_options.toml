@@ -603,7 +603,7 @@ name   = "Quantifiers"
   type       = "QuantStrategyMode"
   default    = "ALL"
   help       = "which quantifier instantiation strategies each check-sat runs; may be set after initialization, and stays set until set again"
-  help_mode  = "Which of the five ladder strategies (E-matching, conflict-based, pool-based, enumerative, model-based) a check-sat runs. A strategy chosen alone (see quant-strategy-alone) runs without the other four, and may instantiate a quantified formula that one of them owns. Modules outside the five run as the other options configure them."
+  help_mode  = "Which of the five ladder strategies (E-matching, conflict-based, pool-based, enumerative, model-based) a check-sat runs. A strategy chosen alone (see quant-strategy-alone) runs without the other four, and may instantiate a quantified formula that one of them owns. Modules outside the five run as the other options configure them. Run each such check-sat inside its own push/pop, or as check-sat-assuming: an unknown answered at the base level marks the model unsound for the rest of the user context, and a later check-sat that would answer sat then answers unknown."
 [[option.mode.ALL]]
   name = "all"
   help = "Run the strategies the other options enable, as if this option were not given."
@@ -629,7 +629,7 @@ name   = "Quantifiers"
   long       = "quant-strategy-alone"
   type       = "bool"
   default    = "true"
-  help       = "run the strategy quant-strategy chooses alone; when false, run it alongside the strategies the other options enable, no ladder strategy's ownership of a formula keeping the others from it; may be set after initialization"
+  help       = "run the strategy quant-strategy chooses alone; when false, run it alongside the strategies the other options enable, and a ladder strategy's ownership of a formula does not keep the others from it; may be set after initialization"
 
 [[option]]
   name       = "matchingLoopsMax"
