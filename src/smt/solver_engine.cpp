@@ -2853,7 +2853,14 @@ void SolverEngine::speculate(const theory::quantifiers::SpeculationRequest& r)
 {
   // Also user-context state, so pending pops go first here too.
   beginCall();
-  getAvailableQuantifiersEngine("speculate")->speculate(r);
+  // Recoverable, as a term that does not parse is: the session goes on.
+  QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine();
+  if (qe == nullptr)
+  {
+    throw RecoverableModalException(
+        "Cannot speculate when quantifiers are not present.");
+  }
+  qe->speculate(r);
 }
 
 void SolverEngine::getInstantiationTermVectors(

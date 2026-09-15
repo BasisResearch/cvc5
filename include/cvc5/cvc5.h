@@ -6339,8 +6339,12 @@ class CVC5_EXPORT Solver
    *
    * @warning This function is experimental and may change in future versions.
    *
-   * @param qid The :qid of the formulas.
-   * @param vars The names of their variables.
+   * @param qid The :qid of the formulas. A formula keeps its :qid when the
+   *            rewriter eliminates one of its variables; name only the
+   *            variables that remain. A formula alpha-equivalent to one
+   *            asserted before it is not registered on its own
+   *            (--quant-alpha-equiv), so its :qid finds nothing.
+   * @param vars The names of their variables, each at most once.
    * @param terms A term for each variable.
    * @param loopThreshold As for speculateObserve.
    */
@@ -6373,7 +6377,8 @@ class CVC5_EXPORT Solver
    * @warning This function is experimental and may change in future versions.
    *
    * @param qid The :qid of the formulas.
-   * @param vars Bound variables named and sorted as those of the formulas.
+   * @param vars Bound variables named and sorted as those of the formulas,
+   *             each name at most once.
    * @param pattern The trigger's terms, over vars.
    * @param loopThreshold As for speculateObserve.
    */
@@ -6405,6 +6410,8 @@ class CVC5_EXPORT Solver
    * @param fingerprint A term in SMT-LIB syntax whose holes, the symbols _,
    *                    _<n> and #<n>, match any term (repeated names match
    *                    equal terms), as the :step of a matching loop report.
+   *                    An application's head is a symbol or an indexed
+   *                    operator such as (_ extract 7 0).
    * @param loopThreshold As for speculateObserve.
    */
   void speculateBlock(const std::string& qid,

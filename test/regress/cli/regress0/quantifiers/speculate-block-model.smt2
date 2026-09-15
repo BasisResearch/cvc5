@@ -1,6 +1,5 @@
 ; COMMAND-LINE: --incremental --finite-model-find
 ; DISABLE-TESTER: unsat-core
-; DISABLE-TESTER: dump
 ; DISABLE-TESTER: model
 ; EXPECT: unknown
 ; EXPECT: (:reason-unknown incomplete)

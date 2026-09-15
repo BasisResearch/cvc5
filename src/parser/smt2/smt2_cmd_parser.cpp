@@ -895,6 +895,7 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
       std::vector<Term> terms;
       std::vector<Term> vars;
       std::vector<Term> pattern;
+      std::vector<std::string> texts;
       std::string fingerprint;
       std::string error;
       // Parse one term from a string token just eaten; on a failure, keep
@@ -930,12 +931,13 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
           d_lex.eatToken(Token::LPAREN_TOK);
           std::string name = d_tparser.parseSymbol(CHECK_NONE, SYM_VARIABLE);
           d_lex.eatToken(Token::STRING_LITERAL);
+          texts.push_back(unquoteString(d_lex.tokenStr()));
+          // a term that fails leaves a null term; the command then fails
+          // without using its terms
           Term t;
-          if (termFromString("the term for " + name, t))
-          {
-            names.push_back(name);
-            terms.push_back(t);
-          }
+          termFromString("the term for " + name, t);
+          names.push_back(name);
+          terms.push_back(t);
           d_lex.eatToken(Token::RPAREN_TOK);
         }
         d_lex.eatToken(Token::RPAREN_TOK);
@@ -954,6 +956,7 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
           while (d_lex.peekToken() == Token::STRING_LITERAL)
           {
             d_lex.eatToken(Token::STRING_LITERAL);
+            texts.push_back(unquoteString(d_lex.tokenStr()));
             Term p;
             if (termFromString("the pattern term", p))
             {
@@ -994,6 +997,7 @@ std::unique_ptr<Cmd> Smt2CmdParser::parseNextCommand()
                                      terms,
                                      vars,
                                      pattern,
+                                     texts,
                                      fingerprint,
                                      loopThreshold,
                                      error));

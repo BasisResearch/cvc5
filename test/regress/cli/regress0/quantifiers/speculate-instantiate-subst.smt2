@@ -1,6 +1,5 @@
 ; COMMAND-LINE: --incremental --user-pat=strict
 ; DISABLE-TESTER: unsat-core
-; DISABLE-TESTER: dump
 ; EXPECT: unsat
 ; EXPECT: (:speculation (:active true :rounds 1 :loop-threshold 5 :hypotheses ((instantiate :qid ax_f :status applied :quantifiers 1 :added 1 :rejected 0 :instances ((b)) :bodies ((>= (f b) 1)))) :loops ()))
 ; EXPECT: unsat

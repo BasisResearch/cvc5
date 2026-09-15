@@ -1186,6 +1186,7 @@ class CVC5_EXPORT SpeculateCommand : public Cmd
                    const std::vector<cvc5::Term>& terms,
                    const std::vector<cvc5::Term>& vars,
                    const std::vector<cvc5::Term>& pattern,
+                   const std::vector<std::string>& texts,
                    const std::string& fingerprint,
                    uint32_t loopThreshold,
                    const std::string& error);
@@ -1206,6 +1207,11 @@ class CVC5_EXPORT SpeculateCommand : public Cmd
   /** :trigger: the variables, and the pattern over them */
   std::vector<cvc5::Term> d_vars;
   std::vector<cvc5::Term> d_pattern;
+  /**
+   * The terms as the input spelled them, parsed or not (one per name, or one
+   * per pattern term), so that the command prints as it was read
+   */
+  std::vector<std::string> d_texts;
   /** :block: the fingerprint */
   std::string d_fingerprint;
   /** 0 keeps the current threshold */

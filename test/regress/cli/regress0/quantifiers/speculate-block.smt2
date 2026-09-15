@@ -1,6 +1,5 @@
 ; COMMAND-LINE: --incremental --inst-max-rounds=12
 ; DISABLE-TESTER: unsat-core
-; DISABLE-TESTER: dump
 ; DISABLE-TESTER: model
 ; EXPECT: unknown
 ; EXPECT: (:speculation (:active true :rounds 18 :loop-threshold 3 :hypotheses ((observe)) :loops ((loop :qid loop :instantiations 12 :directed 0 :rounds 12 :rises 11 :first-depth 0 :max-depth 11 :first-round 2 :last-round 18))))

@@ -2761,6 +2761,7 @@ SpeculateCommand::SpeculateCommand(const std::string& kind,
                                    const std::vector<cvc5::Term>& terms,
                                    const std::vector<cvc5::Term>& vars,
                                    const std::vector<cvc5::Term>& pattern,
+                                   const std::vector<std::string>& texts,
                                    const std::string& fingerprint,
                                    uint32_t loopThreshold,
                                    const std::string& error)
@@ -2770,6 +2771,7 @@ SpeculateCommand::SpeculateCommand(const std::string& kind,
       d_terms(terms),
       d_vars(vars),
       d_pattern(pattern),
+      d_texts(texts),
       d_fingerprint(fingerprint),
       d_loopThreshold(loopThreshold),
       d_error(error)
@@ -2833,7 +2835,8 @@ void SpeculateCommand::toStream(std::ostream& out) const
     for (size_t i = 0, n = d_names.size(); i < n; i++)
     {
       out << (i == 0 ? "" : " ") << "("
-          << cvc5::internal::quoteSymbol(d_names[i]) << " " << flat(d_terms[i])
+          << cvc5::internal::quoteSymbol(d_names[i]) << " "
+          << (i < d_texts.size() ? quoteString(d_texts[i]) : flat(d_terms[i]))
           << ")";
     }
     out << ")";
@@ -2847,9 +2850,19 @@ void SpeculateCommand::toStream(std::ostream& out) const
           << d_vars[i].getSort() << ")";
     }
     out << ") (";
-    for (size_t i = 0, n = d_pattern.size(); i < n; i++)
+    if (!d_texts.empty())
     {
-      out << (i == 0 ? "" : " ") << flat(d_pattern[i]);
+      for (size_t i = 0, n = d_texts.size(); i < n; i++)
+      {
+        out << (i == 0 ? "" : " ") << quoteString(d_texts[i]);
+      }
+    }
+    else
+    {
+      for (size_t i = 0, n = d_pattern.size(); i < n; i++)
+      {
+        out << (i == 0 ? "" : " ") << flat(d_pattern[i]);
+      }
     }
     out << ")";
   }

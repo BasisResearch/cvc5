@@ -197,12 +197,17 @@ class Speculation : protected EnvObj
   static constexpr uint32_t kDefaultLoopThreshold = 5;
 
  private:
-  /** A fingerprint: an atom, a hole, or an application */
+  /**
+   * A fingerprint: an atom, a hole, an indexed identifier such as
+   * (_ extract 7 0), or an application
+   */
   struct Fingerprint
   {
     std::string d_atom;
     std::vector<Fingerprint> d_kids;
     bool d_list = false;
+    /** Whether this list is an indexed identifier, not an application */
+    bool d_indexed = false;
     bool isHole() const;
     /** The fingerprint as text, tokens separated by single spaces */
     std::string text() const;

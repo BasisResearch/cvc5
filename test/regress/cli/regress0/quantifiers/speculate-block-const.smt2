@@ -1,6 +1,5 @@
 ; COMMAND-LINE: --incremental
 ; DISABLE-TESTER: unsat-core
-; DISABLE-TESTER: dump
 ; DISABLE-TESTER: model
 ; EXPECT: unknown
 ; EXPECT: (:speculation (:active true :rounds 4 :loop-threshold 5 :hypotheses ((block :qid q :status applied :quantifiers 1 :fingerprint "(f (- 1))" :blocked 2 :examples (((- 1))))) :loops ()))

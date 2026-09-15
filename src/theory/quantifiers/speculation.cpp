@@ -229,7 +229,19 @@ Speculation::Fingerprint Speculation::parseFingerprint(const std::string& text)
       throw RecoverableModalException("speculate: unclosed ( in fingerprint");
     }
     pos++;
-    if (f.d_kids.size() < 2 || f.d_kids[0].d_list || f.d_kids[0].isHole())
+    // (_ <symbol> <index>+), an indexed identifier: an operator such as
+    // (_ extract 7 0) at the head of an application, or a constant
+    if (f.d_kids.size() >= 3 && !f.d_kids[0].d_list && f.d_kids[0].d_atom == "_"
+        && std::all_of(
+            f.d_kids.begin() + 1, f.d_kids.end(), [](const Fingerprint& k) {
+              return !k.d_list && !k.isHole();
+            }))
+    {
+      f.d_indexed = true;
+      return f;
+    }
+    if (f.d_kids.size() < 2 || (f.d_kids[0].d_list && !f.d_kids[0].d_indexed)
+        || f.d_kids[0].isHole())
     {
       throw RecoverableModalException(
           "speculate: a fingerprint application needs a symbol at its head "
@@ -265,9 +277,9 @@ bool Speculation::matches(const Node& n,
   {
     return stripBars(printTerm(n)) == p.text();
   }
-  if (!p.d_list)
+  if (!p.d_list || p.d_indexed)
   {
-    return n.getNumChildren() == 0 && stripBars(printTerm(n)) == p.d_atom;
+    return n.getNumChildren() == 0 && stripBars(printTerm(n)) == p.text();
   }
   if (n.getNumChildren() + 1 != p.d_kids.size())
   {
@@ -276,7 +288,7 @@ bool Speculation::matches(const Node& n,
   std::string head = n.getMetaKind() == kind::metakind::PARAMETERIZED
                          ? stripBars(printTerm(n.getOperator()))
                          : printer::smt2::Smt2Printer::smtKindStringOf(n);
-  if (head != p.d_kids[0].d_atom)
+  if (head != p.d_kids[0].text())
   {
     return false;
   }
@@ -306,12 +318,34 @@ void Speculation::add(const SpeculationRequest& r)
         throw RecoverableModalException(
             "speculate: :instantiate needs a term for each variable named");
       }
+      for (size_t i = 0, n = r.d_names.size(); i < n; i++)
+      {
+        if (std::find(r.d_names.begin(), r.d_names.begin() + i, r.d_names[i])
+            != r.d_names.begin() + i)
+        {
+          throw RecoverableModalException(
+              "speculate: :instantiate names the variable " + r.d_names[i]
+              + " twice");
+        }
+      }
       break;
     case SpeculationRequest::Kind::TRIGGER:
       if (r.d_pattern.empty())
       {
         throw RecoverableModalException(
             "speculate: :trigger needs at least one pattern term");
+      }
+      for (size_t i = 0, n = r.d_vars.size(); i < n; i++)
+      {
+        for (size_t j = 0; j < i; j++)
+        {
+          if (nameOf(r.d_vars[j]) == nameOf(r.d_vars[i]))
+          {
+            throw RecoverableModalException(
+                "speculate: :trigger names the variable " + nameOf(r.d_vars[i])
+                + " twice");
+          }
+        }
       }
       break;
     case SpeculationRequest::Kind::BLOCK:
@@ -519,7 +553,14 @@ void Speculation::instantiate(Instantiate& inst, Hypothesis& h, const Node& q)
   }
   else if (after.d_dupLemma > before.d_dupLemma)
   {
-    fail(h, "rejected", "the instance is a lemma already sent");
+    // an instance that simplifies to true makes the lemma true, which is
+    // refused as a duplicate
+    Node body = rewrite(inst.getInstantiation(q, terms));
+    fail(h,
+         "rejected",
+         body.isConst() && body.getConst<bool>()
+             ? "the instance simplifies to true"
+             : "the instance is a lemma already sent");
   }
   else
   {

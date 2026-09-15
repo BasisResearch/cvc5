@@ -1840,15 +1840,19 @@ set(regress_0_tests
   regress0/quantifiers/global_negate.smt2
   regress0/quantifiers/speculate-block.smt2
   regress0/quantifiers/speculate-block-const.smt2
+  regress0/quantifiers/speculate-block-indexed.smt2
   regress0/quantifiers/speculate-block-model.smt2
   regress0/quantifiers/speculate-errors.smt2
   regress0/quantifiers/speculate-instantiate.smt2
   regress0/quantifiers/speculate-instantiate-subst.smt2
   regress0/quantifiers/speculate-pending.smt2
+  regress0/quantifiers/speculate-qf.smt2
+  regress0/quantifiers/speculate-rejected.smt2
   regress0/quantifiers/speculate-report.smt2
   regress0/quantifiers/speculate-rounds.smt2
   regress0/quantifiers/speculate-trigger.smt2
   regress0/quantifiers/speculate-trigger-round.smt2
+  regress0/quantifiers/speculate-varelim.smt2
   regress0/quantifiers/horn-ground-pre-post.smt2
   regress0/quantifiers/inst-pressure-proof.smt2
   regress0/quantifiers/inst-pressure-refutation.smt2

@@ -1,6 +1,5 @@
 ; COMMAND-LINE: --incremental --user-pat=strict --inst-max-rounds=3
 ; DISABLE-TESTER: unsat-core
-; DISABLE-TESTER: dump
 ; DISABLE-TESTER: model
 ; EXPECT: unknown
 ; EXPECT: (:speculation (:active true :rounds 3 :loop-threshold 5 :hypotheses ((trigger :qid loop :status applied :quantifiers 1 :pattern ((f x)) :added 3 :instances ((a) ((g a)) ((g (g a)))) :materialized ((forall ((x Int)) (! (>= (+ (f x) (* (- 1) (f (g x)))) 1) :pattern ((f x))))))) :loops ()))

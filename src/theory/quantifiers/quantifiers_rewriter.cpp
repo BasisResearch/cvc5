@@ -39,6 +39,7 @@
 #include "theory/strings/theory_strings_utils.h"
 #include "theory/uf/theory_uf_rewriter.h"
 #include "util/rational.h"
+#include "util/string.h"
 
 using namespace std;
 using namespace cvc5::internal::kind;
@@ -2690,6 +2691,34 @@ Node QuantifiersRewriter::computeOperation(Node f,
       if (!qa.d_ipl.isNull() && args.size() == f[0].getNumChildren())
       {
         children.push_back(qa.d_ipl);
+      }
+      else if (!qa.d_ipl.isNull())
+      {
+        // The patterns may mention variables that are gone, so they go. The
+        // formula's name (:qid) mentions no variable and stays, so that what
+        // refers to the formula by name (e.g. (speculate ...)) still finds it.
+        // Other attributes are dropped, as before: some mark the formula for
+        // a procedure (e.g. fun-def) whose shape the rewrite need not keep.
+        std::vector<Node> names;
+        for (const Node& ip : qa.d_ipl)
+        {
+          if (ip.getKind() != Kind::INST_ATTRIBUTE)
+          {
+            continue;
+          }
+          bool isName = ip[0].getKind() == Kind::CONST_STRING
+                            ? ip[0].getConst<String>().toString() == "qid"
+                            : ip[0].getAttribute(QuantNameAttribute());
+          if (isName)
+          {
+            names.push_back(ip);
+          }
+        }
+        if (!names.empty())
+        {
+          children.push_back(
+              nodeManager()->mkNode(Kind::INST_PATTERN_LIST, names));
+        }
       }
       return nodeManager()->mkNode(Kind::FORALL, children);
     }

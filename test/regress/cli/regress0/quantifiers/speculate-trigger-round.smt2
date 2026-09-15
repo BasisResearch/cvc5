@@ -1,6 +1,5 @@
 ; COMMAND-LINE: --incremental --no-cbqi
 ; DISABLE-TESTER: unsat-core
-; DISABLE-TESTER: dump
 ; DISABLE-TESTER: model
 ; EXPECT: unsat
 ; EXPECT: (:speculation (:active true :rounds 1 :loop-threshold 5 :hypotheses ((trigger :qid loop :status applied :quantifiers 1 :pattern ((f x)) :added 1 :instances ((a)) :materialized ((forall ((x Int)) (! (>= (+ (f x) (* (- 1) (f (g x)))) 1) :pattern ((f x))))))) :loops ()))
