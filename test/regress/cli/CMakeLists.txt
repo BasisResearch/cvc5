@@ -1753,6 +1753,12 @@ set(regress_0_tests
   regress0/quantifiers/ari056.smt2
   regress0/quantifiers/ari-syqi.smt2
   regress0/quantifiers/ARI176e1.smt2
+  regress0/quantifiers/branch-profile.smt2
+  regress0/quantifiers/branch-profile-assuming.smt2
+  regress0/quantifiers/branch-profile-budget.smt2
+  regress0/quantifiers/branch-profile-deep-restart.smt2
+  regress0/quantifiers/branch-profile-enum.smt2
+  regress0/quantifiers/branch-profile-mbqi.smt2
   regress0/quantifiers/bug269.smt2
   regress0/quantifiers/bug290.smt2
   regress0/quantifiers/bug291.smt2

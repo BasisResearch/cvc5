@@ -401,6 +401,38 @@ std::string quantIdName(const Node& q)
 }
 
 /**
+ * Assigns rows to quantified formulas as the get-info replies below report
+ * them: formulas with the same :qid share a row, and each formula without
+ * one has a row of its own.
+ */
+class QuantRows
+{
+ public:
+  /**
+   * The row of q, whose :qid is name (empty for none), and whether the row
+   * is new. A new row's index is next, the number of rows so far.
+   */
+  std::pair<size_t, bool> rowOf(const Node& q,
+                                const std::string& name,
+                                size_t next)
+  {
+    if (name.empty())
+    {
+      auto [it, isNew] = d_byNode.emplace(q, next);
+      return {it->second, isNew};
+    }
+    auto [it, isNew] = d_byName.emplace(name, next);
+    return {it->second, isNew};
+  }
+
+ private:
+  /** The row of each :qid. */
+  std::map<std::string, size_t> d_byName;
+  /** The row of each formula without a :qid. */
+  std::map<Node, size_t> d_byNode;
+};
+
+/**
  * The (get-info :inst-pressure) reply for the last check-sat: its
  * instantiation rounds, whether refutation counts are present, and one row
  * per quantified formula it tried to instantiate, most instantiated first.
@@ -421,26 +453,15 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
     uint64_t d_refuted = 0;
   };
   std::vector<Row> rows;
-  std::map<std::string, size_t> byName;
-  std::map<Node, size_t> byNode;
+  QuantRows keys;
   auto rowFor = [&](const Node& q) -> Row& {
     std::string name = quantIdName(q);
-    std::pair<size_t, bool> slot(rows.size(), false);
-    if (name.empty())
-    {
-      auto [it, isNew] = byNode.emplace(q, rows.size());
-      slot = {it->second, isNew};
-    }
-    else
-    {
-      auto [it, isNew] = byName.emplace(name, rows.size());
-      slot = {it->second, isNew};
-    }
-    if (slot.second)
+    auto [i, isNew] = keys.rowOf(q, name, rows.size());
+    if (isNew)
     {
       rows.push_back(Row{name, Pressure(), {}});
     }
-    return rows[slot.first];
+    return rows[i];
   };
   if (inst != nullptr)
   {
@@ -523,6 +544,92 @@ std::string instPressureInfo(const theory::quantifiers::Instantiate* inst,
   return ss.str();
 }
 
+/**
+ * The (get-info :branch-profile) reply for the last check-sat: the resource
+ * units it spent (see SolverEngine::d_lastCheckResources), the per-check
+ * resource limit it ran under (0 for none), the resource budget it began
+ * with when any resource limit applied, its instantiation rounds, and one
+ * row per quantified formula it instantiated, with its instances split by
+ * the inference that sent them. The budget is the smaller of the per-check
+ * limit and what the cumulative limit (rlimit) had left; it is left out when
+ * neither limit is set. A check that ran out of either spends at least the
+ * budget, and usually a few units more, since the limits are checked between
+ * steps, so a reader should compare the units with >= rather than ==. Rows are
+ * keyed and ordered as (get-info :inst-pressure) keys and orders them: they are
+ * assigned and sorted as there, and only then are the formulas whose every
+ * attempt was rejected, which sort last, left out. A formula without a :qid
+ * therefore gets the same synthetic name in both replies. Two checks of related
+ * queries can then be compared row by row and inference by inference.
+ */
+std::string branchProfileInfo(const theory::quantifiers::Instantiate* inst,
+                              uint64_t resources,
+                              uint64_t limit,
+                              std::optional<uint64_t> budget)
+{
+  struct Row
+  {
+    std::string d_name;
+    uint64_t d_added = 0;
+    std::map<theory::InferenceId, uint64_t> d_byInference;
+  };
+  std::vector<Row> rows;
+  QuantRows keys;
+  if (inst != nullptr)
+  {
+    for (const auto& [q, p] : inst->getPressure())
+    {
+      std::string name = quantIdName(q);
+      auto [i, isNew] = keys.rowOf(q, name, rows.size());
+      if (isNew)
+      {
+        rows.push_back(Row{name, 0, {}});
+      }
+      Row& row = rows[i];
+      row.d_added += p.d_added;
+      for (const auto& [id, n] : p.d_byInference)
+      {
+        row.d_byInference[id] += n;
+      }
+    }
+  }
+  std::stable_sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) {
+    return a.d_added > b.d_added;
+  });
+  std::stringstream ss;
+  ss << "(:resource-units " << resources << " :resource-limit " << limit;
+  if (budget.has_value())
+  {
+    ss << " :resource-budget " << *budget;
+  }
+  ss << " :rounds " << (inst == nullptr ? 0 : inst->getPressureRounds())
+     << " :quantifiers (";
+  size_t unnamed = 0;
+  for (size_t i = 0; i < rows.size() && rows[i].d_added > 0; i++)
+  {
+    const Row& r = rows[i];
+    ss << (i > 0 ? " " : "") << "(";
+    if (r.d_name.empty())
+    {
+      ss << "quant_" << unnamed++ << " :named false";
+    }
+    else
+    {
+      ss << quoteSymbol(r.d_name);
+    }
+    ss << " :instantiations " << r.d_added << " :inferences (";
+    bool first = true;
+    for (const auto& [id, n] : r.d_byInference)
+    {
+      ss << (first ? "" : " ") << "(" << theory::toString(id) << " " << n
+         << ")";
+      first = false;
+    }
+    ss << "))";
+  }
+  ss << "))";
+  return ss.str();
+}
+
 /** The --quant-strategy name of s. */
 const char* quantStrategyName(options::QuantStrategyMode s)
 {
@@ -597,7 +704,8 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
       || key == "matching-loops" || key == "speculation"
       || key == "assertion-stack-levels" || key == "all-options"
       || key == "difficulty-gradient" || key == "nl-frontier"
-      || key == "check-effort" || key == "strategy-rung")
+      || key == "check-effort" || key == "strategy-rung"
+      || key == "branch-profile")
   {
     return true;
   }
@@ -793,6 +901,17 @@ std::string SolverEngine::getInfo(const std::string& key) const
       qe->printSpeculation(ss);
     }
     return ss.str();
+  }
+  if (key == "branch-profile")
+  {
+    // Before the first check there is no theory engine, and nothing spent.
+    QuantifiersEngine* qe = d_smtSolver == nullptr || !d_state->isFullyInited()
+                                ? nullptr
+                                : d_smtSolver->getQuantifiersEngine();
+    return branchProfileInfo(qe == nullptr ? nullptr : qe->getInstantiate(),
+                             d_lastCheckResources,
+                             d_lastCheckResourceLimit,
+                             d_lastCheckResourceBudget);
   }
   if (key == "check-effort")
   {
@@ -1184,11 +1303,26 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
   {
     qe->getInstantiate()->clearPressure();
   }
-  uint64_t resourcesBefore = getResourceManager()->getResourceUsage();
+  // The resource limits this check runs under, for (get-info
+  // :branch-profile), read as it begins: the options may change before the
+  // reply is read, and what the cumulative limit leaves shrinks.
+  d_lastCheckResourceLimit = options().base.perCallResourceLimit;
+  d_lastCheckResourceBudget.reset();
+  if (d_lastCheckResourceLimit > 0)
+  {
+    d_lastCheckResourceBudget = d_lastCheckResourceLimit;
+  }
+  if (options().base.cumulativeResourceLimit > 0)
+  {
+    uint64_t left = getResourceManager()->getResourceRemaining();
+    d_lastCheckResourceBudget =
+        std::min(d_lastCheckResourceBudget.value_or(left), left);
+  }
 
   // Call the SMT solver driver to check for satisfiability. Note that in the
   // case of options like e.g. deep restarts, this may invokve multiple calls
   // to check satisfiability in the underlying SMT solver
+  uint64_t resourcesBefore = getResourceManager()->getResourceUsage();
   Result r = d_smtDriver->checkSat(assumptions);
   // record what this check cost for (get-info :check-effort). The pressure
   // is this check's, cleared above. It is summed now rather than when asked
