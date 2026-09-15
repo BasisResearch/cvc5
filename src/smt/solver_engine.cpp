@@ -532,7 +532,7 @@ bool SolverEngine::isValidGetInfoFlag(const std::string& key) const
       || key == "incomplete-culprits" || key == "inst-pressure"
       || key == "matching-loops" || key == "assertion-stack-levels"
       || key == "all-options" || key == "difficulty-gradient"
-      || key == "nl-frontier")
+      || key == "nl-frontier" || key == "check-effort")
   {
     return true;
   }
@@ -692,6 +692,16 @@ std::string SolverEngine::getInfo(const std::string& key) const
   if (key == "difficulty-gradient")
   {
     return getDifficultyGradient();
+  }
+  if (key == "check-effort")
+  {
+    // What the last check-sat cost, recorded by checkSatInternal (see
+    // d_lastCheckResources).
+    std::stringstream ss;
+    ss << "(:resource-units " << d_lastCheckResources << " :instantiations "
+       << d_lastCheckInstantiations << " :inst-rounds " << d_lastCheckInstRounds
+       << ")";
+    return ss.str();
   }
   if (key == "assertion-stack-levels")
   {
@@ -1065,10 +1075,37 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
     clearNlFrontier(d_smtSolver->getTheoryEngine());
   }
 
+  // Clear the instantiation pressure first. Presolve clears it again, but a
+  // check the driver refuses before presolve (the cumulative resource or time
+  // limit already spent, or preprocess-only) would otherwise leave the
+  // previous check's rows for :inst-pressure and :check-effort.
+  if (QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine())
+  {
+    qe->getInstantiate()->clearPressure();
+  }
+  uint64_t resourcesBefore = getResourceManager()->getResourceUsage();
+
   // Call the SMT solver driver to check for satisfiability. Note that in the
   // case of options like e.g. deep restarts, this may invokve multiple calls
   // to check satisfiability in the underlying SMT solver
   Result r = d_smtDriver->checkSat(assumptions);
+  // record what this check cost for (get-info :check-effort). The pressure
+  // is this check's, cleared above. It is summed now rather than when asked
+  // for, so that a later check-synth, which also presolves, or the absence of
+  // a quantifiers engine cannot change the reply.
+  d_lastCheckResources =
+      getResourceManager()->getResourceUsage() - resourcesBefore;
+  d_lastCheckInstantiations = 0;
+  d_lastCheckInstRounds = 0;
+  if (QuantifiersEngine* qe = d_smtSolver->getQuantifiersEngine())
+  {
+    const theory::quantifiers::Instantiate* inst = qe->getInstantiate();
+    for (const auto& qp : inst->getPressure())
+    {
+      d_lastCheckInstantiations += qp.second.d_added;
+    }
+    d_lastCheckInstRounds = inst->getPressureRounds();
+  }
 
   Trace("smt") << "SolverEngine::checkSat(" << assumptions << ") => " << r
                << endl;

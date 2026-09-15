@@ -1269,6 +1269,32 @@ class CVC5_EXPORT SolverEngine
    */
   size_t d_checkedAssertions = 0;
   uint32_t d_checkedLevel = 0;
+  /**
+   * What the last check-sat or check-sat-assuming cost, the
+   * (get-info :check-effort) reply: the resource units it spent (in the
+   * units of reproducible-resource-limit, the resource manager's cumulative
+   * usage read around the check), the instantiations it added and the
+   * instantiation rounds that sent lemmas (the sums of its :inst-pressure
+   * rows, read as the check returns). The units include the preprocessing of
+   * the assertions made since the last push or check only: a push
+   * preprocesses and asserts the pending assertions before its level opens,
+   * so an assertion made before the last push costs the check nothing to
+   * preprocess. They also leave out the work of subsolvers, which have
+   * resource managers of their own. All
+   * three are 0 before the first check, and the last two are 0 after a
+   * quantifier-free check or one refused before it starts (the cumulative
+   * resource or time limit already spent). The reply stands until the next
+   * check: push, pop, assertions and reset-assertions leave it, as do the
+   * queries that check outside checkSatInternal (get-timeout-core,
+   * get-abduct, get-interpolant, check-synth). Under deep restarts the
+   * instantiation counts are the last restart's while the units cover the
+   * whole check. A check repeated on a warm engine spends fewer units than
+   * it first did (rewriter and term caches carry across pop), so between
+   * checks the instantiation counts compare more steadily than the units.
+   */
+  uint64_t d_lastCheckResources = 0;
+  uint64_t d_lastCheckInstantiations = 0;
+  uint64_t d_lastCheckInstRounds = 0;
 
   /** The solver for sygus queries */
   std::unique_ptr<smt::SygusSolver> d_sygusSolver;
