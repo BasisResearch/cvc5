@@ -46,7 +46,9 @@ InstantiationEngine::InstantiationEngine(Env& env,
   {
     d_quant_rel.reset(new quantifiers::QuantRelevance(env));
   }
-  if (options().quantifiers.eMatching)
+  // Under --quant-ladder this module exists even with --no-e-matching, for
+  // --quant-strategy=ematch to run.
+  if (options().quantifiers.eMatching || options().quantifiers.quantLadder)
   {
     // these are the instantiation strategies for E-matching
     // user-provided patterns
@@ -163,7 +165,7 @@ void InstantiationEngine::check(Theory::Effort e, QEffort quant_e)
   for (size_t i = 0; i < nquant; i++)
   {
     Node q = m->getAssertedQuantifier(i, true);
-    if (shouldProcess(q) && m->isQuantifierActive(q))
+    if (shouldProcess(q, true) && m->isQuantifierActive(q))
     {
       quantActive = true;
       d_quants.push_back(q);
@@ -247,9 +249,9 @@ void InstantiationEngine::addUserNoPattern(Node q, Node pat)
   }
 }
 
-bool InstantiationEngine::shouldProcess(Node q)
+bool InstantiationEngine::shouldProcess(Node q, bool inCheck)
 {
-  if (!d_qreg.hasOwnership(q, this))
+  if (inCheck ? !d_qreg.mayProcess(q, this) : !d_qreg.hasOwnership(q, this))
   {
     return false;
   }

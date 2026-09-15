@@ -1324,6 +1324,11 @@ class CVC5_EXPORT SolverEngine
   std::string d_safeOptsRegularOptionValue;
   /** Was the option already the default setting */
   bool d_safeOptsSetRegularOptionToDefault;
+  /**
+   * The (get-info :strategy-rung) reply for the last check-sat, recorded as
+   * it returns, as :check-effort is; empty before the first check-sat.
+   */
+  std::string d_lastStrategyRung;
 
   /** Whether this is an internal subsolver. */
   bool d_isInternalSubsolver;

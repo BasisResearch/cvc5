@@ -15,6 +15,7 @@
 #ifndef CVC5__THEORY__QUANTIFIERS__INSTANTIATE_H
 #define CVC5__THEORY__QUANTIFIERS__INSTANTIATE_H
 
+#include <array>
 #include <map>
 #include <set>
 #include <unordered_map>
@@ -167,11 +168,32 @@ class Instantiate : public QuantifiersUtil
    */
   uint64_t getPressureRounds() const { return d_pressureRounds; }
   /**
-   * Clear the pressure rows and the round count, as presolve does. Called
-   * before each check-sat too, since a check refused before presolve would
-   * otherwise keep the previous check's pressure.
+   * Clear the pressure rows, the round count and the per-strategy counts, as
+   * presolve does. Called before each check-sat too, since a check refused
+   * before presolve would otherwise keep the previous check's pressure.
    */
   void clearPressure();
+  /**
+   * The ladder strategy (see --quant-strategy) an inference id's
+   * instantiations come from, or OTHER.
+   */
+  enum class StrategyKind
+  {
+    EMATCH,
+    CONFLICT,
+    POOL,
+    ENUM,
+    MBQI,
+    OTHER,
+    COUNT
+  };
+  static StrategyKind strategyOf(InferenceId id);
+  /** The instantiations added this check-sat, indexed by StrategyKind. */
+  const std::array<uint64_t, static_cast<size_t>(StrategyKind::COUNT)>&
+  getStrategyCounts() const
+  {
+    return d_strategyCounts;
+  }
   /** register quantifier */
   void registerQuantifier(Node q) override;
   /** identify */
@@ -623,6 +645,9 @@ class Instantiate : public QuantifiersUtil
    * and on presolve.
    */
   uint64_t d_pressureRounds = 0;
+  /** See getStrategyCounts; cleared before each check-sat and on presolve. */
+  std::array<uint64_t, static_cast<size_t>(StrategyKind::COUNT)>
+      d_strategyCounts{};
   /** The replay record for q under key's current vectors, null if none. */
   Node replayRecord(const std::string& key, const Node& q) const;
   /** The instantiations of this check-sat, if --matching-loops */
