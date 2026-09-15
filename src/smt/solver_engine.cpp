@@ -697,8 +697,9 @@ std::string SolverEngine::getInfo(const std::string& key) const
     std::stringstream ss;
     if (qe == nullptr)
     {
-      ss << "(:active false :rounds 0 :loop-threshold 0 :hypotheses () "
-            ":loops ())";
+      ss << "(:active false :rounds 0 :loop-threshold "
+         << theory::quantifiers::Speculation::kDefaultLoopThreshold
+         << " :hypotheses () :loops ())";
     }
     else
     {

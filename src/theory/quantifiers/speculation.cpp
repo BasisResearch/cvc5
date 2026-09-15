@@ -31,6 +31,7 @@
 #include "theory/quantifiers/quantifiers_registry.h"
 #include "theory/quantifiers/quantifiers_state.h"
 #include "theory/quantifiers/term_util.h"
+#include "theory/trust_substitutions.h"
 #include "util/rational.h"
 #include "util/smt2_quote_string.h"
 
@@ -42,8 +43,6 @@ namespace quantifiers {
 
 namespace {
 
-/** Rises over the first round's depth that make a loop, unless set */
-constexpr uint32_t kDefaultLoopThreshold = 5;
 /** Instance vectors kept per hypothesis */
 constexpr size_t kMaxInstances = 20;
 /** The most characters a printed term may take */
@@ -166,6 +165,20 @@ bool Speculation::Fingerprint::isHole() const
   });
 }
 
+std::string Speculation::Fingerprint::text() const
+{
+  if (!d_list)
+  {
+    return d_atom;
+  }
+  std::string out = "(";
+  for (size_t i = 0, n = d_kids.size(); i < n; i++)
+  {
+    out += (i == 0 ? "" : " ") + d_kids[i].text();
+  }
+  return out + ")";
+}
+
 Speculation::Fingerprint Speculation::parseFingerprint(const std::string& text)
 {
   // Tokens: parentheses, |quoted| symbols (unquoted here), and atoms.
@@ -261,6 +274,12 @@ bool Speculation::matches(const Node& n,
     auto [it, fresh] = holes.emplace(p.d_atom, n);
     return fresh || it->second == n;
   }
+  // A leaf constant prints as a token or as an application such as (- 1) or
+  // (/ 1 2); either way it has no children, so compare the texts.
+  if (n.isConst() && n.getNumChildren() == 0)
+  {
+    return stripBars(printTerm(n)) == p.text();
+  }
   if (!p.d_list)
   {
     return n.getNumChildren() == 0 && stripBars(printTerm(n)) == p.d_atom;
@@ -324,7 +343,11 @@ void Speculation::add(const SpeculationRequest& r)
 
 bool Speculation::isActive() const { return d_hyps.size() > 0; }
 
-void Speculation::presolve() { d_depth.clear(); }
+void Speculation::presolve()
+{
+  d_depth.clear();
+  d_blockedThisCheck = false;
+}
 
 const std::string& Speculation::qidOf(const Node& q) const
 {
@@ -398,7 +421,12 @@ void Speculation::apply(Instantiate& inst, const std::vector<Node>& asserted)
         continue;
       }
       d_done.insert(key);
-      h->d_quants++;
+      // a pop of a scope inside the hypothesis's own applies it again
+      if (std::find(h->d_quants.begin(), h->d_quants.end(), q)
+          == h->d_quants.end())
+      {
+        h->d_quants.push_back(q);
+      }
       switch (h->d_req.d_kind)
       {
         case SpeculationRequest::Kind::INSTANTIATE:
@@ -444,7 +472,8 @@ void Speculation::instantiate(Instantiate& inst, Hypothesis& h, const Node& q)
       fail(h, "mismatch", "no term for the variable " + name);
       return;
     }
-    Node t = rewrite(r.d_terms[it - r.d_names.begin()]);
+    Node t = rewrite(d_env.getTopLevelSubstitutions().apply(
+        r.d_terms[it - r.d_names.begin()]));
     if (t.getType() != v.getType())
     {
       std::stringstream ss;
@@ -482,10 +511,12 @@ void Speculation::instantiate(Instantiate& inst, Hypothesis& h, const Node& q)
     h.d_status = "applied";
     h.d_reason.clear();
     keep(h, terms);
-    if (h.d_bodies.size() < kMaxInstances)
+    Node body = SkolemManager::getOriginalForm(inst.getInstantiation(q, terms));
+    if (h.d_bodies.size() < kMaxInstances
+        && std::find(h.d_bodies.begin(), h.d_bodies.end(), body)
+               == h.d_bodies.end())
     {
-      h.d_bodies.push_back(
-          SkolemManager::getOriginalForm(inst.getInstantiation(q, terms)));
+      h.d_bodies.push_back(body);
     }
     return;
   }
@@ -583,7 +614,12 @@ void Speculation::installTrigger(size_t i, Hypothesis& h, const Node& q)
   NodeManager* nm = nodeManager();
   Node ipl = nm->mkNode(Kind::INST_PATTERN_LIST,
                         nm->mkNode(Kind::INST_PATTERN, shown));
-  h.d_materialized.push_back(nm->mkNode(Kind::FORALL, q[0], q[1], ipl));
+  Node materialized = nm->mkNode(Kind::FORALL, q[0], q[1], ipl);
+  if (std::find(h.d_materialized.begin(), h.d_materialized.end(), materialized)
+      == h.d_materialized.end())
+  {
+    h.d_materialized.push_back(materialized);
+  }
 }
 
 bool Speculation::isBlocked(const Node& q,
@@ -628,6 +664,7 @@ bool Speculation::isBlocked(const Node& q,
       if (matches(c, h->d_fp, holes))
       {
         h->d_blocked++;
+        d_blockedThisCheck = true;
         keep(*h, terms);
         return true;
       }
@@ -699,7 +736,7 @@ void Speculation::print(std::ostream& out, uint64_t rounds) const
       continue;
     }
     std::string status = h.d_status;
-    if (status == "pending" && h.d_quants == 0 && rounds > 0)
+    if (status == "pending" && h.d_quants.empty() && rounds > 0)
     {
       status = "no-quantifier";
     }
@@ -714,7 +751,7 @@ void Speculation::print(std::ostream& out, uint64_t rounds) const
     {
       out << " :reason " << quoteString(h.d_reason);
     }
-    out << " :quantifiers " << h.d_quants;
+    out << " :quantifiers " << h.d_quants.size();
     switch (h.d_req.d_kind)
     {
       case SpeculationRequest::Kind::INSTANTIATE:

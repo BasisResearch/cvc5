@@ -1904,6 +1904,57 @@ TEST_F(TestApiBlackSolver, importInstantiations)
                CVC5ApiException);
 }
 
+TEST_F(TestApiBlackSolver, speculate)
+{
+  d_solver->setOption("incremental", "true");
+  Term f = d_solver->declareFun("f", {d_int}, d_int);
+  Term a = d_solver->mkConst(d_int, "a");
+  Term x = d_tm.mkVar(d_int, "x");
+  Term fx = d_tm.mkTerm(Kind::APPLY_UF, {f, x});
+  Term fa = d_tm.mkTerm(Kind::APPLY_UF, {f, a});
+  Term zero = d_tm.mkInteger(0);
+  Term bvl = d_tm.mkTerm(Kind::VARIABLE_LIST, {x});
+  // as the parser builds (! ... :qid q)
+  Term qid = d_tm.mkTerm(
+      Kind::INST_ATTRIBUTE,
+      {d_tm.mkString("qid"), d_tm.mkConst(d_tm.getBooleanSort(), "q")});
+  Term q = d_tm.mkTerm(Kind::FORALL,
+                       {bvl,
+                        d_tm.mkTerm(Kind::GT, {fx, zero}),
+                        d_tm.mkTerm(Kind::INST_PATTERN_LIST, {qid})});
+  d_solver->assertFormula(q);
+
+  d_solver->push();
+  ASSERT_NO_THROW(d_solver->speculateObserve(3));
+  ASSERT_NO_THROW(d_solver->speculateInstantiation("q", {"x"}, {a}));
+  ASSERT_NO_THROW(d_solver->speculateTrigger("q", {x}, {fx}));
+  ASSERT_NO_THROW(d_solver->speculateBlock("q", "(f (g _0))"));
+  d_solver->assertFormula(d_tm.mkTerm(Kind::LT, {fa, zero}));
+  ASSERT_TRUE(d_solver->checkSat().isUnsat());
+  std::string info = d_solver->getInfo("speculation");
+  ASSERT_NE(info.find(":active true"), std::string::npos);
+  ASSERT_NE(info.find(":loop-threshold 3"), std::string::npos);
+  ASSERT_NE(info.find("(instantiate :qid q :status applied"),
+            std::string::npos);
+  d_solver->pop();
+  info = d_solver->getInfo("speculation");
+  ASSERT_NE(info.find(":active false"), std::string::npos);
+
+  ASSERT_THROW(d_solver->speculateInstantiation("q", {"x"}, {}),
+               CVC5ApiException);
+  ASSERT_THROW(d_solver->speculateInstantiation("q", {"x"}, {Term()}),
+               CVC5ApiException);
+  ASSERT_THROW(d_solver->speculateInstantiation("", {"x"}, {a}),
+               CVC5ApiException);
+  ASSERT_THROW(d_solver->speculateTrigger("q", {x}, {}), CVC5ApiException);
+  ASSERT_THROW(d_solver->speculateBlock("q", "(f"), CVC5ApiException);
+  ASSERT_THROW(d_solver->speculateBlock("q", "(_0 a)"), CVC5ApiException);
+
+  TermManager tm;
+  Solver slv(tm);
+  ASSERT_THROW(slv.speculateInstantiation("q", {"x"}, {a}), CVC5ApiException);
+}
+
 TEST_F(TestApiBlackSolver, setInfo)
 {
   ASSERT_THROW(d_solver->setInfo("cvc5-lagic", "QF_BV"), CVC5ApiException);

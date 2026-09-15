@@ -118,6 +118,13 @@ bool Instantiate::checkComplete(IncompleteId& incId)
     incId = IncompleteId::QUANTIFIERS_RECORDED_INST;
     return false;
   }
+  if (d_speculation->hasBlocked())
+  {
+    Trace("quant-engine-debug")
+        << "Set incomplete due to a speculative block." << std::endl;
+    incId = IncompleteId::QUANTIFIERS_SPECULATIVE_BLOCK;
+    return false;
+  }
   return true;
 }
 

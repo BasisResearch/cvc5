@@ -489,6 +489,10 @@ void QuantifiersEngine::checkInternal(Theory::Effort e,
       d_qim.doPending();
       if (d_qim.hasSentLemma())
       {
+        // a speculative trigger may match every round: count the round, so
+        // --inst-max-rounds bounds it like any strategy's
+        inst->notifyEndRound();
+        d_numInstRoundsLemma++;
         return;
       }
     }

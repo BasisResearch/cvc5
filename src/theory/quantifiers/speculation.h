@@ -140,6 +140,12 @@ class Speculation : protected EnvObj
    * round, and get no such exemption.
    */
   bool isDirecting() const { return d_directing; }
+  /**
+   * Whether a block refused an instantiation since the last presolve. A
+   * model found then need not satisfy the quantified formulas, so the check
+   * must not answer sat.
+   */
+  bool hasBlocked() const { return d_blockedThisCheck; }
   /** Called for each instantiation added, in the given round */
   void notifyAdded(const Node& q,
                    const std::vector<Node>& terms,
@@ -177,8 +183,14 @@ class Speculation : protected EnvObj
    * round ran and no asserted formula has the qid); or pending (no round
    * ran). Terms are printed in original form and flat; one larger than a
    * size limit prints as the symbol ...
+   *
+   * A hypothesis's counts and lists cover every check of its user context
+   * so far, :quantifiers counting distinct formulas; :rounds and :loops
+   * cover the last check only.
    */
   void print(std::ostream& out, uint64_t rounds) const;
+  /** Rises over the first round's depth that make a loop, unless set */
+  static constexpr uint32_t kDefaultLoopThreshold = 5;
 
  private:
   /** A fingerprint: an atom, a hole, or an application */
@@ -188,6 +200,8 @@ class Speculation : protected EnvObj
     std::vector<Fingerprint> d_kids;
     bool d_list = false;
     bool isHole() const;
+    /** The fingerprint as text, tokens separated by single spaces */
+    std::string text() const;
   };
   /** Parse text as a fingerprint; throws a RecoverableModalException */
   static Fingerprint parseFingerprint(const std::string& text);
@@ -202,7 +216,8 @@ class Speculation : protected EnvObj
     Fingerprint d_fp;
     std::string d_status = "pending";
     std::string d_reason;
-    uint64_t d_quants = 0;
+    /** The formulas the hypothesis has been applied to */
+    std::vector<Node> d_quants;
     uint64_t d_added = 0;
     uint64_t d_rejected = 0;
     uint64_t d_blocked = 0;
@@ -258,6 +273,8 @@ class Speculation : protected EnvObj
   std::shared_ptr<Hypothesis> d_current;
   /** Whether a directed instance is being added now; see isDirecting */
   bool d_directing = false;
+  /** Whether a block refused an instantiation since the last presolve */
+  bool d_blockedThisCheck = false;
   /** The :qid of each formula looked up since the last pop */
   mutable std::map<Node, std::string> d_qids;
   /** Per formula, for the loop report; cleared by presolve and by a pop */

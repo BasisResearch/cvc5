@@ -6382,8 +6382,10 @@ class CVC5_EXPORT Solver
    * Speculate, in the current user context, that no asserted quantified
    * formula named qid is instantiated where one of its instantiating terms,
    * or the instance of the trigger that matched, is an instance of
-   * fingerprint. Such an instantiation is refused as a duplicate would be.
-   * A pop lifts the block. Also observes, as speculateObserve does.
+   * fingerprint. Such an instantiation is refused as a duplicate would be,
+   * and a check in which a block refused one answers unknown rather than
+   * sat, since its model may violate the formulas. A pop lifts the block.
+   * Also observes, as speculateObserve does.
    *
    * SMT-LIB:
    *
