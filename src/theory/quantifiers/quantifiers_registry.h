@@ -53,16 +53,16 @@ class QuantifiersRegistry : public QuantifiersUtil
   //----------------------------- ownership
   /**
    * get the owner of quantified formula q, or null if it has none or its
-   * owner is switched off (see setSwitchedOff)
+   * owner's ownership is ignored (see setIgnoredOwners)
    */
   QuantifiersModule* getOwner(Node q) const;
   /**
-   * Switch off the modules in s, which --quant-strategy keeps from running
-   * this check-sat: a formula one of them owns is treated as unowned, so the
-   * modules that do run may process it. Ownership is kept for when they run
-   * again. s must stay alive while set; null switches nothing off.
+   * Ignore the ownership of the modules in s for this check-sat, as
+   * --quant-strategy asks: a formula one of them owns is treated as
+   * unowned, so any module that runs may process it. Ownership is kept for
+   * the next check-sat. s must stay alive while set; null ignores nothing.
    */
-  void setSwitchedOff(const std::unordered_set<QuantifiersModule*>* s);
+  void setIgnoredOwners(const std::unordered_set<QuantifiersModule*>* s);
   /**
    * Set owner of quantified formula q to module m with given priority. If
    * the quantified formula has previously been assigned an owner with
@@ -125,8 +125,8 @@ class QuantifiersRegistry : public QuantifiersUtil
    * precendence.
    */
   std::map<Node, int32_t> d_owner_priority;
-  /** See setSwitchedOff. */
-  const std::unordered_set<QuantifiersModule*>* d_switchedOff = nullptr;
+  /** See setIgnoredOwners. */
+  const std::unordered_set<QuantifiersModule*>* d_ignoredOwners = nullptr;
   /** map from universal quantifiers to the list of variables */
   std::map<Node, std::vector<Node> > d_vars;
   /** map from universal quantifiers to their inst constant body */

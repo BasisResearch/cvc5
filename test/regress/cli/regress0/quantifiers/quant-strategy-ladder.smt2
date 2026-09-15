@@ -8,19 +8,19 @@
 ; COMMAND-LINE: --incremental --quant-ladder --user-pat=strict --no-cbqi
 ; SCRUBBER: sed -e 's/:resource-units [0-9]*/:resource-units N/'
 ; EXPECT: unknown
-; EXPECT: (:strategy-rung (:strategy all :available (ematch conflict pool enum mbqi) :rounds 0 :resource-units N :instantiations (:ematch 0 :conflict 0 :pool 0 :enum 0 :mbqi 0 :other 0)))
+; EXPECT: (:strategy-rung (:strategy all :alone true :available (ematch conflict pool enum mbqi) :rounds 0 :resource-units N :instantiations (:ematch 0 :conflict 0 :pool 0 :enum 0 :mbqi 0 :other 0)))
 ; EXPECT: unknown
-; EXPECT: (:strategy-rung (:strategy ematch :available (ematch conflict pool enum mbqi) :rounds 0 :resource-units N :instantiations (:ematch 0 :conflict 0 :pool 0 :enum 0 :mbqi 0 :other 0)))
+; EXPECT: (:strategy-rung (:strategy ematch :alone true :available (ematch conflict pool enum mbqi) :rounds 0 :resource-units N :instantiations (:ematch 0 :conflict 0 :pool 0 :enum 0 :mbqi 0 :other 0)))
 ; EXPECT: unsat
-; EXPECT: (:strategy-rung (:strategy conflict :available (ematch conflict pool enum mbqi) :rounds 1 :resource-units N :instantiations (:ematch 0 :conflict 1 :pool 0 :enum 0 :mbqi 0 :other 0)))
+; EXPECT: (:strategy-rung (:strategy conflict :alone true :available (ematch conflict pool enum mbqi) :rounds 1 :resource-units N :instantiations (:ematch 0 :conflict 1 :pool 0 :enum 0 :mbqi 0 :other 0)))
 ; EXPECT: unknown
-; EXPECT: (:strategy-rung (:strategy pool :available (ematch conflict pool enum mbqi) :rounds 0 :resource-units N :instantiations (:ematch 0 :conflict 0 :pool 0 :enum 0 :mbqi 0 :other 0)))
+; EXPECT: (:strategy-rung (:strategy pool :alone true :available (ematch conflict pool enum mbqi) :rounds 0 :resource-units N :instantiations (:ematch 0 :conflict 0 :pool 0 :enum 0 :mbqi 0 :other 0)))
 ; EXPECT: unsat
-; EXPECT: (:strategy-rung (:strategy enum :available (ematch conflict pool enum mbqi) :rounds 1 :resource-units N :instantiations (:ematch 0 :conflict 0 :pool 0 :enum 1 :mbqi 0 :other 0)))
+; EXPECT: (:strategy-rung (:strategy enum :alone true :available (ematch conflict pool enum mbqi) :rounds 1 :resource-units N :instantiations (:ematch 0 :conflict 0 :pool 0 :enum 1 :mbqi 0 :other 0)))
 ; EXPECT: unsat
-; EXPECT: (:strategy-rung (:strategy mbqi :available (ematch conflict pool enum mbqi) :rounds 1 :resource-units N :instantiations (:ematch 0 :conflict 0 :pool 0 :enum 0 :mbqi 1 :other 0)))
+; EXPECT: (:strategy-rung (:strategy mbqi :alone true :available (ematch conflict pool enum mbqi) :rounds 1 :resource-units N :instantiations (:ematch 0 :conflict 0 :pool 0 :enum 0 :mbqi 1 :other 0)))
 ; EXPECT: unknown
-; EXPECT: (:strategy-rung (:strategy all :available (ematch conflict pool enum mbqi) :rounds 0 :resource-units N :instantiations (:ematch 0 :conflict 0 :pool 0 :enum 0 :mbqi 0 :other 0)))
+; EXPECT: (:strategy-rung (:strategy all :alone true :available (ematch conflict pool enum mbqi) :rounds 0 :resource-units N :instantiations (:ematch 0 :conflict 0 :pool 0 :enum 0 :mbqi 0 :other 0)))
 (set-logic UF)
 (declare-sort U 0)
 (declare-fun P (U) Bool)

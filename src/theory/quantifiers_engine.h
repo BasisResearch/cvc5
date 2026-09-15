@@ -135,6 +135,8 @@ class QuantifiersEngine : protected EnvObj
    * option is read once, at presolve.
    */
   options::QuantStrategyMode getStrategy() const { return d_strategy; }
+  /** Likewise --quant-strategy-alone. */
+  bool isStrategyAlone() const { return d_strategyAlone; }
   /** Whether a module for strategy s exists (it may be ladder-only). */
   bool hasStrategy(options::QuantStrategyMode s) const;
   //----------user interface for instantiations (see quantifiers/instantiate.h)
@@ -276,11 +278,20 @@ class QuantifiersEngine : protected EnvObj
   IncompleteId d_incompleteCulpritsId = IncompleteId::NONE;
   /** See getStrategy. */
   options::QuantStrategyMode d_strategy = options::QuantStrategyMode::ALL;
+  /** See isStrategyAlone. */
+  bool d_strategyAlone = true;
   /**
    * The modules --quant-strategy keeps from running this check-sat: under
-   * all, the ladder-only ones; under one strategy, the other strategies'.
+   * all, the ladder-only ones; under one strategy alone, the other
+   * strategies'; alongside, the ladder-only ones it did not choose.
    */
   std::unordered_set<quantifiers::QuantifiersModule*> d_switchedOff;
+  /**
+   * The modules whose ownership of a formula is ignored this check-sat (see
+   * QuantifiersRegistry::setIgnoredOwners): the switched-off ones, and
+   * alongside, every ladder strategy.
+   */
+  std::unordered_set<quantifiers::QuantifiersModule*> d_ignoredOwners;
   bool isSwitchedOff(quantifiers::QuantifiersModule* m) const
   {
     return d_switchedOff.count(m) > 0;

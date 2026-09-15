@@ -165,30 +165,57 @@ bool QuantifiersEngine::hasStrategy(options::QuantStrategyMode s) const
 void QuantifiersEngine::presolve()
 {
   Trace("quant-engine-proc") << "QuantifiersEngine : presolve " << std::endl;
-  // The strategy holds for the whole check-sat, so the option is read here.
+  // The strategy holds for the whole check-sat, so the options are read here.
   d_strategy = options().quantifiers.quantStrategy;
+  d_strategyAlone = options().quantifiers.quantStrategyAlone;
   d_switchedOff.clear();
+  d_ignoredOwners.clear();
+  const std::vector<QuantifiersModule*>& idle = d_qmodules->getLadderOnly();
+  QuantifiersModule* chosen = d_qmodules->getStrategyModule(d_strategy);
+  std::vector<QuantifiersModule*> ladder;
+  for (options::QuantStrategyMode s : {options::QuantStrategyMode::EMATCH,
+                                       options::QuantStrategyMode::CONFLICT,
+                                       options::QuantStrategyMode::POOL,
+                                       options::QuantStrategyMode::ENUM,
+                                       options::QuantStrategyMode::MBQI})
+  {
+    QuantifiersModule* m = d_qmodules->getStrategyModule(s);
+    if (m != nullptr)
+    {
+      ladder.push_back(m);
+    }
+  }
   if (d_strategy == options::QuantStrategyMode::ALL)
   {
-    const std::vector<QuantifiersModule*>& idle = d_qmodules->getLadderOnly();
     d_switchedOff.insert(idle.begin(), idle.end());
   }
-  else
+  else if (d_strategyAlone)
   {
-    for (options::QuantStrategyMode s : {options::QuantStrategyMode::EMATCH,
-                                         options::QuantStrategyMode::CONFLICT,
-                                         options::QuantStrategyMode::POOL,
-                                         options::QuantStrategyMode::ENUM,
-                                         options::QuantStrategyMode::MBQI})
+    for (QuantifiersModule* m : ladder)
     {
-      QuantifiersModule* m = d_qmodules->getStrategyModule(s);
-      if (m != nullptr && s != d_strategy)
+      if (m != chosen)
       {
         d_switchedOff.insert(m);
       }
     }
   }
-  d_qreg.setSwitchedOff(d_switchedOff.empty() ? nullptr : &d_switchedOff);
+  else
+  {
+    // Alongside the configured schedule: only the idle strategies not chosen
+    // stay off, and no ladder strategy's ownership keeps the others from a
+    // formula, so the chosen one may instantiate what E-matching owns.
+    for (QuantifiersModule* m : idle)
+    {
+      if (m != chosen)
+      {
+        d_switchedOff.insert(m);
+      }
+    }
+    d_ignoredOwners.insert(ladder.begin(), ladder.end());
+  }
+  // A module that does not run owns nothing this check-sat.
+  d_ignoredOwners.insert(d_switchedOff.begin(), d_switchedOff.end());
+  d_qreg.setIgnoredOwners(d_ignoredOwners.empty() ? nullptr : &d_ignoredOwners);
   d_numInstRoundsLemma = 0;
   d_incompleteCulprits.clear();
   d_incompleteCulpritsId = IncompleteId::NONE;

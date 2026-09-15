@@ -68,24 +68,24 @@ QuantifiersModule* QuantifiersRegistry::getOwner(Node q) const
 {
   std::map<Node, QuantifiersModule*>::const_iterator it = d_owner.find(q);
   if (it == d_owner.end()
-      || (d_switchedOff != nullptr && d_switchedOff->count(it->second) > 0))
+      || (d_ignoredOwners != nullptr && d_ignoredOwners->count(it->second) > 0))
   {
     return nullptr;
   }
   return it->second;
 }
 
-void QuantifiersRegistry::setSwitchedOff(
+void QuantifiersRegistry::setIgnoredOwners(
     const std::unordered_set<QuantifiersModule*>* s)
 {
-  d_switchedOff = s;
+  d_ignoredOwners = s;
 }
 
 void QuantifiersRegistry::setOwner(Node q,
                                    QuantifiersModule* m,
                                    int32_t priority)
 {
-  // the recorded owner, whether or not it is switched off
+  // the recorded owner, whether or not its ownership is ignored
   std::map<Node, QuantifiersModule*>::const_iterator it = d_owner.find(q);
   QuantifiersModule* mo = it == d_owner.end() ? nullptr : it->second;
   if (mo == m)

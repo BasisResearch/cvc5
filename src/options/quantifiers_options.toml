@@ -603,25 +603,33 @@ name   = "Quantifiers"
   type       = "QuantStrategyMode"
   default    = "ALL"
   help       = "which quantifier instantiation strategies each check-sat runs; may be set after initialization, and stays set until set again"
-  help_mode  = "Which of the five ladder strategies (E-matching, conflict-based, pool-based, enumerative, model-based) a check-sat runs. A strategy chosen alone runs without the other four, and may instantiate a quantified formula that one of them owns. Modules outside the five run as the other options configure them."
+  help_mode  = "Which of the five ladder strategies (E-matching, conflict-based, pool-based, enumerative, model-based) a check-sat runs. A strategy chosen alone (see quant-strategy-alone) runs without the other four, and may instantiate a quantified formula that one of them owns. Modules outside the five run as the other options configure them."
 [[option.mode.ALL]]
   name = "all"
   help = "Run the strategies the other options enable, as if this option were not given."
 [[option.mode.EMATCH]]
   name = "ematch"
-  help = "Run E-matching alone."
+  help = "Run E-matching."
 [[option.mode.CONFLICT]]
   name = "conflict"
-  help = "Run conflict-based instantiation alone."
+  help = "Run conflict-based instantiation."
 [[option.mode.POOL]]
   name = "pool"
-  help = "Run pool-based instantiation alone."
+  help = "Run pool-based instantiation."
 [[option.mode.ENUM]]
   name = "enum"
-  help = "Run enumerative instantiation alone."
+  help = "Run enumerative instantiation."
 [[option.mode.MBQI]]
   name = "mbqi"
-  help = "Run model-based quantifier instantiation alone."
+  help = "Run model-based quantifier instantiation."
+
+[[option]]
+  name       = "quantStrategyAlone"
+  category   = "expert"
+  long       = "quant-strategy-alone"
+  type       = "bool"
+  default    = "true"
+  help       = "run the strategy quant-strategy chooses alone; when false, run it alongside the strategies the other options enable, no ladder strategy's ownership of a formula keeping the others from it; may be set after initialization"
 
 [[option]]
   name       = "matchingLoopsMax"

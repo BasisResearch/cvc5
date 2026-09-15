@@ -535,7 +535,8 @@ const char* quantStrategyName(options::QuantStrategyMode s)
 
 /**
  * The (get-info :strategy-rung) reply: the --quant-strategy the last
- * check-sat ran with, the ladder strategies this solver has a module for,
+ * check-sat ran with and whether alone, the ladder strategies this solver
+ * has a module for,
  * that check-sat's instantiation rounds that sent lemmas, the resources it
  * spent (preprocessing included), and the instantiations it added per
  * strategy. qe is
@@ -544,6 +545,7 @@ const char* quantStrategyName(options::QuantStrategyMode s)
  */
 std::string strategyRungInfo(QuantifiersEngine* qe,
                              options::QuantStrategyMode option,
+                             bool optionAlone,
                              uint64_t resources)
 {
   using Kind = theory::quantifiers::Instantiate::StrategyKind;
@@ -554,9 +556,10 @@ std::string strategyRungInfo(QuantifiersEngine* qe,
       options::QuantStrategyMode::ENUM,
       options::QuantStrategyMode::MBQI};
   std::stringstream ss;
+  bool alone = qe == nullptr ? optionAlone : qe->isStrategyAlone();
   ss << "(:strategy "
      << quantStrategyName(qe == nullptr ? option : qe->getStrategy())
-     << " :available (";
+     << " :alone " << (alone ? "true" : "false") << " :available (";
   bool first = true;
   for (options::QuantStrategyMode s : ladder)
   {
@@ -721,8 +724,10 @@ std::string SolverEngine::getInfo(const std::string& key) const
     QuantifiersEngine* qe = d_smtSolver == nullptr || !d_state->isFullyInited()
                                 ? nullptr
                                 : d_smtSolver->getQuantifiersEngine();
-    return strategyRungInfo(
-        qe, options().quantifiers.quantStrategy, d_lastCheckResources);
+    return strategyRungInfo(qe,
+                            options().quantifiers.quantStrategy,
+                            options().quantifiers.quantStrategyAlone,
+                            d_lastCheckResources);
   }
   if (key == "matching-loops")
   {
