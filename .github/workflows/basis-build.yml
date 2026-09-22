@@ -17,11 +17,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: basis-build-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded PR builds only: a cancelled mainline run would leave
+  # that commit without a release.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -109,6 +111,8 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [build]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - name: download all artifacts
         uses: actions/download-artifact@v8
@@ -119,6 +123,13 @@ jobs:
         shell: bash
         run: |
           tag="basis-${GITHUB_SHA:0:10}"
+          # The binaries are not byte-reproducible, so a re-run must not
+          # replace a release whose hash verus-tools-mcp may already pin.
+          # An intentional replacement needs a manual `gh release delete`.
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $tag already exists; keeping it"
+            exit 0
+          fi
           cat ./*/*.sha256 > SHA256SUMS
           {
             printf 'Pinned Basis build of cvc5 at %s.\n\n' "$GITHUB_SHA"
@@ -126,7 +137,6 @@ jobs:
             cat SHA256SUMS
             printf '%s\n' '```'
           } > RELEASE_NOTES.md
-          gh release delete -y "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag 2>/dev/null || true
           gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Basis cvc5 build $tag" \
