@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MIT
 #
 # Basis fork build: produce pinned static cvc5 binaries for the platforms the
-# Verus MCP server supports (arm64 macOS, x86 Linux), publish them as a
-# per-commit GitHub release with sha256 checksums. Mirrors the
+# Verus MCP server supports (arm64 macOS, x86 and arm64 Linux), publish them
+# as a per-commit GitHub release with sha256 checksums. Mirrors the
 # BasisResearch/verus fork's build.yml/rolling-release.yml pattern, except
 # artifacts land on a release so verus-tools-mcp can download them
 # unauthenticated and verify against hardcoded hashes.
@@ -32,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build: [macos, linux]
+        build: [macos, linux, linux-arm64]
         include:
           - build: macos
             os: macos-14
@@ -40,6 +40,9 @@ jobs:
           - build: linux
             os: ubuntu-24.04
             release_name: cvc5-x86-linux
+          - build: linux-arm64
+            os: ubuntu-24.04-arm
+            release_name: cvc5-arm64-linux
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 240
@@ -130,6 +133,8 @@ jobs:
             cvc5-arm64-macos/cvc5-arm64-macos.sha256
             cvc5-x86-linux/cvc5-x86-linux
             cvc5-x86-linux/cvc5-x86-linux.sha256
+            cvc5-arm64-linux/cvc5-arm64-linux
+            cvc5-arm64-linux/cvc5-arm64-linux.sha256
             SHA256SUMS
           )
           # The binaries are not byte-reproducible, so a re-run must not
